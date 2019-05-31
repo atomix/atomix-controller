@@ -25,6 +25,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"strconv"
 )
 
 func getPartitionResourceName(partition *v1alpha1.Partition, resource string) string {
@@ -45,9 +46,10 @@ func GetPartitionNamespacedName(group *v1alpha1.PartitionGroup, partition int) t
 func NewPartition(group *v1alpha1.PartitionGroup, partition int) *v1alpha1.Partition {
 	return &v1alpha1.Partition{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      GetPartitionName(group, partition),
-			Namespace: group.Namespace,
-			Labels:    newPartitionLabels(group, partition),
+			Name:        GetPartitionName(group, partition),
+			Namespace:   group.Namespace,
+			Labels:      newPartitionLabels(group, partition),
+			Annotations: newPartitionAnnotations(group, partition),
 		},
 		Spec: v1alpha1.PartitionSpec{
 			Controller: group.Spec.Controller,
@@ -65,6 +67,16 @@ func newPartitionLabels(group *v1alpha1.PartitionGroup, partition int) map[strin
 		TypeKey:       PartitionType,
 		GroupKey:      group.Name,
 		PartitionKey:  string(partition),
+	}
+}
+
+// newPartitionAnnotations returns annotations for the given partition
+func newPartitionAnnotations(group *v1alpha1.PartitionGroup, partition int) map[string]string {
+	return map[string]string{
+		ControllerAnnotation: GetControllerNamespacedName().String(),
+		TypeAnnotation:       PartitionType,
+		GroupAnnotation:      group.Name,
+		PartitionAnnotation:  string(partition),
 	}
 }
 
@@ -320,10 +332,20 @@ func newEphemeralPartitionStatefulSet(partition *v1alpha1.Partition) (*appsv1.St
 
 // newPersistentPartitionStatefulSet returns a new StatefulSet for a persistent partition group
 func newPersistentPartitionStatefulSet(partition *v1alpha1.Partition, storage *v1alpha1.Storage) (*appsv1.StatefulSet, error) {
+	var affinity *corev1.Affinity
+	g, gok := partition.Annotations[GroupAnnotation]
+	p, pok := partition.Annotations[PartitionAnnotation]
+	if gok && pok {
+		if id, err := strconv.ParseInt(p, 0, 32); err == nil {
+			affinity = newAffinity(g, int(id))
+		}
+	}
+
 	claims, err := newPersistentVolumeClaims(storage.ClassName, storage.Size)
 	if err != nil {
 		return nil, err
 	}
+
 	return &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      GetPartitionStatefulSetName(partition),
@@ -345,7 +367,7 @@ func newPersistentPartitionStatefulSet(partition *v1alpha1.Partition, storage *v
 					Labels: partition.Labels,
 				},
 				Spec: corev1.PodSpec{
-					Affinity:       newAffinity(GetPartitionStatefulSetName(partition)),
+					Affinity:       affinity,
 					InitContainers: newInitContainers(partition.Spec.Size),
 					Containers:     newPersistentContainers(partition.Spec.Version, partition.Spec.Env, partition.Spec.Resources),
 					Volumes: []corev1.Volume{

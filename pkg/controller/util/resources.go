@@ -36,6 +36,13 @@ const (
 )
 
 const (
+	ControllerAnnotation = "k8s.atomix.io/controller"
+	TypeAnnotation       = "k8s.atomix.io/type"
+	GroupAnnotation      = "k8s.atomix.io/group"
+	PartitionAnnotation  = "k8s.atomix.io/partition"
+)
+
+const (
 	GroupType     = "group"
 	PartitionType = "partition"
 )
@@ -85,7 +92,7 @@ func GetControllerLabels() map[string]string {
 	}
 }
 
-func newAffinity(name string) *corev1.Affinity {
+func newAffinity(group string, partition int) *corev1.Affinity {
 	return &corev1.Affinity{
 		PodAntiAffinity: &corev1.PodAntiAffinity{
 			PreferredDuringSchedulingIgnoredDuringExecution: []corev1.WeightedPodAffinityTerm{
@@ -98,7 +105,7 @@ func newAffinity(name string) *corev1.Affinity {
 									Key:      AppKey,
 									Operator: metav1.LabelSelectorOpIn,
 									Values: []string{
-										name,
+										AtomixApp,
 									},
 								},
 								{
@@ -106,6 +113,20 @@ func newAffinity(name string) *corev1.Affinity {
 									Operator: metav1.LabelSelectorOpIn,
 									Values: []string{
 										PartitionType,
+									},
+								},
+								{
+									Key:      GroupKey,
+									Operator: metav1.LabelSelectorOpIn,
+									Values: []string{
+										group,
+									},
+								},
+								{
+									Key:      PartitionKey,
+									Operator: metav1.LabelSelectorOpIn,
+									Values: []string{
+										string(partition),
 									},
 								},
 							},
@@ -163,7 +184,7 @@ func newPersistentContainer(version string, env []corev1.EnvVar, resources corev
 		"--config",
 		"/etc/atomix/system/atomix.yaml",
 	}
-	return newContainer(fmt.Sprintf("atomix/atomix:%s", version), args, env, resources, newPersistentVolumeMounts())
+	return newContainer(fmt.Sprintf("atomix/atomix-server:%s", version), args, env, resources, newPersistentVolumeMounts())
 }
 
 func newEphemeralContainers(version string, env []corev1.EnvVar, resources corev1.ResourceRequirements) []corev1.Container {
@@ -177,7 +198,7 @@ func newEphemeralContainer(version string, env []corev1.EnvVar, resources corev1
 		"--config",
 		"/etc/atomix/system/atomix.yaml",
 	}
-	return newContainer(fmt.Sprintf("atomix/atomix:%s", version), args, env, resources, newEphemeralVolumeMounts())
+	return newContainer(fmt.Sprintf("atomix/atomix-server:%s", version), args, env, resources, newEphemeralVolumeMounts())
 }
 
 func newContainer(image string, args []string, env []corev1.EnvVar, resources corev1.ResourceRequirements, volumeMounts []corev1.VolumeMount) corev1.Container {
