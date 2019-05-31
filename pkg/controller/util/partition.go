@@ -45,6 +45,21 @@ func GetPartitionNamespacedName(group *v1alpha1.PartitionGroup, partition int) t
 }
 
 func NewPartition(group *v1alpha1.PartitionGroup, partition int) *v1alpha1.Partition {
+	spec := v1alpha1.PartitionSpec{
+		Version:   group.Spec.Version,
+		Size:      int32(group.Spec.PartitionSize),
+		Env:       group.Spec.Env,
+		Resources: group.Spec.Resources,
+	}
+
+	if group.Spec.Raft != nil {
+		spec.Raft = group.Spec.Raft
+	} else if group.Spec.PrimaryBackup != nil {
+		spec.PrimaryBackup = group.Spec.PrimaryBackup
+	} else if group.Spec.Log != nil {
+		spec.Log = group.Spec.Log
+	}
+
 	return &v1alpha1.Partition{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        GetPartitionName(group, partition),
@@ -52,11 +67,7 @@ func NewPartition(group *v1alpha1.PartitionGroup, partition int) *v1alpha1.Parti
 			Labels:      newPartitionLabels(group, partition),
 			Annotations: newPartitionAnnotations(group, partition),
 		},
-		Spec: v1alpha1.PartitionSpec{
-			Controller: group.Spec.Controller,
-			Version:    group.Spec.Version,
-			Size:       int32(group.Spec.PartitionSize),
-		},
+		Spec: spec,
 	}
 }
 
@@ -149,11 +160,6 @@ func NewPartitionInitConfigMap(partition *v1alpha1.Partition) *corev1.ConfigMap 
 	}
 }
 
-// getPartitionControllerServiceName returns the DNS service for the partition controller
-func getPartitionControllerServiceName(partition *v1alpha1.Partition) string {
-	return fmt.Sprintf("%s.%s.svc.cluster.local", partition.Spec.Controller.Name, partition.Spec.Controller.Namespace)
-}
-
 // newRaftInitConfigMapScript returns a new script for generating a Raft configuration
 func newRaftInitConfigMapScript(partition *v1alpha1.Partition) string {
 	id, _ := getPartitionIdFromAnnotation(partition)
@@ -195,7 +201,7 @@ else
     echo "Failed to parse name and ordinal of Pod"
     exit 1
 fi
-create_config`, id, group, partition.Namespace, GetControllerName(), getPartitionControllerServiceName(partition))
+create_config`, id, group, partition.Namespace, GetControllerName(), getControllerServiceDnsName())
 }
 
 // newPrimaryBackupInitConfigMapScript returns a new script for generating a Raft configuration
@@ -232,7 +238,7 @@ else
     echo "Failed to parse name and ordinal of Pod"
     exit 1
 fi
-create_config`, id, group, partition.Namespace, GetControllerName(), getPartitionControllerServiceName(partition))
+create_config`, id, group, partition.Namespace, GetControllerName(), getControllerServiceDnsName())
 }
 
 // newLogInitConfigMapScript returns a new script for generating a Raft configuration
@@ -265,7 +271,7 @@ else
     echo "Failed to parse name and ordinal of Pod"
     exit 1
 fi
-create_config`, id, group, partition.Namespace, GetControllerName(), getPartitionControllerServiceName(partition))
+create_config`, id, group, partition.Namespace, GetControllerName(), getControllerServiceDnsName())
 }
 
 // NewPartitionDisruptionBudget returns a new pod disruption budget for the partition group partition

@@ -145,10 +145,6 @@ func newCompactionProto(spec v1alpha1.Compaction) *partition.CompactionSpec {
 
 func NewPartitionGroup(id *partition.PartitionGroupId, pbspec *partition.PartitionGroupSpec) *v1alpha1.PartitionGroup {
 	spec := v1alpha1.PartitionGroupSpec{
-		Controller: types.NamespacedName{
-			Namespace: GetControllerNamespace(),
-			Name:      GetControllerName(),
-		},
 		Version:       "latest",
 		Size:          int32(pbspec.Replicas),
 		Partitions:    int(pbspec.Partitions),

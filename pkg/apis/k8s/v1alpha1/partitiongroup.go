@@ -17,10 +17,8 @@
 package v1alpha1
 
 import (
-	"fmt"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 )
 
 const (
@@ -32,7 +30,6 @@ const (
 type PartitionGroupType string
 
 type PartitionGroupSpec struct {
-	Controller          types.NamespacedName         `json:"controller,omitempty"`
 	Version             string                       `json:"version,omitempty"`
 	Size                int32                        `json:"size,omitempty"`
 	Partitions          int                         `json:"partitions,omitempty"`
@@ -53,18 +50,6 @@ const (
 	RackAwareMemberGroupStrategy MemberGroupStrategy = "rack_aware"
 	ZoneAwareMemberGroupStrategy MemberGroupStrategy = "zone_aware"
 )
-
-func GetPartitionGroupType(group *PartitionGroup) (PartitionGroupType, error) {
-	switch {
-	case group.Spec.Raft != nil:
-		return RaftType, nil
-	case group.Spec.PrimaryBackup != nil:
-		return PrimaryBackupType, nil
-	case group.Spec.Log != nil:
-		return LogType, nil
-	}
-	return "", fmt.Errorf("unknown partition group type")
-}
 
 // PartitionGroupStatus defines the observed state of Partition
 type PartitionGroupStatus struct {

@@ -1,9 +1,8 @@
 apiVersion: k8s.atomix.io/v1alpha1
 kind: PartitionGroup
 metadata:
-  name: raft-group
+  name: raft
 spec:
-  controller: example-atomix-controller
   version: latest
   size: 3
   partitions: 3

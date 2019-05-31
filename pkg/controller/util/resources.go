@@ -93,6 +93,10 @@ func GetControllerLabels() map[string]string {
 	}
 }
 
+func getControllerServiceDnsName() string {
+	return fmt.Sprintf("%s.%s.svc.cluster.local", GetControllerName(), GetControllerNamespace())
+}
+
 func newAffinity(group string, partition int) *corev1.Affinity {
 	return &corev1.Affinity{
 		PodAntiAffinity: &corev1.PodAntiAffinity{

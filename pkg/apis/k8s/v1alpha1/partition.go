@@ -19,12 +19,10 @@ package v1alpha1
 import (
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 )
 
 // PartitionSpec defines the desired state of Partition
 type PartitionSpec struct {
-	Controller    types.NamespacedName    `json:"controller,omitempty"`
 	Version       string                  `json:"version,omitempty"`
 	Size          int32                   `json:"size,omitempty"`
 	Env           []v1.EnvVar             `json:"env,omitempty"`
