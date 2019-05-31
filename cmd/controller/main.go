@@ -69,7 +69,7 @@ func main() {
 	}
 
 	// Become the leader before proceeding
-	leader.Become(context.TODO(), "atomix-k8s-controller-lock")
+	leader.Become(context.TODO(), "atomix-controller-lock")
 
 	r := ready.NewFileReady()
 	err = r.Set()

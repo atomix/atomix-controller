@@ -38,9 +38,9 @@ import (
 
 var log = logf.Log.WithName("controller_atomix")
 
-// AddController adds the Atomix contrller to the controller manager
+// AddController adds the Atomix controller to the k8s controller manager
 func AddController(mgr manager.Manager) error {
-	c := NewController(mgr.GetClient(), mgr.GetScheme(), mgr.GetConfig())
+	c := newController(mgr.GetClient(), mgr.GetScheme(), mgr.GetConfig())
 	err := mgr.Add(c)
 	if err != nil {
 		return err
@@ -55,8 +55,8 @@ func AddController(mgr manager.Manager) error {
 	return nil
 }
 
-// NewController creates a new controller server
-func NewController(client client.Client, scheme *runtime.Scheme, config *rest.Config, opts ...grpc.ServerOption) *AtomixController {
+// newController creates a new controller server
+func newController(client client.Client, scheme *runtime.Scheme, config *rest.Config, opts ...grpc.ServerOption) *AtomixController {
 	return &AtomixController{
 		client: client,
 		scheme: scheme,
@@ -152,13 +152,14 @@ func (c *AtomixController) GetPartitionGroups(ctx context.Context, r *controller
 
 // EnterElection is unimplemented
 func (c *AtomixController) EnterElection(r *controller.PartitionElectionRequest, s controller.ControllerService_EnterElectionServer) error {
-	return errors.New("Not implemented")
+	return errors.New("not implemented")
 }
 
 // Start starts the controller server
 func (c *AtomixController) Start(stop <-chan struct{}) error {
 	errs := make(chan error)
 
+	log.Info("Starting controller server")
 	lis, err := net.Listen("tcp", "0.0.0.0:5679")
 	if err != nil {
 		return err
@@ -172,9 +173,9 @@ func (c *AtomixController) Start(stop <-chan struct{}) error {
 		}
 	}()
 
-	go func() {
-		<-stop
-		s.Stop()
-	}()
+	<-stop
+
+	log.Info("Stopping controller server")
+	s.Stop()
 	return nil
 }

@@ -16,11 +16,7 @@ tag. Once the image has been built, the controller can be deployed to k8s using 
 following sequence of commands:
 
 ```bash
-> kubectl create -f deploy/service_account.yaml
-> kubectl create -f deploy/role.yaml
-> kubectl create -f deploy/role_binding.yaml
-> kubectl create -f deploy/controller.yaml
-> kubectl create -f deploy/service.yaml
+> kubectl create -f deploy/atomix-controller.yaml
 ```
 
 The default configuration will deploy a controller named `atomix-controller` in the
