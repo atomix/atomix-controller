@@ -155,23 +155,11 @@ func newInitContainer(size int32, namespace string, group string, partition int)
 				Name:  "ATOMIX_REPLICAS",
 				Value: fmt.Sprint(size),
 			},
-			{
-				Name:  "GROUP_NAMESPACE",
-				Value: namespace,
-			},
-			{
-				Name:  "GROUP_NAME",
-				Value: group,
-			},
-			{
-				Name:  "PARTITION_ID",
-				Value: fmt.Sprint(partition),
-			},
 		},
 		Command: []string{
 			"bash",
 			"-c",
-			"/scripts/create_config.sh $ATOMIX_REPLICAS $GROUP_NAMESPACE $GROUP_NAME $PARTITION_ID > /config/atomix.yaml",
+			"/scripts/create_config.sh $ATOMIX_REPLICAS > /config/atomix.yaml",
 		},
 		VolumeMounts: []corev1.VolumeMount{
 			{

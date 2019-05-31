@@ -156,20 +156,25 @@ func getPartitionControllerServiceName(partition *v1alpha1.Partition) string {
 
 // newRaftInitConfigMapScript returns a new script for generating a Raft configuration
 func newRaftInitConfigMapScript(partition *v1alpha1.Partition) string {
+	id, _ := getPartitionIdFromAnnotation(partition)
+	group, _ := getPartitionGroupFromAnnotation(partition)
 	return fmt.Sprintf(`
 #!/usr/bin/env bash
 DOMAIN=$(hostname -d)
 REPLICAS=$1
-NAMESPACE=$2
-GROUP=$3
-PARTITION=$4
+CONTROLLER=$2
+NAMESPACE=$3
+GROUP=$4
+PARTITION=$5
 function create_config() {
-    echo "partitionId: $PARTITION"
+    echo "partitionId: %d"
     echo "partitionGroup:"
-    echo "  name: $GROUP"
-    echo "  namespace: $NAMESPACE"
+    echo "  name: %s"
+    echo "  namespace: %s"
     echo "controller:"
-    echo "  service: %s"
+    echo "  id: %s"
+    echo "  host: %s"
+    echo "  port: 5679"
     echo "node:"
     echo "  id: $NAME-$ORD"
     echo "  host: $NAME-$ORD.$DOMAIN"
@@ -190,30 +195,35 @@ else
     echo "Failed to parse name and ordinal of Pod"
     exit 1
 fi
-create_config`, getPartitionControllerServiceName(partition))
+create_config`, id, group, partition.Namespace, GetControllerName(), getPartitionControllerServiceName(partition))
 }
 
 // newPrimaryBackupInitConfigMapScript returns a new script for generating a Raft configuration
 func newPrimaryBackupInitConfigMapScript(partition *v1alpha1.Partition) string {
+	id, _ := getPartitionIdFromAnnotation(partition)
+	group, _ := getPartitionGroupFromAnnotation(partition)
 	return fmt.Sprintf(`
 #!/usr/bin/env bash
 DOMAIN=$(hostname -d)
-NAMESPACE=$2
-GROUP=$3
-PARTITION=$4
+CONTROLLER=$2
+NAMESPACE=$3
+GROUP=$4
+PARTITION=$5
 function create_config() {
-    echo "partitionId: $PARTITION"
+    echo "partitionId: %d"
     echo "partitionGroup:"
-    echo "  name: $GROUP"
-    echo "  namespace: $NAMESPACE"
+    echo "  name: %s"
+    echo "  namespace: %s"
     echo "controller:"
-    echo "  service: %s"
+    echo "  id: %s"
+    echo "  host: %s"
+    echo "  port: 5679"
     echo "node:"
     echo "  id: $NAME-$ORD"
     echo "  host: $NAME-$ORD.$DOMAIN"
     echo "  port: 5678"
     echo "protocol:"
-    echo "  type: primary-backup"
+    echo "  type: primaryBackup"
 }
 if [[ $HOST =~ (.*)-([0-9]+)$ ]]; then
     NAME=${BASH_REMATCH[1]}
@@ -222,24 +232,25 @@ else
     echo "Failed to parse name and ordinal of Pod"
     exit 1
 fi
-create_config`, getPartitionControllerServiceName(partition))
+create_config`, id, group, partition.Namespace, GetControllerName(), getPartitionControllerServiceName(partition))
 }
 
 // newLogInitConfigMapScript returns a new script for generating a Raft configuration
 func newLogInitConfigMapScript(partition *v1alpha1.Partition) string {
+	id, _ := getPartitionIdFromAnnotation(partition)
+	group, _ := getPartitionGroupFromAnnotation(partition)
 	return fmt.Sprintf(`
 #!/usr/bin/env bash
 DOMAIN=$(hostname -d)
-NAMESPACE=$2
-GROUP=$3
-PARTITION=$4
 function create_config() {
-    echo "partitionId: $PARTITION"
+    echo "partitionId: %d"
     echo "partitionGroup:"
-    echo "  name: $GROUP"
-    echo "  namespace: $NAMESPACE"
+    echo "  name: %s"
+    echo "  namespace: %s"
     echo "controller:"
-    echo "  service: %s"
+    echo "  id: %s"
+    echo "  host: %s"
+    echo "  port: 5679"
     echo "node:"
     echo "  id: $NAME-$ORD"
     echo "  host: $NAME-$ORD.$DOMAIN"
@@ -254,7 +265,7 @@ else
     echo "Failed to parse name and ordinal of Pod"
     exit 1
 fi
-create_config`, getPartitionControllerServiceName(partition))
+create_config`, id, group, partition.Namespace, GetControllerName(), getPartitionControllerServiceName(partition))
 }
 
 // NewPartitionDisruptionBudget returns a new pod disruption budget for the partition group partition
