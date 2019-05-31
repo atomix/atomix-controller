@@ -140,13 +140,13 @@ func newAffinity(group string, partition int) *corev1.Affinity {
 	}
 }
 
-func newInitContainers(size int32) []corev1.Container {
+func newInitContainers(size int32, namespace string, group string, partition int) []corev1.Container {
 	return []corev1.Container{
-		newInitContainer(size),
+		newInitContainer(size, namespace, group, partition),
 	}
 }
 
-func newInitContainer(size int32) corev1.Container {
+func newInitContainer(size int32, namespace string, group string, partition int) corev1.Container {
 	return corev1.Container{
 		Name:  "configure",
 		Image: "ubuntu:16.04",
@@ -155,11 +155,23 @@ func newInitContainer(size int32) corev1.Container {
 				Name:  "ATOMIX_REPLICAS",
 				Value: fmt.Sprint(size),
 			},
+			{
+				Name:  "GROUP_NAMESPACE",
+				Value: namespace,
+			},
+			{
+				Name:  "GROUP_NAME",
+				Value: group,
+			},
+			{
+				Name:  "PARTITION_ID",
+				Value: fmt.Sprint(partition),
+			},
 		},
 		Command: []string{
 			"bash",
 			"-c",
-			"/scripts/create_config.sh $ATOMIX_REPLICAS > /config/atomix.yaml",
+			"/scripts/create_config.sh $ATOMIX_REPLICAS $GROUP_NAMESPACE $GROUP_NAME $PARTITION_ID > /config/atomix.yaml",
 		},
 		VolumeMounts: []corev1.VolumeMount{
 			{

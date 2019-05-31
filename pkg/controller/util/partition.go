@@ -17,6 +17,7 @@
 package util
 
 import (
+	"errors"
 	"fmt"
 	"github.com/atomix/atomix-k8s-controller/pkg/apis/k8s/v1alpha1"
 	appsv1 "k8s.io/api/apps/v1"
@@ -80,6 +81,27 @@ func newPartitionAnnotations(group *v1alpha1.PartitionGroup, partition int) map[
 	}
 }
 
+func getPartitionGroupFromAnnotation(partition *v1alpha1.Partition) (string, error) {
+	group, ok := partition.Annotations[GroupAnnotation]
+	if !ok {
+		return "", errors.New("partition missing group annotation")
+	}
+	return group, nil
+}
+
+func getPartitionIdFromAnnotation(partition *v1alpha1.Partition) (int, error) {
+	idstr, ok := partition.Annotations[PartitionAnnotation]
+	if !ok {
+		return 0, errors.New("partition missing partition ID annotation")
+	}
+
+	id, err := strconv.ParseInt(idstr, 0, 32)
+	if err != nil {
+		return 0, err
+	}
+	return int(id), nil
+}
+
 func GetPartitionServiceName(group *v1alpha1.Partition) string {
 	return group.Name
 }
@@ -138,10 +160,15 @@ func newRaftInitConfigMapScript(partition *v1alpha1.Partition) string {
 #!/usr/bin/env bash
 DOMAIN=$(hostname -d)
 REPLICAS=$1
+NAMESPACE=$2
+GROUP=$3
+PARTITION=$4
 function create_config() {
+    echo "partitionId: $PARTITION"
+    echo "partitionGroup:"
+    echo "  name: $GROUP"
+    echo "  namespace: $NAMESPACE"
     echo "controller:"
-    echo "  service: %s"
-    echo "dns:"
     echo "  service: %s"
     echo "node:"
     echo "  id: $NAME-$ORD"
@@ -149,9 +176,8 @@ function create_config() {
     echo "  port: 5678"
     echo "protocol:"
     echo "  type: raft"
-    echo "  config:"
-    echo "    memberId: $NAME-$ORD"
-    echo "    members:"
+    echo "  memberId: $NAME-$ORD"
+    echo "  members:"
     for (( i=0; i<$REPLICAS; i++ ))
     do
         echo "      - $NAME-$((i))"
@@ -164,7 +190,7 @@ else
     echo "Failed to parse name and ordinal of Pod"
     exit 1
 fi
-create_config`, getPartitionControllerServiceName(partition), GetPartitionServiceName(partition))
+create_config`, getPartitionControllerServiceName(partition))
 }
 
 // newPrimaryBackupInitConfigMapScript returns a new script for generating a Raft configuration
@@ -172,10 +198,15 @@ func newPrimaryBackupInitConfigMapScript(partition *v1alpha1.Partition) string {
 	return fmt.Sprintf(`
 #!/usr/bin/env bash
 DOMAIN=$(hostname -d)
+NAMESPACE=$2
+GROUP=$3
+PARTITION=$4
 function create_config() {
+    echo "partitionId: $PARTITION"
+    echo "partitionGroup:"
+    echo "  name: $GROUP"
+    echo "  namespace: $NAMESPACE"
     echo "controller:"
-    echo "  service: %s"
-    echo "dns:"
     echo "  service: %s"
     echo "node:"
     echo "  id: $NAME-$ORD"
@@ -191,7 +222,7 @@ else
     echo "Failed to parse name and ordinal of Pod"
     exit 1
 fi
-create_config`, getPartitionControllerServiceName(partition), GetPartitionServiceName(partition))
+create_config`, getPartitionControllerServiceName(partition))
 }
 
 // newLogInitConfigMapScript returns a new script for generating a Raft configuration
@@ -199,10 +230,15 @@ func newLogInitConfigMapScript(partition *v1alpha1.Partition) string {
 	return fmt.Sprintf(`
 #!/usr/bin/env bash
 DOMAIN=$(hostname -d)
+NAMESPACE=$2
+GROUP=$3
+PARTITION=$4
 function create_config() {
+    echo "partitionId: $PARTITION"
+    echo "partitionGroup:"
+    echo "  name: $GROUP"
+    echo "  namespace: $NAMESPACE"
     echo "controller:"
-    echo "  service: %s"
-    echo "dns:"
     echo "  service: %s"
     echo "node:"
     echo "  id: $NAME-$ORD"
@@ -218,7 +254,7 @@ else
     echo "Failed to parse name and ordinal of Pod"
     exit 1
 fi
-create_config`, getPartitionControllerServiceName(partition), GetPartitionServiceName(partition))
+create_config`, getPartitionControllerServiceName(partition))
 }
 
 // NewPartitionDisruptionBudget returns a new pod disruption budget for the partition group partition
@@ -296,6 +332,16 @@ func NewPartitionStatefulSet(partition *v1alpha1.Partition) (*appsv1.StatefulSet
 
 // newEphemeralPartitionStatefulSet returns a new StatefulSet for a persistent partition group
 func newEphemeralPartitionStatefulSet(partition *v1alpha1.Partition) (*appsv1.StatefulSet, error) {
+	group, err := getPartitionGroupFromAnnotation(partition)
+	if err != nil {
+		return nil, err
+	}
+
+	id, err := getPartitionIdFromAnnotation(partition)
+	if err != nil {
+		return nil, err
+	}
+
 	return &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      GetPartitionStatefulSetName(partition),
@@ -317,7 +363,7 @@ func newEphemeralPartitionStatefulSet(partition *v1alpha1.Partition) (*appsv1.St
 					Labels: partition.Labels,
 				},
 				Spec: corev1.PodSpec{
-					InitContainers: newInitContainers(partition.Spec.Size),
+					InitContainers: newInitContainers(partition.Spec.Size, partition.Namespace, group, id),
 					Containers:     newEphemeralContainers(partition.Spec.Version, partition.Spec.Env, partition.Spec.Resources),
 					Volumes: []corev1.Volume{
 						newInitScriptsVolume(GetPartitionInitConfigMapName(partition)),
@@ -333,12 +379,10 @@ func newEphemeralPartitionStatefulSet(partition *v1alpha1.Partition) (*appsv1.St
 // newPersistentPartitionStatefulSet returns a new StatefulSet for a persistent partition group
 func newPersistentPartitionStatefulSet(partition *v1alpha1.Partition, storage *v1alpha1.Storage) (*appsv1.StatefulSet, error) {
 	var affinity *corev1.Affinity
-	g, gok := partition.Annotations[GroupAnnotation]
-	p, pok := partition.Annotations[PartitionAnnotation]
-	if gok && pok {
-		if id, err := strconv.ParseInt(p, 0, 32); err == nil {
-			affinity = newAffinity(g, int(id))
-		}
+	group, err := getPartitionGroupFromAnnotation(partition)
+	id, err := getPartitionIdFromAnnotation(partition)
+	if group != "" && id != 0 {
+		affinity = newAffinity(group, id)
 	}
 
 	claims, err := newPersistentVolumeClaims(storage.ClassName, storage.Size)
@@ -368,7 +412,7 @@ func newPersistentPartitionStatefulSet(partition *v1alpha1.Partition, storage *v
 				},
 				Spec: corev1.PodSpec{
 					Affinity:       affinity,
-					InitContainers: newInitContainers(partition.Spec.Size),
+					InitContainers: newInitContainers(partition.Spec.Size, partition.Namespace, group, id),
 					Containers:     newPersistentContainers(partition.Spec.Version, partition.Spec.Env, partition.Spec.Resources),
 					Volumes: []corev1.Volume{
 						newInitScriptsVolume(GetPartitionInitConfigMapName(partition)),
