@@ -60,7 +60,7 @@ func Add(mgr manager.Manager) error {
 		return err
 	}
 
-	// Watch for changes to secondary resource Pods and requeue the owner Partition
+	// Watch for changes to secondary resource StatefulSets and requeue the owner Partition
 	err = c.Watch(&source.Kind{Type: &appsv1.StatefulSet{}}, &handler.EnqueueRequestForOwner{
 		IsController: true,
 		OwnerType:    &v1alpha1.Partition{},

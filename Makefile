@@ -13,7 +13,7 @@ build: # @HELP build the controller Docker image
 push: # @HELP push the controller Docker image
 	docker push atomix/atomix-k8s-controller:latest
 dev: # @HELP run the controller in locally development mode
-	WATCH_NAMESPACE=default OPERATOR_NAME=atomix-k8s-controller go run cmd/controller/main.go
+	CONTROLLER_NAME=atomix-controller go run cmd/controller/main.go
 deploy: # @HELP deploy the controller to a Kubernetes partition
 	kubectl create -f deploy/role.yaml
 	kubectl create -f deploy/service_account.yaml

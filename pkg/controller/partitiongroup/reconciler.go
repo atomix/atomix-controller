@@ -20,7 +20,6 @@ import (
 	"context"
 	"github.com/atomix/atomix-k8s-controller/pkg/apis/k8s/v1alpha1"
 	"github.com/atomix/atomix-k8s-controller/pkg/controller/util"
-	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
@@ -57,8 +56,8 @@ func Add(mgr manager.Manager) error {
 		return err
 	}
 
-	// Watch for changes to secondary resource Pods and requeue the owner PartitionGroup
-	err = c.Watch(&source.Kind{Type: &appsv1.StatefulSet{}}, &handler.EnqueueRequestForOwner{
+	// Watch for changes to secondary resource Partitions and requeue the owner PartitionGroup
+	err = c.Watch(&source.Kind{Type: &v1alpha1.Partition{}}, &handler.EnqueueRequestForOwner{
 		IsController: true,
 		OwnerType:    &v1alpha1.PartitionGroup{},
 	})
