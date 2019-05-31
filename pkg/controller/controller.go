@@ -173,9 +173,12 @@ func (c *AtomixController) Start(stop <-chan struct{}) error {
 		}
 	}()
 
-	<-stop
-
-	log.Info("Stopping controller server")
-	s.Stop()
-	return nil
+	select {
+	case e := <-errs:
+		return e
+	case <-stop:
+		log.Info("Stopping controller server")
+		s.Stop()
+		return nil
+	}
 }
