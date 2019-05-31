@@ -1,5 +1,7 @@
 #!/bin/sh
 
+go install ./vendor/github.com/golang/protobuf/protoc-gen-go
+
 rm -rf build/proto/_output/atomix
 rm -rf proto
 git clone --branch single-server https://github.com/atomix/atomix.git build/proto/_output/atomix

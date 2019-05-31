@@ -3,13 +3,11 @@
 
 package partition
 
-import (
-	fmt "fmt"
-	proto "github.com/golang/protobuf/proto"
-	_ "github.com/golang/protobuf/ptypes/any"
-	duration "github.com/golang/protobuf/ptypes/duration"
-	math "math"
-)
+import proto "github.com/golang/protobuf/proto"
+import fmt "fmt"
+import math "math"
+import _ "github.com/golang/protobuf/ptypes/any"
+import duration "github.com/golang/protobuf/ptypes/duration"
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
@@ -20,7 +18,7 @@ var _ = math.Inf
 // is compatible with the proto package it is being compiled against.
 // A compilation error at this line likely means your copy of the
 // proto package needs to be updated.
-const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
+const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
 
 // Storage level
 type StorageLevel int32
@@ -34,7 +32,6 @@ var StorageLevel_name = map[int32]string{
 	0: "DISK",
 	1: "MAPPED",
 }
-
 var StorageLevel_value = map[string]int32{
 	"DISK":   0,
 	"MAPPED": 1,
@@ -43,9 +40,8 @@ var StorageLevel_value = map[string]int32{
 func (x StorageLevel) String() string {
 	return proto.EnumName(StorageLevel_name, int32(x))
 }
-
 func (StorageLevel) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_ef7216535633430c, []int{0}
+	return fileDescriptor_partition_9e42a1abc8ffc6fc, []int{0}
 }
 
 // Member group strategy
@@ -62,7 +58,6 @@ var MemberGroupStrategy_name = map[int32]string{
 	1: "RACK_AWARE",
 	2: "ZONE_AWARE",
 }
-
 var MemberGroupStrategy_value = map[string]int32{
 	"HOST_AWARE": 0,
 	"RACK_AWARE": 1,
@@ -72,9 +67,8 @@ var MemberGroupStrategy_value = map[string]int32{
 func (x MemberGroupStrategy) String() string {
 	return proto.EnumName(MemberGroupStrategy_name, int32(x))
 }
-
 func (MemberGroupStrategy) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_ef7216535633430c, []int{1}
+	return fileDescriptor_partition_9e42a1abc8ffc6fc, []int{1}
 }
 
 // Partition identifier
@@ -90,17 +84,16 @@ func (m *PartitionId) Reset()         { *m = PartitionId{} }
 func (m *PartitionId) String() string { return proto.CompactTextString(m) }
 func (*PartitionId) ProtoMessage()    {}
 func (*PartitionId) Descriptor() ([]byte, []int) {
-	return fileDescriptor_ef7216535633430c, []int{0}
+	return fileDescriptor_partition_9e42a1abc8ffc6fc, []int{0}
 }
-
 func (m *PartitionId) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_PartitionId.Unmarshal(m, b)
 }
 func (m *PartitionId) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_PartitionId.Marshal(b, m, deterministic)
 }
-func (m *PartitionId) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_PartitionId.Merge(m, src)
+func (dst *PartitionId) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_PartitionId.Merge(dst, src)
 }
 func (m *PartitionId) XXX_Size() int {
 	return xxx_messageInfo_PartitionId.Size(m)
@@ -139,17 +132,16 @@ func (m *PartitionGroup) Reset()         { *m = PartitionGroup{} }
 func (m *PartitionGroup) String() string { return proto.CompactTextString(m) }
 func (*PartitionGroup) ProtoMessage()    {}
 func (*PartitionGroup) Descriptor() ([]byte, []int) {
-	return fileDescriptor_ef7216535633430c, []int{1}
+	return fileDescriptor_partition_9e42a1abc8ffc6fc, []int{1}
 }
-
 func (m *PartitionGroup) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_PartitionGroup.Unmarshal(m, b)
 }
 func (m *PartitionGroup) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_PartitionGroup.Marshal(b, m, deterministic)
 }
-func (m *PartitionGroup) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_PartitionGroup.Merge(m, src)
+func (dst *PartitionGroup) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_PartitionGroup.Merge(dst, src)
 }
 func (m *PartitionGroup) XXX_Size() int {
 	return xxx_messageInfo_PartitionGroup.Size(m)
@@ -194,17 +186,16 @@ func (m *Partition) Reset()         { *m = Partition{} }
 func (m *Partition) String() string { return proto.CompactTextString(m) }
 func (*Partition) ProtoMessage()    {}
 func (*Partition) Descriptor() ([]byte, []int) {
-	return fileDescriptor_ef7216535633430c, []int{2}
+	return fileDescriptor_partition_9e42a1abc8ffc6fc, []int{2}
 }
-
 func (m *Partition) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Partition.Unmarshal(m, b)
 }
 func (m *Partition) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_Partition.Marshal(b, m, deterministic)
 }
-func (m *Partition) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_Partition.Merge(m, src)
+func (dst *Partition) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_Partition.Merge(dst, src)
 }
 func (m *Partition) XXX_Size() int {
 	return xxx_messageInfo_Partition.Size(m)
@@ -242,17 +233,16 @@ func (m *PartitionEndpoint) Reset()         { *m = PartitionEndpoint{} }
 func (m *PartitionEndpoint) String() string { return proto.CompactTextString(m) }
 func (*PartitionEndpoint) ProtoMessage()    {}
 func (*PartitionEndpoint) Descriptor() ([]byte, []int) {
-	return fileDescriptor_ef7216535633430c, []int{3}
+	return fileDescriptor_partition_9e42a1abc8ffc6fc, []int{3}
 }
-
 func (m *PartitionEndpoint) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_PartitionEndpoint.Unmarshal(m, b)
 }
 func (m *PartitionEndpoint) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_PartitionEndpoint.Marshal(b, m, deterministic)
 }
-func (m *PartitionEndpoint) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_PartitionEndpoint.Merge(m, src)
+func (dst *PartitionEndpoint) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_PartitionEndpoint.Merge(dst, src)
 }
 func (m *PartitionEndpoint) XXX_Size() int {
 	return xxx_messageInfo_PartitionEndpoint.Size(m)
@@ -297,17 +287,16 @@ func (m *PartitionGroupSpec) Reset()         { *m = PartitionGroupSpec{} }
 func (m *PartitionGroupSpec) String() string { return proto.CompactTextString(m) }
 func (*PartitionGroupSpec) ProtoMessage()    {}
 func (*PartitionGroupSpec) Descriptor() ([]byte, []int) {
-	return fileDescriptor_ef7216535633430c, []int{4}
+	return fileDescriptor_partition_9e42a1abc8ffc6fc, []int{4}
 }
-
 func (m *PartitionGroupSpec) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_PartitionGroupSpec.Unmarshal(m, b)
 }
 func (m *PartitionGroupSpec) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_PartitionGroupSpec.Marshal(b, m, deterministic)
 }
-func (m *PartitionGroupSpec) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_PartitionGroupSpec.Merge(m, src)
+func (dst *PartitionGroupSpec) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_PartitionGroupSpec.Merge(dst, src)
 }
 func (m *PartitionGroupSpec) XXX_Size() int {
 	return xxx_messageInfo_PartitionGroupSpec.Size(m)
@@ -396,13 +385,97 @@ func (m *PartitionGroupSpec) GetLog() *DistributedLogPartitionGroup {
 	return nil
 }
 
-// XXX_OneofWrappers is for the internal use of the proto package.
-func (*PartitionGroupSpec) XXX_OneofWrappers() []interface{} {
-	return []interface{}{
+// XXX_OneofFuncs is for the internal use of the proto package.
+func (*PartitionGroupSpec) XXX_OneofFuncs() (func(msg proto.Message, b *proto.Buffer) error, func(msg proto.Message, tag, wire int, b *proto.Buffer) (bool, error), func(msg proto.Message) (n int), []interface{}) {
+	return _PartitionGroupSpec_OneofMarshaler, _PartitionGroupSpec_OneofUnmarshaler, _PartitionGroupSpec_OneofSizer, []interface{}{
 		(*PartitionGroupSpec_Raft)(nil),
 		(*PartitionGroupSpec_PrimaryBackup)(nil),
 		(*PartitionGroupSpec_Log)(nil),
 	}
+}
+
+func _PartitionGroupSpec_OneofMarshaler(msg proto.Message, b *proto.Buffer) error {
+	m := msg.(*PartitionGroupSpec)
+	// group
+	switch x := m.Group.(type) {
+	case *PartitionGroupSpec_Raft:
+		b.EncodeVarint(5<<3 | proto.WireBytes)
+		if err := b.EncodeMessage(x.Raft); err != nil {
+			return err
+		}
+	case *PartitionGroupSpec_PrimaryBackup:
+		b.EncodeVarint(6<<3 | proto.WireBytes)
+		if err := b.EncodeMessage(x.PrimaryBackup); err != nil {
+			return err
+		}
+	case *PartitionGroupSpec_Log:
+		b.EncodeVarint(7<<3 | proto.WireBytes)
+		if err := b.EncodeMessage(x.Log); err != nil {
+			return err
+		}
+	case nil:
+	default:
+		return fmt.Errorf("PartitionGroupSpec.Group has unexpected type %T", x)
+	}
+	return nil
+}
+
+func _PartitionGroupSpec_OneofUnmarshaler(msg proto.Message, tag, wire int, b *proto.Buffer) (bool, error) {
+	m := msg.(*PartitionGroupSpec)
+	switch tag {
+	case 5: // group.raft
+		if wire != proto.WireBytes {
+			return true, proto.ErrInternalBadWireType
+		}
+		msg := new(RaftPartitionGroup)
+		err := b.DecodeMessage(msg)
+		m.Group = &PartitionGroupSpec_Raft{msg}
+		return true, err
+	case 6: // group.primary_backup
+		if wire != proto.WireBytes {
+			return true, proto.ErrInternalBadWireType
+		}
+		msg := new(PrimaryBackupPartitionGroup)
+		err := b.DecodeMessage(msg)
+		m.Group = &PartitionGroupSpec_PrimaryBackup{msg}
+		return true, err
+	case 7: // group.log
+		if wire != proto.WireBytes {
+			return true, proto.ErrInternalBadWireType
+		}
+		msg := new(DistributedLogPartitionGroup)
+		err := b.DecodeMessage(msg)
+		m.Group = &PartitionGroupSpec_Log{msg}
+		return true, err
+	default:
+		return false, nil
+	}
+}
+
+func _PartitionGroupSpec_OneofSizer(msg proto.Message) (n int) {
+	m := msg.(*PartitionGroupSpec)
+	// group
+	switch x := m.Group.(type) {
+	case *PartitionGroupSpec_Raft:
+		s := proto.Size(x.Raft)
+		n += 1 // tag and wire
+		n += proto.SizeVarint(uint64(s))
+		n += s
+	case *PartitionGroupSpec_PrimaryBackup:
+		s := proto.Size(x.PrimaryBackup)
+		n += 1 // tag and wire
+		n += proto.SizeVarint(uint64(s))
+		n += s
+	case *PartitionGroupSpec_Log:
+		s := proto.Size(x.Log)
+		n += 1 // tag and wire
+		n += proto.SizeVarint(uint64(s))
+		n += s
+	case nil:
+	default:
+		panic(fmt.Sprintf("proto: unexpected type %T in oneof", x))
+	}
+	return n
 }
 
 // Raft partition group spec
@@ -420,17 +493,16 @@ func (m *RaftPartitionGroup) Reset()         { *m = RaftPartitionGroup{} }
 func (m *RaftPartitionGroup) String() string { return proto.CompactTextString(m) }
 func (*RaftPartitionGroup) ProtoMessage()    {}
 func (*RaftPartitionGroup) Descriptor() ([]byte, []int) {
-	return fileDescriptor_ef7216535633430c, []int{5}
+	return fileDescriptor_partition_9e42a1abc8ffc6fc, []int{5}
 }
-
 func (m *RaftPartitionGroup) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_RaftPartitionGroup.Unmarshal(m, b)
 }
 func (m *RaftPartitionGroup) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_RaftPartitionGroup.Marshal(b, m, deterministic)
 }
-func (m *RaftPartitionGroup) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_RaftPartitionGroup.Merge(m, src)
+func (dst *RaftPartitionGroup) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_RaftPartitionGroup.Merge(dst, src)
 }
 func (m *RaftPartitionGroup) XXX_Size() int {
 	return xxx_messageInfo_RaftPartitionGroup.Size(m)
@@ -481,17 +553,16 @@ func (m *PrimaryBackupPartitionGroup) Reset()         { *m = PrimaryBackupPartit
 func (m *PrimaryBackupPartitionGroup) String() string { return proto.CompactTextString(m) }
 func (*PrimaryBackupPartitionGroup) ProtoMessage()    {}
 func (*PrimaryBackupPartitionGroup) Descriptor() ([]byte, []int) {
-	return fileDescriptor_ef7216535633430c, []int{6}
+	return fileDescriptor_partition_9e42a1abc8ffc6fc, []int{6}
 }
-
 func (m *PrimaryBackupPartitionGroup) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_PrimaryBackupPartitionGroup.Unmarshal(m, b)
 }
 func (m *PrimaryBackupPartitionGroup) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_PrimaryBackupPartitionGroup.Marshal(b, m, deterministic)
 }
-func (m *PrimaryBackupPartitionGroup) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_PrimaryBackupPartitionGroup.Merge(m, src)
+func (dst *PrimaryBackupPartitionGroup) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_PrimaryBackupPartitionGroup.Merge(dst, src)
 }
 func (m *PrimaryBackupPartitionGroup) XXX_Size() int {
 	return xxx_messageInfo_PrimaryBackupPartitionGroup.Size(m)
@@ -523,17 +594,16 @@ func (m *DistributedLogPartitionGroup) Reset()         { *m = DistributedLogPart
 func (m *DistributedLogPartitionGroup) String() string { return proto.CompactTextString(m) }
 func (*DistributedLogPartitionGroup) ProtoMessage()    {}
 func (*DistributedLogPartitionGroup) Descriptor() ([]byte, []int) {
-	return fileDescriptor_ef7216535633430c, []int{7}
+	return fileDescriptor_partition_9e42a1abc8ffc6fc, []int{7}
 }
-
 func (m *DistributedLogPartitionGroup) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_DistributedLogPartitionGroup.Unmarshal(m, b)
 }
 func (m *DistributedLogPartitionGroup) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_DistributedLogPartitionGroup.Marshal(b, m, deterministic)
 }
-func (m *DistributedLogPartitionGroup) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_DistributedLogPartitionGroup.Merge(m, src)
+func (dst *DistributedLogPartitionGroup) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_DistributedLogPartitionGroup.Merge(dst, src)
 }
 func (m *DistributedLogPartitionGroup) XXX_Size() int {
 	return xxx_messageInfo_DistributedLogPartitionGroup.Size(m)
@@ -580,17 +650,16 @@ func (m *StorageSpec) Reset()         { *m = StorageSpec{} }
 func (m *StorageSpec) String() string { return proto.CompactTextString(m) }
 func (*StorageSpec) ProtoMessage()    {}
 func (*StorageSpec) Descriptor() ([]byte, []int) {
-	return fileDescriptor_ef7216535633430c, []int{8}
+	return fileDescriptor_partition_9e42a1abc8ffc6fc, []int{8}
 }
-
 func (m *StorageSpec) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_StorageSpec.Unmarshal(m, b)
 }
 func (m *StorageSpec) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_StorageSpec.Marshal(b, m, deterministic)
 }
-func (m *StorageSpec) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_StorageSpec.Merge(m, src)
+func (dst *StorageSpec) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_StorageSpec.Merge(dst, src)
 }
 func (m *StorageSpec) XXX_Size() int {
 	return xxx_messageInfo_StorageSpec.Size(m)
@@ -642,17 +711,16 @@ func (m *CompactionSpec) Reset()         { *m = CompactionSpec{} }
 func (m *CompactionSpec) String() string { return proto.CompactTextString(m) }
 func (*CompactionSpec) ProtoMessage()    {}
 func (*CompactionSpec) Descriptor() ([]byte, []int) {
-	return fileDescriptor_ef7216535633430c, []int{9}
+	return fileDescriptor_partition_9e42a1abc8ffc6fc, []int{9}
 }
-
 func (m *CompactionSpec) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_CompactionSpec.Unmarshal(m, b)
 }
 func (m *CompactionSpec) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_CompactionSpec.Marshal(b, m, deterministic)
 }
-func (m *CompactionSpec) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_CompactionSpec.Merge(m, src)
+func (dst *CompactionSpec) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_CompactionSpec.Merge(dst, src)
 }
 func (m *CompactionSpec) XXX_Size() int {
 	return xxx_messageInfo_CompactionSpec.Size(m)
@@ -678,8 +746,6 @@ func (m *CompactionSpec) GetFreeDiskBuffer() float64 {
 }
 
 func init() {
-	proto.RegisterEnum("atomix.partition.StorageLevel", StorageLevel_name, StorageLevel_value)
-	proto.RegisterEnum("atomix.partition.MemberGroupStrategy", MemberGroupStrategy_name, MemberGroupStrategy_value)
 	proto.RegisterType((*PartitionId)(nil), "atomix.partition.PartitionId")
 	proto.RegisterType((*PartitionGroup)(nil), "atomix.partition.PartitionGroup")
 	proto.RegisterType((*Partition)(nil), "atomix.partition.Partition")
@@ -690,11 +756,15 @@ func init() {
 	proto.RegisterType((*DistributedLogPartitionGroup)(nil), "atomix.partition.DistributedLogPartitionGroup")
 	proto.RegisterType((*StorageSpec)(nil), "atomix.partition.StorageSpec")
 	proto.RegisterType((*CompactionSpec)(nil), "atomix.partition.CompactionSpec")
+	proto.RegisterEnum("atomix.partition.StorageLevel", StorageLevel_name, StorageLevel_value)
+	proto.RegisterEnum("atomix.partition.MemberGroupStrategy", MemberGroupStrategy_name, MemberGroupStrategy_value)
 }
 
-func init() { proto.RegisterFile("atomix/partition/partition.proto", fileDescriptor_ef7216535633430c) }
+func init() {
+	proto.RegisterFile("atomix/partition/partition.proto", fileDescriptor_partition_9e42a1abc8ffc6fc)
+}
 
-var fileDescriptor_ef7216535633430c = []byte{
+var fileDescriptor_partition_9e42a1abc8ffc6fc = []byte{
 	// 803 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xb4, 0x54, 0x5d, 0x6f, 0xdb, 0x36,
 	0x14, 0x8d, 0x6c, 0xe7, 0xc3, 0x57, 0x89, 0xea, 0xb2, 0x1b, 0xa6, 0x26, 0x5d, 0xe0, 0x6a, 0xe9,

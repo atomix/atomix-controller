@@ -3,11 +3,9 @@
 
 package atomix_headers
 
-import (
-	fmt "fmt"
-	proto "github.com/golang/protobuf/proto"
-	math "math"
-)
+import proto "github.com/golang/protobuf/proto"
+import fmt "fmt"
+import math "math"
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
@@ -18,7 +16,7 @@ var _ = math.Inf
 // is compatible with the proto package it is being compiled against.
 // A compilation error at this line likely means your copy of the
 // proto package needs to be updated.
-const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
+const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
 
 // Namespaced primitive name
 type Name struct {
@@ -33,17 +31,16 @@ func (m *Name) Reset()         { *m = Name{} }
 func (m *Name) String() string { return proto.CompactTextString(m) }
 func (*Name) ProtoMessage()    {}
 func (*Name) Descriptor() ([]byte, []int) {
-	return fileDescriptor_95de8fb3e0e30ffd, []int{0}
+	return fileDescriptor_headers_0b929c4bede07241, []int{0}
 }
-
 func (m *Name) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Name.Unmarshal(m, b)
 }
 func (m *Name) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_Name.Marshal(b, m, deterministic)
 }
-func (m *Name) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_Name.Merge(m, src)
+func (dst *Name) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_Name.Merge(dst, src)
 }
 func (m *Name) XXX_Size() int {
 	return xxx_messageInfo_Name.Size(m)
@@ -83,17 +80,16 @@ func (m *RequestHeader) Reset()         { *m = RequestHeader{} }
 func (m *RequestHeader) String() string { return proto.CompactTextString(m) }
 func (*RequestHeader) ProtoMessage()    {}
 func (*RequestHeader) Descriptor() ([]byte, []int) {
-	return fileDescriptor_95de8fb3e0e30ffd, []int{1}
+	return fileDescriptor_headers_0b929c4bede07241, []int{1}
 }
-
 func (m *RequestHeader) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_RequestHeader.Unmarshal(m, b)
 }
 func (m *RequestHeader) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_RequestHeader.Marshal(b, m, deterministic)
 }
-func (m *RequestHeader) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_RequestHeader.Merge(m, src)
+func (dst *RequestHeader) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_RequestHeader.Merge(dst, src)
 }
 func (m *RequestHeader) XXX_Size() int {
 	return xxx_messageInfo_RequestHeader.Size(m)
@@ -153,17 +149,16 @@ func (m *ResponseHeader) Reset()         { *m = ResponseHeader{} }
 func (m *ResponseHeader) String() string { return proto.CompactTextString(m) }
 func (*ResponseHeader) ProtoMessage()    {}
 func (*ResponseHeader) Descriptor() ([]byte, []int) {
-	return fileDescriptor_95de8fb3e0e30ffd, []int{2}
+	return fileDescriptor_headers_0b929c4bede07241, []int{2}
 }
-
 func (m *ResponseHeader) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ResponseHeader.Unmarshal(m, b)
 }
 func (m *ResponseHeader) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_ResponseHeader.Marshal(b, m, deterministic)
 }
-func (m *ResponseHeader) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_ResponseHeader.Merge(m, src)
+func (dst *ResponseHeader) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ResponseHeader.Merge(dst, src)
 }
 func (m *ResponseHeader) XXX_Size() int {
 	return xxx_messageInfo_ResponseHeader.Size(m)
@@ -215,17 +210,16 @@ func (m *StreamHeader) Reset()         { *m = StreamHeader{} }
 func (m *StreamHeader) String() string { return proto.CompactTextString(m) }
 func (*StreamHeader) ProtoMessage()    {}
 func (*StreamHeader) Descriptor() ([]byte, []int) {
-	return fileDescriptor_95de8fb3e0e30ffd, []int{3}
+	return fileDescriptor_headers_0b929c4bede07241, []int{3}
 }
-
 func (m *StreamHeader) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_StreamHeader.Unmarshal(m, b)
 }
 func (m *StreamHeader) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_StreamHeader.Marshal(b, m, deterministic)
 }
-func (m *StreamHeader) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_StreamHeader.Merge(m, src)
+func (dst *StreamHeader) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_StreamHeader.Merge(dst, src)
 }
 func (m *StreamHeader) XXX_Size() int {
 	return xxx_messageInfo_StreamHeader.Size(m)
@@ -264,9 +258,11 @@ func init() {
 	proto.RegisterType((*StreamHeader)(nil), "atomix.headers.StreamHeader")
 }
 
-func init() { proto.RegisterFile("atomix/headers/headers.proto", fileDescriptor_95de8fb3e0e30ffd) }
+func init() {
+	proto.RegisterFile("atomix/headers/headers.proto", fileDescriptor_headers_0b929c4bede07241)
+}
 
-var fileDescriptor_95de8fb3e0e30ffd = []byte{
+var fileDescriptor_headers_0b929c4bede07241 = []byte{
 	// 299 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x94, 0x92, 0xdf, 0x4a, 0xc3, 0x30,
 	0x14, 0xc6, 0xc9, 0xd6, 0xa9, 0x3d, 0xd3, 0x29, 0x61, 0x42, 0xc5, 0x0a, 0xa3, 0x37, 0xf6, 0xaa,

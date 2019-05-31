@@ -4,4 +4,4 @@ RUN apk upgrade --update --no-cache
 
 USER nobody
 
-ADD build/_output/bin/atomix-k8s-controller /usr/local/bin/atomix-controller
+ADD build/controller/_output/bin/atomix-k8s-controller /usr/local/bin/atomix-controller
