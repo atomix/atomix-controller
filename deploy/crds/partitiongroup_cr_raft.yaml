@@ -1,0 +1,12 @@
+apiVersion: k8s.atomix.io/v1alpha1
+kind: PartitionGroup
+metadata:
+  name: raft-group
+spec:
+  controller: example-atomix-controller
+  version: latest
+  size: 3
+  partitions: 3
+  raft:
+    storage:
+      className: fast-disks

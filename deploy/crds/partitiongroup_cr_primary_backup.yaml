@@ -1,0 +1,10 @@
+apiVersion: k8s.atomix.io/v1alpha1
+kind: PartitionGroup
+metadata:
+  name: primary-backup-group
+spec:
+  controller: example-atomix-controller
+  version: latest
+  size: 3
+  partitions: 7
+  primaryBackup: {}

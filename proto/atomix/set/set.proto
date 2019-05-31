@@ -1,0 +1,158 @@
+syntax = "proto3";
+
+package atomix.set;
+
+import "google/protobuf/duration.proto";
+import "atomix/headers/headers.proto";
+
+option java_package = "io.atomix.api.set";
+option java_multiple_files = true;
+
+message CreateRequest {
+    atomix.headers.RequestHeader header = 1;
+    google.protobuf.Duration timeout = 2;
+}
+
+message CreateResponse {
+    atomix.headers.ResponseHeader header = 1;
+}
+
+message KeepAliveRequest {
+    atomix.headers.RequestHeader header = 1;
+}
+
+message KeepAliveResponse {
+    atomix.headers.ResponseHeader header = 1;
+}
+
+message CloseRequest {
+    atomix.headers.RequestHeader header = 1;
+    bool delete = 2;
+}
+
+message CloseResponse {
+    atomix.headers.ResponseHeader header = 1;
+}
+
+message SizeRequest {
+    atomix.headers.RequestHeader header = 1;
+}
+
+message SizeResponse {
+    atomix.headers.ResponseHeader header = 1;
+    int32 size = 2;
+}
+
+message ContainsRequest {
+    atomix.headers.RequestHeader header = 1;
+    repeated string values = 2;
+}
+
+message ContainsResponse {
+    atomix.headers.ResponseHeader header = 1;
+    bool contains = 2;
+}
+
+message AddRequest {
+    atomix.headers.RequestHeader header = 1;
+    repeated string values = 2;
+}
+
+message AddResponse {
+    atomix.headers.ResponseHeader header = 1;
+    ResponseStatus status = 2;
+    bool added = 3;
+}
+
+message RemoveRequest {
+    atomix.headers.RequestHeader header = 1;
+    repeated string values = 2;
+}
+
+message RemoveResponse {
+    atomix.headers.ResponseHeader header = 1;
+    ResponseStatus status = 2;
+    bool removed = 3;
+}
+
+message ClearRequest {
+    atomix.headers.RequestHeader header = 1;
+}
+
+message ClearResponse {
+    atomix.headers.ResponseHeader header = 1;
+}
+
+message EventRequest {
+    atomix.headers.RequestHeader header = 1;
+}
+
+message EventResponse {
+    atomix.headers.ResponseHeader header = 1;
+    Type type = 2;
+    string value = 3;
+
+    enum Type {
+        ADDED = 0;
+        REMOVED = 1;
+    }
+}
+
+message IterateRequest {
+    atomix.headers.RequestHeader header = 1;
+}
+
+message IterateResponse {
+    atomix.headers.ResponseHeader header = 1;
+    string value = 2;
+}
+
+enum ResponseStatus {
+    OK = 0;
+    NOOP = 1;
+    WRITE_LOCK = 2;
+}
+
+// Set service
+service SetService {
+
+    rpc Create(CreateRequest) returns (CreateResponse) {
+
+    }
+
+    rpc KeepAlive(KeepAliveRequest) returns (KeepAliveResponse) {
+
+    }
+
+    rpc Close(CloseRequest) returns (CloseResponse) {
+
+    }
+
+    rpc Size(SizeRequest) returns (SizeResponse) {
+
+    }
+
+    rpc Contains(ContainsRequest) returns (ContainsResponse) {
+
+    }
+
+    rpc Add(AddRequest) returns (AddResponse) {
+
+    }
+
+    rpc Remove(RemoveRequest) returns (RemoveResponse) {
+
+    }
+
+    rpc Clear(ClearRequest) returns (ClearResponse) {
+
+    }
+
+    rpc Listen(EventRequest) returns (stream EventResponse) {
+
+    }
+
+    rpc Iterate(IterateRequest) returns (stream IterateResponse) {
+
+    }
+}

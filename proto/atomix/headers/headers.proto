@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+package atomix.headers;
+
+option java_package = "io.atomix.api.headers";
+option java_multiple_files = true;
+
+// Namespaced primitive name
+message Name {
+    string name = 1;
+    string namespace = 2;
+}
+
+message RequestHeader {
+    Name name = 1;
+    uint64 session_id = 2;
+    uint64 index = 3;
+    uint64 sequence_number = 4;
+    repeated StreamHeader streams = 5;
+}
+
+message ResponseHeader {
+    uint64 session_id = 1;
+    uint64 index = 2;
+    uint64 sequence_number = 3;
+    repeated StreamHeader streams = 4;
+}
+
+message StreamHeader {
+    uint64 stream_id = 1;
+    uint64 index = 2;
+    uint64 last_item_number = 3;
+}

@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: atomix-controller
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: atomix-controller
+  template:
+    metadata:
+      labels:
+        name: atomix-controller
+    spec:
+      serviceAccountName: atomix-controller
+      containers:
+        - name: atomix-controller
+          # Replace this with the built image name
+          image: atomix/atomix-k8s-controller:latest
+          ports:
+            - containerPort: 60000
+              name: metrics
+            - containerPort: 5679
+              name: control
+          command:
+          - atomix-controller
+          imagePullPolicy: Always
+          readinessProbe:
+            exec:
+              command:
+                - stat
+                - /tmp/operator-sdk-ready
+            initialDelaySeconds: 4
+            periodSeconds: 10
+            failureThreshold: 1
+          env:
+            - name: WATCH_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: CONTROLLER_NAME
+              value: "atomix-controller"
+            - name: CONTROLLER_NAMESPACE
+                valueFrom:
+                  fieldRef:
+                    fieldPath: metadata.name
+            - name: OPERATOR_NAME
+              value: "atomix-controller"

@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+package atomix.log;
+
+option java_package = "io.atomix.api.log";
+option java_multiple_files = true;
+
+message ProduceRequest {
+    bytes value = 1;
+}
+
+message ProduceResponse {
+}
+
+message ConsumeRequest {
+    uint64 offset = 1;
+}
+
+message LogRecord {
+    uint64 offset = 1;
+    uint64 timestamp = 2;
+    bytes value = 3;
+}
+
+// Distributed log service
+service LogService {
+
+    rpc Produce(stream ProduceRequest) returns (ProduceResponse) {}
+
+    rpc Consume(ConsumeRequest) returns (stream LogRecord) {}
+
+}
