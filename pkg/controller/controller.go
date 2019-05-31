@@ -29,7 +29,6 @@ import (
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
 	"net"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -79,15 +78,12 @@ type AtomixController struct {
 // CreatePartitionGroup creates a partition group via the k8s API
 func (c *AtomixController) CreatePartitionGroup(ctx context.Context, r *controller.CreatePartitionGroupRequest) (*controller.CreatePartitionGroupResponse, error) {
 	group := &v1alpha1.PartitionGroup{}
-	name := types.NamespacedName{
-		Name:      group.Name,
-		Namespace: util.GetControllerNamespace(),
-	}
+	name := util.GetPartitionGroupNamespacedName(r.Id)
 
 	err := c.client.Get(ctx, name, group)
 	if err != nil {
 		if k8serrors.IsNotFound(err) {
-			group = util.NewPartitionGroup(r.Group)
+			group = util.NewPartitionGroup(r.Id, r.Spec)
 		}
 		return nil, err
 	}
@@ -97,10 +93,7 @@ func (c *AtomixController) CreatePartitionGroup(ctx context.Context, r *controll
 // DeletePartitionGroup deletes a partition group via the k8s API
 func (c *AtomixController) DeletePartitionGroup(ctx context.Context, r *controller.DeletePartitionGroupRequest) (*controller.DeletePartitionGroupResponse, error) {
 	group := &v1alpha1.PartitionGroup{}
-	name := types.NamespacedName{
-		Name:      group.Name,
-		Namespace: util.GetControllerNamespace(),
-	}
+	name := util.GetPartitionGroupNamespacedName(r.Id)
 
 	if err := c.client.Get(ctx, name, group); err != nil {
 		return nil, err
@@ -114,28 +107,47 @@ func (c *AtomixController) DeletePartitionGroup(ctx context.Context, r *controll
 
 // GetPartitionGroups returns a list of partition groups read from the k8s API
 func (c *AtomixController) GetPartitionGroups(ctx context.Context, r *controller.GetPartitionGroupsRequest) (*controller.GetPartitionGroupsResponse, error) {
-	groups := &v1alpha1.PartitionGroupList{}
-	opts := &client.ListOptions{
-		Namespace:     util.GetControllerNamespace(),
-		LabelSelector: labels.SelectorFromSet(util.GetControllerLabels()),
-	}
+	if r.Id.Name != "" {
+		group := &v1alpha1.PartitionGroup{}
+		name := util.GetPartitionGroupNamespacedName(r.Id)
+		err := c.client.Get(context.TODO(), name, group)
+		if err != nil && !k8serrors.IsNotFound(err) {
+			return nil, err
+		}
 
-	if err := c.client.List(ctx, opts, groups); err != nil {
-		return nil, err
-	}
-
-	pbgroups := make([]*partitionpb.PartitionGroup, len(groups.Items))
-	for _, group := range groups.Items {
-		pbgroup, err := util.NewPartitionGroupProto(&group)
+		proto, err := util.NewPartitionGroupProto(group)
 		if err != nil {
 			return nil, err
 		}
-		pbgroups = append(pbgroups, pbgroup)
-	}
 
-	return &controller.GetPartitionGroupsResponse{
-		Groups: pbgroups,
-	}, nil
+		return &controller.GetPartitionGroupsResponse{
+			Groups: []*partitionpb.PartitionGroup{proto},
+		}, nil
+	} else {
+		groups := &v1alpha1.PartitionGroupList{}
+
+		opts := &client.ListOptions{
+			Namespace:     util.GetPartitionGroupNamespace(r.Id),
+			LabelSelector: labels.SelectorFromSet(util.GetControllerLabels()),
+		}
+
+		if err := c.client.List(ctx, opts, groups); err != nil {
+			return nil, err
+		}
+
+		pbgroups := make([]*partitionpb.PartitionGroup, len(groups.Items))
+		for _, group := range groups.Items {
+			pbgroup, err := util.NewPartitionGroupProto(&group)
+			if err != nil {
+				return nil, err
+			}
+			pbgroups = append(pbgroups, pbgroup)
+		}
+
+		return &controller.GetPartitionGroupsResponse{
+			Groups: pbgroups,
+		}, nil
+	}
 }
 
 // EnterElection is unimplemented

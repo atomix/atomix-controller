@@ -11,12 +11,18 @@ option java_multiple_files = true;
 // Partition identifier
 message PartitionId {
     int32 partition = 1;
-    string group = 2;
+    PartitionGroupId group = 2;
+}
+
+// Partition group name
+message PartitionGroupId {
+    string name = 1;
+    string namespace = 2;
 }
 
 // Partition group info
 message PartitionGroup {
-    string name = 1;
+    PartitionGroupId id = 1;
     PartitionGroupSpec spec = 2;
     repeated Partition partitions = 3;
 }
@@ -29,20 +35,19 @@ message Partition {
 
 // Partition endpoint
 message PartitionEndpoint {
-    string host = 2;
-    int32 port = 3;
+    string host = 1;
+    int32 port = 2;
 }
 
 // Partition group specification
 message PartitionGroupSpec {
-    string name = 1;
-    uint32 replicas = 2;
-    uint32 partitions = 3;
-    uint32 partition_size = 4;
+    uint32 replicas = 1;
+    uint32 partitions = 2;
+    uint32 partition_size = 3;
     oneof group {
-        RaftPartitionGroup raft = 5;
-        PrimaryBackupPartitionGroup primary_backup = 6;
-        DistributedLogPartitionGroup log = 7;
+        RaftPartitionGroup raft = 4;
+        PrimaryBackupPartitionGroup primary_backup = 5;
+        DistributedLogPartitionGroup log = 6;
     }
 }
 

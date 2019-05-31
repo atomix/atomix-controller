@@ -49,7 +49,7 @@ func Add(mgr manager.Manager) error {
 	}
 
 	// Create a new controller
-	c, err := controller.New("atomixcluster-controller", mgr, controller.Options{Reconciler: r})
+	c, err := controller.New("partition-controller", mgr, controller.Options{Reconciler: r})
 	if err != nil {
 		return err
 	}

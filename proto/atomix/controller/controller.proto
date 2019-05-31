@@ -8,8 +8,9 @@ import "atomix/partition/partition.proto";
 option java_package = "io.atomix.api.controller";
 option java_multiple_files = true;
 
-// Gets a list of partition groups
+// Gets a list of partition groups in the given namespace
 message GetPartitionGroupsRequest {
+    atomix.partition.PartitionGroupId id = 1;
 }
 
 // Returns a list of partition groups
@@ -19,7 +20,8 @@ message GetPartitionGroupsResponse {
 
 // Creates a new partition group
 message CreatePartitionGroupRequest {
-    atomix.partition.PartitionGroupSpec group = 1;
+    atomix.partition.PartitionGroupId id = 1;
+    atomix.partition.PartitionGroupSpec spec = 2;
 }
 
 // Returns the status of a partition group
@@ -29,7 +31,7 @@ message CreatePartitionGroupResponse {
 
 // Deletes a partition group
 message DeletePartitionGroupRequest {
-    string name = 1;
+    atomix.partition.PartitionGroupId id = 1;
 }
 
 // Returns the result of deleting a partition group

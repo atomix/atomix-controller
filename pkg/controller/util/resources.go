@@ -67,6 +67,10 @@ const (
 	ControllerNamespaceVar = "CONTROLLER_NAMESPACE"
 )
 
+const (
+	DefaultNamespace = "default"
+)
+
 func GetControllerName() string {
 	return os.Getenv(ControllerNameVar)
 }
@@ -84,11 +88,8 @@ func GetControllerNamespacedName() types.NamespacedName {
 
 func GetControllerLabels() map[string]string {
 	return map[string]string{
-		AppKey: AtomixApp,
-		ControllerKey: types.NamespacedName{
-			Namespace: GetControllerNamespace(),
-			Name:      GetControllerName(),
-		}.String(),
+		AppKey:        AtomixApp,
+		ControllerKey: GetControllerNamespacedName().String(),
 	}
 }
 

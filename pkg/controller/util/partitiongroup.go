@@ -11,13 +11,35 @@ import (
 	"time"
 )
 
+func GetPartitionGroupName(id *partition.PartitionGroupId) string {
+	return id.Name
+}
+
+func GetPartitionGroupNamespace(id *partition.PartitionGroupId) string {
+	if id.Namespace != "" {
+		return id.Namespace
+	} else {
+		return DefaultNamespace
+	}
+}
+
+func GetPartitionGroupNamespacedName(id *partition.PartitionGroupId) types.NamespacedName {
+	return types.NamespacedName{
+		Name: GetPartitionGroupName(id),
+		Namespace: GetPartitionGroupNamespace(id),
+	}
+}
+
 func NewPartitionGroupProto(group *v1alpha1.PartitionGroup) (*partition.PartitionGroup, error) {
 	spec, err := newPartitionGroupSpecProto(group)
 	if err != nil {
 		return nil, err
 	}
 	return &partition.PartitionGroup{
-		Name: group.Name,
+		Id: &partition.PartitionGroupId{
+			Name: group.Name,
+			Namespace: group.Namespace,
+		},
 		Spec: spec,
 	}, nil
 }
@@ -25,7 +47,6 @@ func NewPartitionGroupProto(group *v1alpha1.PartitionGroup) (*partition.Partitio
 func newPartitionGroupSpecProto(group *v1alpha1.PartitionGroup) (*partition.PartitionGroupSpec, error) {
 	if group.Spec.Raft != nil {
 		return &partition.PartitionGroupSpec{
-			Name:          group.Name,
 			Replicas:      uint32(group.Spec.Size),
 			Partitions:    uint32(group.Spec.Partitions),
 			PartitionSize: uint32(group.Spec.PartitionSize),
@@ -35,14 +56,12 @@ func newPartitionGroupSpecProto(group *v1alpha1.PartitionGroup) (*partition.Part
 		}, nil
 	} else if group.Spec.PrimaryBackup != nil {
 		return &partition.PartitionGroupSpec{
-			Name: group.Name,
 			Group: &partition.PartitionGroupSpec_PrimaryBackup{
 				PrimaryBackup: newPartitionGroupPrimaryBackupProto(group.Spec),
 			},
 		}, nil
 	} else if group.Spec.Log != nil {
 		return &partition.PartitionGroupSpec{
-			Name: group.Name,
 			Group: &partition.PartitionGroupSpec_Log{
 				Log: newPartitionGroupLogProto(group.Spec),
 			},
@@ -124,7 +143,7 @@ func newCompactionProto(spec v1alpha1.Compaction) *partition.CompactionSpec {
 	}
 }
 
-func NewPartitionGroup(pbspec *partition.PartitionGroupSpec) *v1alpha1.PartitionGroup {
+func NewPartitionGroup(id *partition.PartitionGroupId, pbspec *partition.PartitionGroupSpec) *v1alpha1.PartitionGroup {
 	spec := v1alpha1.PartitionGroupSpec{
 		Controller: types.NamespacedName{
 			Namespace: GetControllerNamespace(),
@@ -147,10 +166,16 @@ func NewPartitionGroup(pbspec *partition.PartitionGroupSpec) *v1alpha1.Partition
 		spec.MemberGroupStrategy = newMemberGroupStrategy(g.Log.MemberGroupStrategy)
 	}
 
+	ns := id.Namespace
+	if ns == "" {
+		ns = DefaultNamespace
+	}
+
 	return &v1alpha1.PartitionGroup{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:   pbspec.Name,
-			Labels: newPartitionGroupLabels(pbspec.Name),
+			Name:   id.Name,
+			Namespace: id.Namespace,
+			Labels: newPartitionGroupLabels(id.Name),
 		},
 		Spec: spec,
 	}
