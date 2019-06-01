@@ -204,7 +204,7 @@ func newContainer(image string, args []string, env []corev1.EnvVar, resources co
 	return corev1.Container{
 		Name:            "atomix",
 		Image:           image,
-		ImagePullPolicy: corev1.PullAlways,
+		ImagePullPolicy: corev1.PullIfNotPresent,
 		Env:             env,
 		Resources:       resources,
 		Ports: []corev1.ContainerPort{

@@ -161,6 +161,7 @@ func newRaftInitConfigMapScript(partition *v1alpha1.Partition) string {
 	group, _ := getPartitionGroupFromAnnotation(partition)
 	return fmt.Sprintf(`
 #!/usr/bin/env bash
+HOST=$(hostname -s)
 DOMAIN=$(hostname -d)
 REPLICAS=$1
 function create_config() {
@@ -203,6 +204,7 @@ func newPrimaryBackupInitConfigMapScript(partition *v1alpha1.Partition) string {
 	group, _ := getPartitionGroupFromAnnotation(partition)
 	return fmt.Sprintf(`
 #!/usr/bin/env bash
+HOST=$(hostname -s)
 DOMAIN=$(hostname -d)
 function create_config() {
     echo "partitionId: %d"
@@ -236,6 +238,7 @@ func newLogInitConfigMapScript(partition *v1alpha1.Partition) string {
 	group, _ := getPartitionGroupFromAnnotation(partition)
 	return fmt.Sprintf(`
 #!/usr/bin/env bash
+HOST=$(hostname -s)
 DOMAIN=$(hostname -d)
 function create_config() {
     echo "partitionId: %d"
