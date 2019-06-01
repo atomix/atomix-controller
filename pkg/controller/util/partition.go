@@ -187,11 +187,12 @@ function create_config() {
     echo "  port: 5678"
     echo "protocol:"
     echo "  type: raft"
-    echo "  memberId: $NAME-$ORD"
     echo "  members:"
     for (( i=0; i<$REPLICAS; i++ ))
     do
-        echo "    - $NAME-$((i))"
+        echo "    - id: $NAME-$((i))"
+        echo "      host: $NAME-$((i)).$DOMAIN"
+        echo "      port: 5678"
     done
     echo "  storage:"
     echo "    directory: /var/lib/atomix"
