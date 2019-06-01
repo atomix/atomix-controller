@@ -127,6 +127,25 @@ func (c *AtomixController) GetPartitionGroups(ctx context.Context, r *controller
 			return nil, err
 		}
 
+		options := &client.ListOptions{
+			LabelSelector: labels.SelectorFromSet(util.GetPartitionLabels(group)),
+		}
+		partitions := &v1alpha1.PartitionList{}
+		err = c.client.List(context.TODO(), options, partitions)
+		if err != nil {
+			return nil, err
+		}
+
+		partitionProtos := []*partitionpb.Partition{}
+		for _, partition := range partitions.Items {
+			partitionProto, err := util.NewPartitionProto(&partition)
+			if err != nil {
+				return nil, err
+			}
+			partitionProtos = append(partitionProtos, partitionProto)
+		}
+		proto.Partitions = partitionProtos
+
 		return &controller.GetPartitionGroupsResponse{
 			Groups: []*partitionpb.PartitionGroup{proto},
 		}, nil
@@ -148,6 +167,26 @@ func (c *AtomixController) GetPartitionGroups(ctx context.Context, r *controller
 			if err != nil {
 				return nil, err
 			}
+
+			options := &client.ListOptions{
+				LabelSelector: labels.SelectorFromSet(util.GetPartitionLabels(&group)),
+			}
+			partitions := &v1alpha1.PartitionList{}
+			err = c.client.List(context.TODO(), options, partitions)
+			if err != nil {
+				return nil, err
+			}
+
+			pbpartitions := []*partitionpb.Partition{}
+			for _, partition := range partitions.Items {
+				pbpartition, err := util.NewPartitionProto(&partition)
+				if err != nil {
+					return nil, err
+				}
+				pbpartitions = append(pbpartitions, pbpartition)
+			}
+			pbgroup.Partitions = pbpartitions
+
 			pbgroups = append(pbgroups, pbgroup)
 		}
 

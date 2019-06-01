@@ -71,6 +71,14 @@ func NewPartition(group *v1alpha1.PartitionGroup, partition int) *v1alpha1.Parti
 	}
 }
 
+func GetPartitionLabels(group *v1alpha1.PartitionGroup) map[string]string {
+	return map[string]string{
+		AppKey:       AtomixApp,
+		TypeKey:      PartitionType,
+		GroupKey:     group.Name,
+	}
+}
+
 // newPartitionLabels returns a new labels map containing the partition app
 func newPartitionLabels(group *v1alpha1.PartitionGroup, partition int) map[string]string {
 	return map[string]string{
@@ -112,8 +120,8 @@ func getPartitionIdFromAnnotation(partition *v1alpha1.Partition) (int, error) {
 	return int(id), nil
 }
 
-func GetPartitionServiceName(group *v1alpha1.Partition) string {
-	return group.Name
+func GetPartitionServiceName(partition *v1alpha1.Partition) string {
+	return partition.Name
 }
 
 func GetPartitionHeadlessServiceName(partition *v1alpha1.Partition) string {

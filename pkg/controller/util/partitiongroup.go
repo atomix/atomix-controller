@@ -30,6 +30,22 @@ func GetPartitionGroupNamespacedName(id *partition.PartitionGroupId) types.Names
 	}
 }
 
+func NewPartitionProto(p *v1alpha1.Partition) (*partition.Partition, error) {
+	id, err := getPartitionIdFromAnnotation(p)
+	if err != nil {
+		return nil, err
+	}
+	return &partition.Partition{
+		PartitionId: int32(id),
+		Endpoints: []*partition.PartitionEndpoint{
+			{
+				Host: GetPartitionServiceName(p),
+				Port: 5678,
+			},
+		},
+	}, nil
+}
+
 func NewPartitionGroupProto(group *v1alpha1.PartitionGroup) (*partition.PartitionGroup, error) {
 	spec, err := newPartitionGroupSpecProto(group)
 	if err != nil {
