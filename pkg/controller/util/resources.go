@@ -51,12 +51,10 @@ const (
 	HeadlessServiceSuffix  = "hs"
 	DisruptionBudgetSuffix = "pdb"
 	InitSuffix             = "init"
-	ConfigSuffix           = "config"
 )
 
 const (
 	InitScriptsVolume  = "init-scripts"
-	UserConfigVolume   = "user-config"
 	SystemConfigVolume = "system-config"
 	DataVolume         = "data"
 )
@@ -127,7 +125,7 @@ func newAffinity(group string, partition int) *corev1.Affinity {
 									Key:      PartitionKey,
 									Operator: metav1.LabelSelectorOpIn,
 									Values: []string{
-										string(partition),
+										fmt.Sprint(partition),
 									},
 								},
 							},
@@ -140,13 +138,13 @@ func newAffinity(group string, partition int) *corev1.Affinity {
 	}
 }
 
-func newInitContainers(size int32, namespace string, group string, partition int) []corev1.Container {
+func newInitContainers(size int32) []corev1.Container {
 	return []corev1.Container{
-		newInitContainer(size, namespace, group, partition),
+		newInitContainer(size),
 	}
 }
 
-func newInitContainer(size int32, namespace string, group string, partition int) corev1.Container {
+func newInitContainer(size int32) corev1.Container {
 	return corev1.Container{
 		Name:  "configure",
 		Image: "ubuntu:16.04",
@@ -183,7 +181,7 @@ func newPersistentContainers(version string, env []corev1.EnvVar, resources core
 func newPersistentContainer(version string, env []corev1.EnvVar, resources corev1.ResourceRequirements) corev1.Container {
 	args := []string{
 		"--config",
-		"/etc/atomix/system/atomix.yaml",
+		"/etc/atomix/atomix.yaml",
 	}
 	return newContainer(fmt.Sprintf("atomix/atomix-server:%s", version), args, env, resources, newPersistentVolumeMounts())
 }
@@ -197,7 +195,7 @@ func newEphemeralContainers(version string, env []corev1.EnvVar, resources corev
 func newEphemeralContainer(version string, env []corev1.EnvVar, resources corev1.ResourceRequirements) corev1.Container {
 	args := []string{
 		"--config",
-		"/etc/atomix/system/atomix.yaml",
+		"/etc/atomix/atomix.yaml",
 	}
 	return newContainer(fmt.Sprintf("atomix/atomix-server:%s", version), args, env, resources, newEphemeralVolumeMounts())
 }
@@ -262,7 +260,22 @@ func newDataVolumeMount() corev1.VolumeMount {
 func newSystemConfigVolumeMount() corev1.VolumeMount {
 	return corev1.VolumeMount{
 		Name:      SystemConfigVolume,
-		MountPath: "/etc/atomix/system",
+		MountPath: "/etc/atomix",
+	}
+}
+
+func newVolumes(initScriptsName string, storageClass *string) []corev1.Volume {
+	if storageClass == nil {
+		return []corev1.Volume{
+			newInitScriptsVolume(initScriptsName),
+			newSystemConfigVolume(),
+			newDataVolume(),
+		}
+	} else {
+		return []corev1.Volume{
+			newInitScriptsVolume(initScriptsName),
+			newSystemConfigVolume(),
+		}
 	}
 }
 
@@ -281,19 +294,6 @@ func newInitScriptsVolume(name string) corev1.Volume {
 	}
 }
 
-func newUserConfigVolume(name string) corev1.Volume {
-	return corev1.Volume{
-		Name: UserConfigVolume,
-		VolumeSource: corev1.VolumeSource{
-			ConfigMap: &corev1.ConfigMapVolumeSource{
-				LocalObjectReference: corev1.LocalObjectReference{
-					Name: name,
-				},
-			},
-		},
-	}
-}
-
 func newSystemConfigVolume() corev1.Volume {
 	return corev1.Volume{
 		Name: SystemConfigVolume,
@@ -303,7 +303,20 @@ func newSystemConfigVolume() corev1.Volume {
 	}
 }
 
+func newDataVolume() corev1.Volume {
+	return corev1.Volume{
+		Name: DataVolume,
+		VolumeSource: corev1.VolumeSource{
+			EmptyDir: &corev1.EmptyDirVolumeSource{},
+		},
+	}
+}
+
 func newPersistentVolumeClaims(className *string, size string) ([]corev1.PersistentVolumeClaim, error) {
+	if className == nil {
+		return []corev1.PersistentVolumeClaim{}, nil
+	}
+
 	claim, err := newPersistentVolumeClaim(className, size)
 	if err != nil {
 		return nil, err

@@ -25,7 +25,7 @@ func GetPartitionGroupNamespace(id *partition.PartitionGroupId) string {
 
 func GetPartitionGroupNamespacedName(id *partition.PartitionGroupId) types.NamespacedName {
 	return types.NamespacedName{
-		Name: GetPartitionGroupName(id),
+		Name:      GetPartitionGroupName(id),
 		Namespace: GetPartitionGroupNamespace(id),
 	}
 }
@@ -37,7 +37,7 @@ func NewPartitionGroupProto(group *v1alpha1.PartitionGroup) (*partition.Partitio
 	}
 	return &partition.PartitionGroup{
 		Id: &partition.PartitionGroupId{
-			Name: group.Name,
+			Name:      group.Name,
 			Namespace: group.Namespace,
 		},
 		Spec: spec,
@@ -169,9 +169,9 @@ func NewPartitionGroup(id *partition.PartitionGroupId, pbspec *partition.Partiti
 
 	return &v1alpha1.PartitionGroup{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:   id.Name,
+			Name:      id.Name,
 			Namespace: id.Namespace,
-			Labels: newPartitionGroupLabels(id.Name),
+			Labels:    newPartitionGroupLabels(id.Name),
 		},
 		Spec: spec,
 	}
@@ -180,9 +180,9 @@ func NewPartitionGroup(id *partition.PartitionGroupId, pbspec *partition.Partiti
 // newPartitionLabels returns a new labels map containing the partition group info
 func newPartitionGroupLabels(group string) map[string]string {
 	return map[string]string{
-		AppKey:        AtomixApp,
-		TypeKey:       GroupType,
-		GroupKey:      group,
+		AppKey:   AtomixApp,
+		TypeKey:  GroupType,
+		GroupKey: group,
 	}
 }
 

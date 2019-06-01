@@ -74,9 +74,10 @@ func NewPartition(group *v1alpha1.PartitionGroup, partition int) *v1alpha1.Parti
 // newPartitionLabels returns a new labels map containing the partition app
 func newPartitionLabels(group *v1alpha1.PartitionGroup, partition int) map[string]string {
 	return map[string]string{
-		AppKey:   AtomixApp,
-		TypeKey:  PartitionType,
-		GroupKey: group.Name,
+		AppKey:       AtomixApp,
+		TypeKey:      PartitionType,
+		GroupKey:     group.Name,
+		PartitionKey: fmt.Sprint(partition),
 	}
 }
 
@@ -86,7 +87,7 @@ func newPartitionAnnotations(group *v1alpha1.PartitionGroup, partition int) map[
 		ControllerAnnotation: GetControllerNameString(),
 		TypeAnnotation:       PartitionType,
 		GroupAnnotation:      group.Name,
-		PartitionAnnotation:  string(partition),
+		PartitionAnnotation:  fmt.Sprint(partition),
 	}
 }
 
@@ -127,10 +128,6 @@ func GetPartitionInitConfigMapName(partition *v1alpha1.Partition) string {
 	return getPartitionResourceName(partition, InitSuffix)
 }
 
-func GetPartitionSystemConfigMapName(partition *v1alpha1.Partition) string {
-	return getPartitionResourceName(partition, ConfigSuffix)
-}
-
 func GetPartitionStatefulSetName(partition *v1alpha1.Partition) string {
 	return partition.Name
 }
@@ -166,10 +163,6 @@ func newRaftInitConfigMapScript(partition *v1alpha1.Partition) string {
 #!/usr/bin/env bash
 DOMAIN=$(hostname -d)
 REPLICAS=$1
-CONTROLLER=$2
-NAMESPACE=$3
-GROUP=$4
-PARTITION=$5
 function create_config() {
     echo "partitionId: %d"
     echo "partitionGroup:"
@@ -189,8 +182,10 @@ function create_config() {
     echo "  members:"
     for (( i=0; i<$REPLICAS; i++ ))
     do
-        echo "      - $NAME-$((i))"
+        echo "    - $NAME-$((i))"
     done
+    echo "  storage:"
+    echo "    directory: /var/lib/atomix"
 }
 if [[ $HOST =~ (.*)-([0-9]+)$ ]]; then
     NAME=${BASH_REMATCH[1]}
@@ -209,10 +204,6 @@ func newPrimaryBackupInitConfigMapScript(partition *v1alpha1.Partition) string {
 	return fmt.Sprintf(`
 #!/usr/bin/env bash
 DOMAIN=$(hostname -d)
-CONTROLLER=$2
-NAMESPACE=$3
-GROUP=$4
-PARTITION=$5
 function create_config() {
     echo "partitionId: %d"
     echo "partitionGroup:"
@@ -261,6 +252,8 @@ function create_config() {
     echo "  port: 5678"
     echo "protocol:"
     echo "  type: log"
+    echo "  storage:"
+    echo "    directory: /var/lib/atomix"
 }
 if [[ $HOST =~ (.*)-([0-9]+)$ ]]; then
     NAME=${BASH_REMATCH[1]}
@@ -347,16 +340,6 @@ func NewPartitionStatefulSet(partition *v1alpha1.Partition) (*appsv1.StatefulSet
 
 // newEphemeralPartitionStatefulSet returns a new StatefulSet for a persistent partition group
 func newEphemeralPartitionStatefulSet(partition *v1alpha1.Partition) (*appsv1.StatefulSet, error) {
-	group, err := getPartitionGroupFromAnnotation(partition)
-	if err != nil {
-		return nil, err
-	}
-
-	id, err := getPartitionIdFromAnnotation(partition)
-	if err != nil {
-		return nil, err
-	}
-
 	return &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      GetPartitionStatefulSetName(partition),
@@ -378,13 +361,9 @@ func newEphemeralPartitionStatefulSet(partition *v1alpha1.Partition) (*appsv1.St
 					Labels: partition.Labels,
 				},
 				Spec: corev1.PodSpec{
-					InitContainers: newInitContainers(partition.Spec.Size, partition.Namespace, group, id),
+					InitContainers: newInitContainers(partition.Spec.Size),
 					Containers:     newEphemeralContainers(partition.Spec.Version, partition.Spec.Env, partition.Spec.Resources),
-					Volumes: []corev1.Volume{
-						newInitScriptsVolume(GetPartitionInitConfigMapName(partition)),
-						newUserConfigVolume(GetPartitionSystemConfigMapName(partition)),
-						newSystemConfigVolume(),
-					},
+					Volumes:        newVolumes(GetPartitionInitConfigMapName(partition), nil),
 				},
 			},
 		},
@@ -427,13 +406,9 @@ func newPersistentPartitionStatefulSet(partition *v1alpha1.Partition, storage *v
 				},
 				Spec: corev1.PodSpec{
 					Affinity:       affinity,
-					InitContainers: newInitContainers(partition.Spec.Size, partition.Namespace, group, id),
+					InitContainers: newInitContainers(partition.Spec.Size),
 					Containers:     newPersistentContainers(partition.Spec.Version, partition.Spec.Env, partition.Spec.Resources),
-					Volumes: []corev1.Volume{
-						newInitScriptsVolume(GetPartitionInitConfigMapName(partition)),
-						newUserConfigVolume(GetPartitionSystemConfigMapName(partition)),
-						newSystemConfigVolume(),
-					},
+					Volumes:        newVolumes(GetPartitionInitConfigMapName(partition), storage.ClassName),
 				},
 			},
 			VolumeClaimTemplates: claims,

@@ -6,6 +6,4 @@ spec:
   version: latest
   size: 3
   partitions: 3
-  raft:
-    storage:
-      className: fast-disks
+  raft: {}
