@@ -74,18 +74,16 @@ func NewPartition(group *v1alpha1.PartitionGroup, partition int) *v1alpha1.Parti
 // newPartitionLabels returns a new labels map containing the partition app
 func newPartitionLabels(group *v1alpha1.PartitionGroup, partition int) map[string]string {
 	return map[string]string{
-		AppKey:        AtomixApp,
-		ControllerKey: GetControllerNamespacedName().String(),
-		TypeKey:       PartitionType,
-		GroupKey:      group.Name,
-		PartitionKey:  string(partition),
+		AppKey:   AtomixApp,
+		TypeKey:  PartitionType,
+		GroupKey: group.Name,
 	}
 }
 
 // newPartitionAnnotations returns annotations for the given partition
 func newPartitionAnnotations(group *v1alpha1.PartitionGroup, partition int) map[string]string {
 	return map[string]string{
-		ControllerAnnotation: GetControllerNamespacedName().String(),
+		ControllerAnnotation: GetControllerNameString(),
 		TypeAnnotation:       PartitionType,
 		GroupAnnotation:      group.Name,
 		PartitionAnnotation:  string(partition),
@@ -299,7 +297,7 @@ func NewPartitionService(partition *v1alpha1.Partition) *corev1.Service {
 		Spec: corev1.ServiceSpec{
 			Ports: []corev1.ServicePort{
 				{
-					Name: "node",
+					Name: "api",
 					Port: 5678,
 				},
 			},
@@ -314,7 +312,7 @@ func NewPartitionService(partition *v1alpha1.Partition) *corev1.Service {
 func NewPartitionHeadlessService(partition *v1alpha1.Partition) *corev1.Service {
 	return &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      GetPartitionServiceName(partition),
+			Name:      GetPartitionHeadlessServiceName(partition),
 			Namespace: partition.Namespace,
 			Labels:    partition.Labels,
 			Annotations: map[string]string{
@@ -324,7 +322,7 @@ func NewPartitionHeadlessService(partition *v1alpha1.Partition) *corev1.Service 
 		Spec: corev1.ServiceSpec{
 			Ports: []corev1.ServicePort{
 				{
-					Name: "node",
+					Name: "api",
 					Port: 5678,
 				},
 			},

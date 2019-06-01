@@ -121,7 +121,7 @@ func (r *PartitionGroupReconciler) reconcilePartition(group *v1alpha1.PartitionG
 }
 
 func (r *PartitionGroupReconciler) addPartition(group *v1alpha1.PartitionGroup, id int) error {
-	log.Info("Creating partition", "Name", util.GetPartitionName(group, id), group.Namespace)
+	log.Info("Creating partition", "Name", util.GetPartitionName(group, id), "Namespace", group.Namespace)
 	partition := util.NewPartition(group, id)
 	if err := controllerutil.SetControllerReference(group, partition, r.scheme); err != nil {
 		return err

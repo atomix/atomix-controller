@@ -37,7 +37,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
-var log = logf.Log.WithName("controller_atomixcluster")
+var log = logf.Log.WithName("controller_partition")
 
 // AddController creates a new Partition ManagementGroup and adds it to the Manager. The Manager will set fields on the ManagementGroup
 // and Start it when the Manager is Started.
@@ -184,7 +184,7 @@ func (r *PartitionReconciler) reconcileHeadlessService(partition *v1alpha1.Parti
 }
 
 func (r *PartitionReconciler) addInitScript(partition *v1alpha1.Partition) error {
-	log.Info("Creating new configuration ConfigMap", "Name", partition.Name, "Namespace", partition.Namespace)
+	log.Info("Creating init ConfigMap", "Name", partition.Name, "Namespace", partition.Namespace)
 	cm := util.NewPartitionInitConfigMap(partition)
 	if err := controllerutil.SetControllerReference(partition, cm, r.scheme); err != nil {
 		return err
@@ -193,7 +193,7 @@ func (r *PartitionReconciler) addInitScript(partition *v1alpha1.Partition) error
 }
 
 func (r *PartitionReconciler) addStatefulSet(partition *v1alpha1.Partition) error {
-	log.Info("Creating new partition set", "Name", partition.Name, "Namespace", partition.Namespace)
+	log.Info("Creating partition set", "Name", partition.Name, "Namespace", partition.Namespace)
 	set, err := util.NewPartitionStatefulSet(partition)
 	if err != nil {
 		return err
@@ -205,7 +205,7 @@ func (r *PartitionReconciler) addStatefulSet(partition *v1alpha1.Partition) erro
 }
 
 func (r *PartitionReconciler) addService(partition *v1alpha1.Partition) error {
-	log.Info("Creating new partition service", "Name", partition.Name, "Namespace", partition.Namespace)
+	log.Info("Creating partition service", "Name", partition.Name, "Namespace", partition.Namespace)
 	service := util.NewPartitionService(partition)
 	if err := controllerutil.SetControllerReference(partition, service, r.scheme); err != nil {
 		return err
@@ -214,7 +214,7 @@ func (r *PartitionReconciler) addService(partition *v1alpha1.Partition) error {
 }
 
 func (r *PartitionReconciler) addHeadlessService(partition *v1alpha1.Partition) error {
-	log.Info("Creating new headless partition service", "Name", partition.Name, "Namespace", partition.Namespace)
+	log.Info("Creating headless partition service", "Name", partition.Name, "Namespace", partition.Namespace)
 	service := util.NewPartitionHeadlessService(partition)
 	if err := controllerutil.SetControllerReference(partition, service, r.scheme); err != nil {
 		return err
@@ -223,7 +223,7 @@ func (r *PartitionReconciler) addHeadlessService(partition *v1alpha1.Partition) 
 }
 
 func (r *PartitionReconciler) addDisruptionBudget(partition *v1alpha1.Partition) error {
-	log.Info("Creating new pod disruption budget", "Name", partition.Name, "Namespace", partition.Namespace)
+	log.Info("Creating pod disruption budget", "Name", partition.Name, "Namespace", partition.Namespace)
 	budget := util.NewPartitionDisruptionBudget(partition)
 	if err := controllerutil.SetControllerReference(partition, budget, r.scheme); err != nil {
 		return err

@@ -21,7 +21,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"os"
 )
@@ -79,17 +78,14 @@ func GetControllerNamespace() string {
 	return os.Getenv(ControllerNamespaceVar)
 }
 
-func GetControllerNamespacedName() types.NamespacedName {
-	return types.NamespacedName{
-		Name:      GetControllerName(),
-		Namespace: GetControllerNamespace(),
-	}
+func GetControllerNameString() string {
+	return fmt.Sprintf("%s.%s", GetControllerNamespace(), GetControllerName())
 }
 
 func GetControllerLabels() map[string]string {
 	return map[string]string{
 		AppKey:        AtomixApp,
-		ControllerKey: GetControllerNamespacedName().String(),
+		ControllerKey: GetControllerNameString(),
 	}
 }
 

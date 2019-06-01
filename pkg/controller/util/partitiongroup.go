@@ -181,7 +181,6 @@ func NewPartitionGroup(id *partition.PartitionGroupId, pbspec *partition.Partiti
 func newPartitionGroupLabels(group string) map[string]string {
 	return map[string]string{
 		AppKey:        AtomixApp,
-		ControllerKey: GetControllerNamespacedName().String(),
 		TypeKey:       GroupType,
 		GroupKey:      group,
 	}
