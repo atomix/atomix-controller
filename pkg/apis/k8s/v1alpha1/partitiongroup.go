@@ -30,8 +30,7 @@ const (
 type PartitionGroupType string
 
 type PartitionGroupSpec struct {
-	Version             string                       `json:"version,omitempty"`
-	Size                int32                        `json:"size,omitempty"`
+	Version             string                      `json:"version,omitempty"`
 	Partitions          int                         `json:"partitions,omitempty"`
 	PartitionSize       int                         `json:"partitionSize,omitempty"`
 	MemberGroupStrategy MemberGroupStrategy         `json:"memberGroupStrategy,omitempty"`

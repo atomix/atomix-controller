@@ -27,6 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"strconv"
+	"strings"
 )
 
 func getPartitionResourceName(partition *v1alpha1.Partition, resource string) string {
@@ -73,9 +74,9 @@ func NewPartition(group *v1alpha1.PartitionGroup, partition int) *v1alpha1.Parti
 
 func GetPartitionLabels(group *v1alpha1.PartitionGroup) map[string]string {
 	return map[string]string{
-		AppKey:       AtomixApp,
-		TypeKey:      PartitionType,
-		GroupKey:     group.Name,
+		AppKey:   AtomixApp,
+		TypeKey:  PartitionType,
+		GroupKey: group.Name,
 	}
 }
 
@@ -120,8 +121,22 @@ func getPartitionIdFromAnnotation(partition *v1alpha1.Partition) (int, error) {
 	return int(id), nil
 }
 
+func GetPartitionIdFromPartitionName(name string) (int, error) {
+	parts := strings.Split(name, "-")
+	idstr := parts[len(parts)-1]
+	id, err := strconv.ParseInt(idstr, 0, 32)
+	return int(id), err
+}
+
 func GetPartitionServiceName(partition *v1alpha1.Partition) string {
 	return partition.Name
+}
+
+func GetPartitionServiceNamespacedName(partition *v1alpha1.Partition) types.NamespacedName {
+	return types.NamespacedName{
+		Name:      partition.Name,
+		Namespace: partition.Namespace,
+	}
 }
 
 func GetPartitionHeadlessServiceName(partition *v1alpha1.Partition) string {
@@ -291,7 +306,41 @@ func NewPartitionDisruptionBudget(partition *v1alpha1.Partition) *v1beta1.PodDis
 	}
 }
 
-// NewPartitionService returns a new service for a partition group
+// GetPartitionPartitionGroupServiceName returns the partition group service name for a partition
+func GetPartitionPartitionGroupServiceName(partition *v1alpha1.Partition) string {
+	group, err := getPartitionGroupFromAnnotation(partition)
+	if err != nil {
+		return partition.Name[:strings.LastIndex(partition.Name, "-")]
+	}
+	return group
+}
+
+// GetPartitionPartitionGroupServiceNamespacedName returns the partition group service name for a partition
+func GetPartitionPartitionGroupServiceNamespacedName(partition *v1alpha1.Partition) types.NamespacedName {
+	return types.NamespacedName{
+		Name:      GetPartitionPartitionGroupServiceName(partition),
+		Namespace: partition.Namespace,
+	}
+}
+
+// GetPartitionPartitionGroupName returns the partition group name for a partition
+func GetPartitionPartitionGroupName(partition *v1alpha1.Partition) string {
+	group, err := getPartitionGroupFromAnnotation(partition)
+	if err != nil {
+		return partition.Name[:strings.LastIndex(partition.Name, "-")]
+	}
+	return group
+}
+
+// GetPartitionPartitionGroupNamespacedName returns the partition group service name for a partition
+func GetPartitionPartitionGroupNamespacedName(partition *v1alpha1.Partition) types.NamespacedName {
+	return types.NamespacedName{
+		Name:      GetPartitionPartitionGroupName(partition),
+		Namespace: partition.Namespace,
+	}
+}
+
+// NewPartitionService returns a new service for a partition
 func NewPartitionService(partition *v1alpha1.Partition) *corev1.Service {
 	return &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
@@ -306,9 +355,7 @@ func NewPartitionService(partition *v1alpha1.Partition) *corev1.Service {
 					Port: 5678,
 				},
 			},
-			PublishNotReadyAddresses: true,
-			ClusterIP:                "None",
-			Selector:                 partition.Labels,
+			Selector: partition.Labels,
 		},
 	}
 }

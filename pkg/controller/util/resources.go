@@ -87,6 +87,11 @@ func GetControllerLabels() map[string]string {
 	}
 }
 
+// GetServiceDnsName returns the DNS hostname for a service
+func GetServiceDnsName(service *corev1.Service) string {
+	return fmt.Sprintf("%s.%s.svc.cluster.local", service.Name, service.Namespace)
+}
+
 func getControllerServiceDnsName() string {
 	return fmt.Sprintf("%s.%s.svc.cluster.local", GetControllerName(), GetControllerNamespace())
 }

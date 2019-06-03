@@ -20,6 +20,7 @@ import (
 	"context"
 	"github.com/atomix/atomix-k8s-controller/pkg/apis/k8s/v1alpha1"
 	"github.com/atomix/atomix-k8s-controller/pkg/controller/util"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
@@ -101,6 +102,14 @@ func (r *PartitionGroupReconciler) Reconcile(request reconcile.Request) (reconci
 
 	v1alpha1.SetDefaults_PartitionGroup(group)
 
+	if err = r.reconcileService(group); err != nil {
+		return reconcile.Result{}, err
+	}
+
+	if err = r.reconcileEndpoints(group); err != nil {
+		return reconcile.Result{}, err
+	}
+
 	for i := 1; i <= group.Spec.Partitions; i++ {
 		if err = r.reconcilePartition(group, i); err != nil {
 			return reconcile.Result{}, err
@@ -110,6 +119,41 @@ func (r *PartitionGroupReconciler) Reconcile(request reconcile.Request) (reconci
 	return reconcile.Result{}, nil
 }
 
+func (r *PartitionGroupReconciler) reconcileService(group *v1alpha1.PartitionGroup) error {
+	service := &corev1.Service{}
+	err := r.client.Get(context.TODO(), util.GetPartitionGroupServiceNamespacedName(group), service)
+	if err != nil && errors.IsNotFound(err) {
+		err = r.addService(group)
+	}
+	return err
+}
+
+func (r *PartitionGroupReconciler) addService(group *v1alpha1.PartitionGroup) error {
+	log.Info("Creating service", "Name", group.Name, "Namespace", group.Namespace)
+	service := util.NewPartitionGroupService(group)
+	if err := controllerutil.SetControllerReference(group, service, r.scheme); err != nil {
+		return err
+	}
+	return r.client.Create(context.TODO(), service)
+}
+
+func (r *PartitionGroupReconciler) reconcileEndpoints(group *v1alpha1.PartitionGroup) error {
+	endpoints := &corev1.Endpoints{}
+	err := r.client.Get(context.TODO(), util.GetPartitionGroupServiceNamespacedName(group), endpoints)
+	if err != nil && errors.IsNotFound(err) {
+		err = r.addEndpoints(group)
+	}
+	return err
+}
+
+func (r *PartitionGroupReconciler) addEndpoints(group *v1alpha1.PartitionGroup) error {
+	log.Info("Creating endpoints", "Name", group.Name, "Namespace", group.Namespace)
+	endpoints := util.NewPartitionGroupEndpoints(group)
+	if err := controllerutil.SetControllerReference(group, endpoints, r.scheme); err != nil {
+		return err
+	}
+	return r.client.Create(context.TODO(), endpoints)
+}
 
 func (r *PartitionGroupReconciler) reconcilePartition(group *v1alpha1.PartitionGroup, id int) error {
 	partition := &v1alpha1.Partition{}

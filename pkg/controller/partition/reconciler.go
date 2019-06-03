@@ -35,6 +35,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 	"sigs.k8s.io/controller-runtime/pkg/source"
+	"sort"
 )
 
 var log = logf.Log.WithName("controller_partition")
@@ -135,6 +136,15 @@ func (r *PartitionReconciler) Reconcile(request reconcile.Request) (reconcile.Re
 		return reconcile.Result{}, err
 	}
 
+	// Reconcile the partition group service endpoints
+	err = r.reconcileEndpoints(partition)
+	if err != nil {
+		if errors.IsConflict(err) {
+			return reconcile.Result{Requeue: true}, nil
+		}
+		return reconcile.Result{}, err
+	}
+
 	return reconcile.Result{}, nil
 }
 
@@ -167,7 +177,7 @@ func (r *PartitionReconciler) reconcileStatefulSet(partition *v1alpha1.Partition
 
 func (r *PartitionReconciler) reconcileService(partition *v1alpha1.Partition) error {
 	service := &corev1.Service{}
-	err := r.client.Get(context.TODO(), types.NamespacedName{Name: util.GetPartitionServiceName(partition), Namespace: partition.Namespace}, service)
+	err := r.client.Get(context.TODO(), util.GetPartitionServiceNamespacedName(partition), service)
 	if err != nil && errors.IsNotFound(err) {
 		err = r.addService(partition)
 	}
@@ -179,6 +189,22 @@ func (r *PartitionReconciler) reconcileHeadlessService(partition *v1alpha1.Parti
 	err := r.client.Get(context.TODO(), types.NamespacedName{Name: util.GetPartitionHeadlessServiceName(partition), Namespace: partition.Namespace}, service)
 	if err != nil && errors.IsNotFound(err) {
 		err = r.addHeadlessService(partition)
+	}
+	return err
+}
+
+func (r *PartitionReconciler) reconcileEndpoints(partition *v1alpha1.Partition) error {
+	service := &corev1.Service{}
+	err := r.client.Get(context.TODO(), util.GetPartitionServiceNamespacedName(partition), service)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			return nil
+		} else {
+			return err
+		}
+	}
+	if service.Spec.ClusterIP != "" {
+		err = r.addEndpoints(partition, service)
 	}
 	return err
 }
@@ -229,4 +255,80 @@ func (r *PartitionReconciler) addDisruptionBudget(partition *v1alpha1.Partition)
 		return err
 	}
 	return r.client.Create(context.TODO(), budget)
+}
+
+func (r *PartitionReconciler) addEndpoints(partition *v1alpha1.Partition, service *corev1.Service) error {
+	log.Info("Creating endpoint", "Name", partition.Name, "Namespace", partition.Namespace)
+	endpoints := &corev1.Endpoints{}
+	err := r.client.Get(context.TODO(), util.GetPartitionPartitionGroupServiceNamespacedName(partition), endpoints)
+	if err != nil {
+		return nil
+	}
+
+	// If the partition's service is already a member of the subsets, return.
+	notReadyAddresses := 0
+	for _, subset := range endpoints.Subsets {
+		for _, address := range subset.NotReadyAddresses {
+			if address.Hostname == service.Name {
+				return nil
+			}
+			notReadyAddresses += 1
+		}
+		for _, address := range subset.Addresses {
+			if address.Hostname == service.Name {
+				return nil
+			}
+		}
+	}
+
+	// Append the partition service to the endpoint subsets.
+	endpoints.Subsets = append(endpoints.Subsets, corev1.EndpointSubset{
+		NotReadyAddresses: []corev1.EndpointAddress{
+			{
+				IP:       service.Spec.ClusterIP,
+				Hostname: service.Name,
+			},
+		},
+		Ports: util.NewPartitionGroupEndpointPorts(),
+	})
+	notReadyAddresses += 1
+
+	// Load the parent partition group.
+	group := &v1alpha1.PartitionGroup{}
+	err = r.client.Get(context.TODO(), util.GetPartitionPartitionGroupNamespacedName(partition), group)
+	if err != nil {
+		return err
+	}
+
+	// If all the partition services have been added to the endpoint subsets, sort the subsets.
+	if notReadyAddresses == group.Spec.Partitions {
+		log.Info("Updating endpoint addresses to ready", "Name", partition.Name, "Namespace", partition.Namespace)
+		addresses := make([]corev1.EndpointAddress, notReadyAddresses)
+		i := 0
+		for _, subset := range endpoints.Subsets {
+			for _, address := range subset.NotReadyAddresses {
+				addresses[i] = address
+				i += 1
+			}
+		}
+		sort.Slice(addresses, func(i, j int) bool {
+			iid, err := util.GetPartitionIdFromPartitionName(addresses[i].Hostname)
+			if err != nil {
+				return false
+			}
+			jid, err := util.GetPartitionIdFromPartitionName(addresses[j].Hostname)
+			if err != nil {
+				return false
+			}
+			return iid < jid
+		})
+
+		endpoints.Subsets = []corev1.EndpointSubset{
+			{
+				Addresses: addresses,
+				Ports:     util.NewPartitionGroupEndpointPorts(),
+			},
+		}
+	}
+	return r.client.Update(context.TODO(), endpoints)
 }

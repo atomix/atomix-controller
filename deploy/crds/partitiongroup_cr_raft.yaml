@@ -4,6 +4,6 @@ metadata:
   name: raft
 spec:
   version: latest
-  size: 3
   partitions: 3
+  partitionSize: 3
   raft: {}

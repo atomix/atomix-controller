@@ -34,13 +34,10 @@ func SetDefaults_Partition(partition *Partition) {
 
 func SetDefaults_PartitionGroup(group *PartitionGroup) {
 	if group.Spec.Version == "" {
-		group.Spec.Version = "3.1.0"
-	}
-	if group.Spec.Size == 0 {
-		group.Spec.Size = 1
+		group.Spec.Version = "latest"
 	}
 	if group.Spec.Partitions == 0 {
-		group.Spec.Partitions = int(group.Spec.Size)
+		group.Spec.Partitions = 1
 	}
 	if group.Spec.PartitionSize == 0 {
 		group.Spec.PartitionSize = 1
