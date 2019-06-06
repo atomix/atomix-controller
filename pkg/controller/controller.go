@@ -118,7 +118,12 @@ func (c *AtomixController) GetPartitionGroups(ctx context.Context, r *controller
 		group := &v1alpha1.PartitionGroup{}
 		name := util.GetPartitionGroupNamespacedName(r.Id)
 		err := c.client.Get(context.TODO(), name, group)
-		if err != nil && !k8serrors.IsNotFound(err) {
+		if err != nil {
+			if k8serrors.IsNotFound(err) {
+				return &controller.GetPartitionGroupsResponse{
+					Groups: []*partitionpb.PartitionGroup{},
+				}, nil
+			}
 			return nil, err
 		}
 
@@ -153,15 +158,14 @@ func (c *AtomixController) GetPartitionGroups(ctx context.Context, r *controller
 		groups := &v1alpha1.PartitionGroupList{}
 
 		opts := &client.ListOptions{
-			Namespace:     util.GetPartitionGroupNamespace(r.Id),
-			LabelSelector: labels.SelectorFromSet(util.GetControllerLabels()),
+			Namespace: util.GetPartitionGroupNamespace(r.Id),
 		}
 
 		if err := c.client.List(ctx, opts, groups); err != nil {
 			return nil, err
 		}
 
-		pbgroups := make([]*partitionpb.PartitionGroup, len(groups.Items))
+		pbgroups := make([]*partitionpb.PartitionGroup, 0, len(groups.Items))
 		for _, group := range groups.Items {
 			pbgroup, err := util.NewPartitionGroupProto(&group)
 			if err != nil {
@@ -239,7 +243,7 @@ func (c *AtomixController) Start(stop <-chan struct{}) error {
 	errs := make(chan error)
 
 	log.Info("Starting controller server")
-	lis, err := net.Listen("tcp", "0.0.0.0:5679")
+	lis, err := net.Listen("tcp", ":5679")
 	if err != nil {
 		return err
 	}
