@@ -88,11 +88,11 @@ func (c *AtomixController) CreatePartitionGroup(ctx context.Context, r *controll
 	name := util.GetPartitionGroupNamespacedName(r.Id)
 
 	err := c.client.Get(ctx, name, group)
-	if err != nil {
-		if k8serrors.IsNotFound(err) {
-			group = util.NewPartitionGroup(r.Id, r.Spec)
+	if err != nil && k8serrors.IsNotFound(err) {
+		group = util.NewPartitionGroup(r.Id, r.Spec)
+		if err = c.client.Create(context.TODO(), group); err != nil {
+			return nil, err
 		}
-		return nil, err
 	}
 	return &controller.CreatePartitionGroupResponse{}, nil
 }

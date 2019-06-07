@@ -291,17 +291,20 @@ func newLogPartitionGroup(pbspec *partition.DistributedLogPartitionGroup) *v1alp
 }
 
 func newStorage(pbspec *partition.StorageSpec) v1alpha1.Storage {
-	storage := v1alpha1.Storage{
-		Level:         newStorageLevel(pbspec.Level),
-		FlushOnCommit: pbspec.FlushOnCommit,
+	if pbspec != nil {
+		storage := v1alpha1.Storage{
+			Level:         newStorageLevel(pbspec.Level),
+			FlushOnCommit: pbspec.FlushOnCommit,
+		}
+		if pbspec.SegmentSize > 0 {
+			storage.SegmentSize = string(pbspec.SegmentSize)
+		}
+		if pbspec.MaxEntrySize > 0 {
+			storage.EntrySize = string(pbspec.MaxEntrySize)
+		}
+		return storage
 	}
-	if pbspec.SegmentSize > 0 {
-		storage.SegmentSize = string(pbspec.SegmentSize)
-	}
-	if pbspec.MaxEntrySize > 0 {
-		storage.EntrySize = string(pbspec.MaxEntrySize)
-	}
-	return storage
+	return v1alpha1.Storage{}
 }
 
 func newStorageLevel(level partition.StorageLevel) v1alpha1.StorageLevel {
@@ -314,9 +317,14 @@ func newStorageLevel(level partition.StorageLevel) v1alpha1.StorageLevel {
 }
 
 func newCompaction(pbspec *partition.CompactionSpec) v1alpha1.Compaction {
+	if pbspec != nil {
+		return v1alpha1.Compaction{
+			Dynamic:        pbspec.Dynamic,
+			FreeDiskBuffer: float32(pbspec.FreeDiskBuffer),
+		}
+	}
 	return v1alpha1.Compaction{
-		Dynamic:        pbspec.Dynamic,
-		FreeDiskBuffer: float32(pbspec.FreeDiskBuffer),
+		Dynamic: true,
 	}
 }
 
