@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package util
+package k8s
 
 import (
 	"errors"

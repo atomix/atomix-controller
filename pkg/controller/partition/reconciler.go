@@ -20,7 +20,7 @@ import (
 	"context"
 	"github.com/atomix/atomix-k8s-controller/pkg/apis/k8s/v1alpha1"
 	"github.com/atomix/atomix-k8s-controller/pkg/controller/protocol"
-	"github.com/atomix/atomix-k8s-controller/pkg/controller/util"
+	k8sutil "github.com/atomix/atomix-k8s-controller/pkg/controller/util/k8s"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/api/policy/v1beta1"
@@ -153,7 +153,7 @@ func (r *PartitionReconciler) Reconcile(request reconcile.Request) (reconcile.Re
 
 func (r *PartitionReconciler) reconcileConfigMap(partition *v1alpha1.Partition) error {
 	cm := &corev1.ConfigMap{}
-	err := r.client.Get(context.TODO(), types.NamespacedName{Name: util.GetPartitionConfigMapName(partition), Namespace: partition.Namespace}, cm)
+	err := r.client.Get(context.TODO(), types.NamespacedName{Name: k8sutil.GetPartitionConfigMapName(partition), Namespace: partition.Namespace}, cm)
 	if err != nil && errors.IsNotFound(err) {
 		err = r.addConfigMap(partition)
 	}
@@ -162,7 +162,7 @@ func (r *PartitionReconciler) reconcileConfigMap(partition *v1alpha1.Partition) 
 
 func (r *PartitionReconciler) reconcileDisruptionBudget(partition *v1alpha1.Partition) error {
 	budget := &v1beta1.PodDisruptionBudget{}
-	err := r.client.Get(context.TODO(), types.NamespacedName{Name: util.GetPartitionDisruptionBudgetName(partition), Namespace: partition.Namespace}, budget)
+	err := r.client.Get(context.TODO(), types.NamespacedName{Name: k8sutil.GetPartitionDisruptionBudgetName(partition), Namespace: partition.Namespace}, budget)
 	if err != nil && errors.IsNotFound(err) {
 		err = r.addDisruptionBudget(partition)
 	}
@@ -171,7 +171,7 @@ func (r *PartitionReconciler) reconcileDisruptionBudget(partition *v1alpha1.Part
 
 func (r *PartitionReconciler) reconcileStatefulSet(partition *v1alpha1.Partition) error {
 	set := &appsv1.StatefulSet{}
-	err := r.client.Get(context.TODO(), types.NamespacedName{Name: util.GetPartitionStatefulSetName(partition), Namespace: partition.Namespace}, set)
+	err := r.client.Get(context.TODO(), types.NamespacedName{Name: k8sutil.GetPartitionStatefulSetName(partition), Namespace: partition.Namespace}, set)
 	if err != nil && errors.IsNotFound(err) {
 		err = r.addStatefulSet(partition)
 	}
@@ -180,7 +180,7 @@ func (r *PartitionReconciler) reconcileStatefulSet(partition *v1alpha1.Partition
 
 func (r *PartitionReconciler) reconcileService(partition *v1alpha1.Partition) error {
 	service := &corev1.Service{}
-	err := r.client.Get(context.TODO(), util.GetPartitionServiceNamespacedName(partition), service)
+	err := r.client.Get(context.TODO(), k8sutil.GetPartitionServiceNamespacedName(partition), service)
 	if err != nil && errors.IsNotFound(err) {
 		err = r.addService(partition)
 	}
@@ -189,7 +189,7 @@ func (r *PartitionReconciler) reconcileService(partition *v1alpha1.Partition) er
 
 func (r *PartitionReconciler) reconcileHeadlessService(partition *v1alpha1.Partition) error {
 	service := &corev1.Service{}
-	err := r.client.Get(context.TODO(), types.NamespacedName{Name: util.GetPartitionHeadlessServiceName(partition), Namespace: partition.Namespace}, service)
+	err := r.client.Get(context.TODO(), types.NamespacedName{Name: k8sutil.GetPartitionHeadlessServiceName(partition), Namespace: partition.Namespace}, service)
 	if err != nil && errors.IsNotFound(err) {
 		err = r.addHeadlessService(partition)
 	}
@@ -198,7 +198,7 @@ func (r *PartitionReconciler) reconcileHeadlessService(partition *v1alpha1.Parti
 
 func (r *PartitionReconciler) reconcileEndpoints(partition *v1alpha1.Partition) error {
 	service := &corev1.Service{}
-	err := r.client.Get(context.TODO(), util.GetPartitionServiceNamespacedName(partition), service)
+	err := r.client.Get(context.TODO(), k8sutil.GetPartitionServiceNamespacedName(partition), service)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			return nil
@@ -214,7 +214,7 @@ func (r *PartitionReconciler) reconcileEndpoints(partition *v1alpha1.Partition) 
 
 func (r *PartitionReconciler) addConfigMap(partition *v1alpha1.Partition) error {
 	log.Info("Creating node ConfigMap", "Name", partition.Name, "Namespace", partition.Namespace)
-	cm, err := util.NewPartitionConfigMap(partition, r.protocols)
+	cm, err := k8sutil.NewPartitionConfigMap(partition, r.protocols)
 	if err != nil {
 		return err
 	}
@@ -226,7 +226,7 @@ func (r *PartitionReconciler) addConfigMap(partition *v1alpha1.Partition) error 
 
 func (r *PartitionReconciler) addStatefulSet(partition *v1alpha1.Partition) error {
 	log.Info("Creating partition set", "Name", partition.Name, "Namespace", partition.Namespace)
-	set, err := util.NewPartitionStatefulSet(partition)
+	set, err := k8sutil.NewPartitionStatefulSet(partition)
 	if err != nil {
 		return err
 	}
@@ -238,7 +238,7 @@ func (r *PartitionReconciler) addStatefulSet(partition *v1alpha1.Partition) erro
 
 func (r *PartitionReconciler) addService(partition *v1alpha1.Partition) error {
 	log.Info("Creating partition service", "Name", partition.Name, "Namespace", partition.Namespace)
-	service := util.NewPartitionService(partition)
+	service := k8sutil.NewPartitionService(partition)
 	if err := controllerutil.SetControllerReference(partition, service, r.scheme); err != nil {
 		return err
 	}
@@ -247,7 +247,7 @@ func (r *PartitionReconciler) addService(partition *v1alpha1.Partition) error {
 
 func (r *PartitionReconciler) addHeadlessService(partition *v1alpha1.Partition) error {
 	log.Info("Creating headless partition service", "Name", partition.Name, "Namespace", partition.Namespace)
-	service := util.NewPartitionHeadlessService(partition)
+	service := k8sutil.NewPartitionHeadlessService(partition)
 	if err := controllerutil.SetControllerReference(partition, service, r.scheme); err != nil {
 		return err
 	}
@@ -256,7 +256,7 @@ func (r *PartitionReconciler) addHeadlessService(partition *v1alpha1.Partition) 
 
 func (r *PartitionReconciler) addDisruptionBudget(partition *v1alpha1.Partition) error {
 	log.Info("Creating pod disruption budget", "Name", partition.Name, "Namespace", partition.Namespace)
-	budget := util.NewPartitionDisruptionBudget(partition)
+	budget := k8sutil.NewPartitionDisruptionBudget(partition)
 	if err := controllerutil.SetControllerReference(partition, budget, r.scheme); err != nil {
 		return err
 	}
@@ -266,7 +266,7 @@ func (r *PartitionReconciler) addDisruptionBudget(partition *v1alpha1.Partition)
 func (r *PartitionReconciler) addEndpoints(partition *v1alpha1.Partition, service *corev1.Service) error {
 	log.Info("Creating endpoint", "Name", partition.Name, "Namespace", partition.Namespace)
 	endpoints := &corev1.Endpoints{}
-	err := r.client.Get(context.TODO(), util.GetPartitionPartitionGroupServiceNamespacedName(partition), endpoints)
+	err := r.client.Get(context.TODO(), k8sutil.GetPartitionPartitionGroupServiceNamespacedName(partition), endpoints)
 	if err != nil {
 		return nil
 	}
@@ -295,13 +295,13 @@ func (r *PartitionReconciler) addEndpoints(partition *v1alpha1.Partition, servic
 				Hostname: service.Name,
 			},
 		},
-		Ports: util.NewPartitionGroupEndpointPorts(),
+		Ports: k8sutil.NewPartitionGroupEndpointPorts(),
 	})
 	notReadyAddresses += 1
 
 	// Load the parent partition group.
 	group := &v1alpha1.PartitionGroup{}
-	err = r.client.Get(context.TODO(), util.GetPartitionPartitionGroupNamespacedName(partition), group)
+	err = r.client.Get(context.TODO(), k8sutil.GetPartitionPartitionGroupNamespacedName(partition), group)
 	if err != nil {
 		return err
 	}
@@ -318,11 +318,11 @@ func (r *PartitionReconciler) addEndpoints(partition *v1alpha1.Partition, servic
 			}
 		}
 		sort.Slice(addresses, func(i, j int) bool {
-			iid, err := util.GetPartitionIdFromPartitionName(addresses[i].Hostname)
+			iid, err := k8sutil.GetPartitionIdFromPartitionName(addresses[i].Hostname)
 			if err != nil {
 				return false
 			}
-			jid, err := util.GetPartitionIdFromPartitionName(addresses[j].Hostname)
+			jid, err := k8sutil.GetPartitionIdFromPartitionName(addresses[j].Hostname)
 			if err != nil {
 				return false
 			}
@@ -332,7 +332,7 @@ func (r *PartitionReconciler) addEndpoints(partition *v1alpha1.Partition, servic
 		endpoints.Subsets = []corev1.EndpointSubset{
 			{
 				Addresses: addresses,
-				Ports:     util.NewPartitionGroupEndpointPorts(),
+				Ports:     k8sutil.NewPartitionGroupEndpointPorts(),
 			},
 		}
 	}

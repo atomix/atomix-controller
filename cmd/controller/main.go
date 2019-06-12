@@ -25,9 +25,8 @@ import (
 
 	"github.com/atomix/atomix-k8s-controller/pkg/apis"
 	"github.com/atomix/atomix-k8s-controller/pkg/controller"
-	"github.com/operator-framework/operator-sdk/pkg/leader"
-	"github.com/operator-framework/operator-sdk/pkg/ready"
-	sdkVersion "github.com/operator-framework/operator-sdk/version"
+	"github.com/atomix/atomix-k8s-controller/pkg/controller/util/leader"
+	"github.com/atomix/atomix-k8s-controller/pkg/controller/util/ready"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -40,7 +39,6 @@ var log = logf.Log.WithName("cmd")
 func printVersion() {
 	log.Info(fmt.Sprintf("Go Version: %s", runtime.Version()))
 	log.Info(fmt.Sprintf("Go OS/Arch: %s/%s", runtime.GOOS, runtime.GOARCH))
-	log.Info(fmt.Sprintf("operator-sdk Version: %v", sdkVersion.Version))
 }
 
 func main() {
@@ -62,7 +60,7 @@ func main() {
 	}
 
 	// Become the leader before proceeding
-	leader.Become(context.TODO(), "atomix-controller-lock")
+	leader.Become(context.TODO())
 
 	r := ready.NewFileReady()
 	err = r.Set()

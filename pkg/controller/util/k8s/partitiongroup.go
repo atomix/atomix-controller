@@ -1,4 +1,4 @@
-package util
+package k8s
 
 import (
 	"github.com/atomix/atomix-k8s-controller/pkg/apis/k8s/v1alpha1"

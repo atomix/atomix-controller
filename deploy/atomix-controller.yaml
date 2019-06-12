@@ -127,7 +127,7 @@ spec:
             exec:
               command:
                 - stat
-                - /tmp/operator-sdk-ready
+                - /tmp/atomix-controller-ready
             initialDelaySeconds: 4
             periodSeconds: 10
             failureThreshold: 1
@@ -135,6 +135,14 @@ spec:
             - name: CONTROLLER_NAME
               value: "atomix-controller"
             - name: CONTROLLER_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace

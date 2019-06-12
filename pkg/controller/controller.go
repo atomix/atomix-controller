@@ -24,7 +24,7 @@ import (
 	"github.com/atomix/atomix-k8s-controller/pkg/controller/partition"
 	"github.com/atomix/atomix-k8s-controller/pkg/controller/partitiongroup"
 	"github.com/atomix/atomix-k8s-controller/pkg/controller/protocol"
-	"github.com/atomix/atomix-k8s-controller/pkg/controller/util"
+	k8sutil "github.com/atomix/atomix-k8s-controller/pkg/controller/util/k8s"
 	"github.com/atomix/atomix-k8s-controller/proto/atomix/controller"
 	"google.golang.org/grpc"
 	"io"
@@ -89,11 +89,11 @@ type AtomixController struct {
 // CreatePartitionGroup creates a partition group via the k8s API
 func (c *AtomixController) CreatePartitionGroup(ctx context.Context, r *controller.CreatePartitionGroupRequest) (*controller.CreatePartitionGroupResponse, error) {
 	group := &v1alpha1.PartitionGroup{}
-	name := util.GetPartitionGroupNamespacedName(r.Id)
+	name := k8sutil.GetPartitionGroupNamespacedName(r.Id)
 
 	err := c.client.Get(ctx, name, group)
 	if err != nil && k8serrors.IsNotFound(err) {
-		group, err = util.NewPartitionGroup(r.Id, r.Spec, c.protocols)
+		group, err = k8sutil.NewPartitionGroup(r.Id, r.Spec, c.protocols)
 		if err != nil {
 			return nil, err
 		}
@@ -107,7 +107,7 @@ func (c *AtomixController) CreatePartitionGroup(ctx context.Context, r *controll
 // DeletePartitionGroup deletes a partition group via the k8s API
 func (c *AtomixController) DeletePartitionGroup(ctx context.Context, r *controller.DeletePartitionGroupRequest) (*controller.DeletePartitionGroupResponse, error) {
 	group := &v1alpha1.PartitionGroup{}
-	name := util.GetPartitionGroupNamespacedName(r.Id)
+	name := k8sutil.GetPartitionGroupNamespacedName(r.Id)
 
 	if err := c.client.Get(ctx, name, group); err != nil {
 		return nil, err
@@ -123,7 +123,7 @@ func (c *AtomixController) DeletePartitionGroup(ctx context.Context, r *controll
 func (c *AtomixController) GetPartitionGroups(ctx context.Context, r *controller.GetPartitionGroupsRequest) (*controller.GetPartitionGroupsResponse, error) {
 	if r.Id.Name != "" {
 		group := &v1alpha1.PartitionGroup{}
-		name := util.GetPartitionGroupNamespacedName(r.Id)
+		name := k8sutil.GetPartitionGroupNamespacedName(r.Id)
 		err := c.client.Get(context.TODO(), name, group)
 		if err != nil {
 			if k8serrors.IsNotFound(err) {
@@ -134,13 +134,13 @@ func (c *AtomixController) GetPartitionGroups(ctx context.Context, r *controller
 			return nil, err
 		}
 
-		proto, err := util.NewPartitionGroupProto(group, c.protocols)
+		proto, err := k8sutil.NewPartitionGroupProto(group, c.protocols)
 		if err != nil {
 			return nil, err
 		}
 
 		options := &client.ListOptions{
-			LabelSelector: labels.SelectorFromSet(util.GetPartitionLabels(group)),
+			LabelSelector: labels.SelectorFromSet(k8sutil.GetPartitionLabels(group)),
 		}
 		partitions := &v1alpha1.PartitionList{}
 		err = c.client.List(context.TODO(), options, partitions)
@@ -150,7 +150,7 @@ func (c *AtomixController) GetPartitionGroups(ctx context.Context, r *controller
 
 		partitionProtos := []*controller.Partition{}
 		for _, partition := range partitions.Items {
-			partitionProto, err := util.NewPartitionProto(&partition)
+			partitionProto, err := k8sutil.NewPartitionProto(&partition)
 			if err != nil {
 				return nil, err
 			}
@@ -165,7 +165,7 @@ func (c *AtomixController) GetPartitionGroups(ctx context.Context, r *controller
 		groups := &v1alpha1.PartitionGroupList{}
 
 		opts := &client.ListOptions{
-			Namespace: util.GetPartitionGroupNamespace(r.Id),
+			Namespace: k8sutil.GetPartitionGroupNamespace(r.Id),
 		}
 
 		if err := c.client.List(ctx, opts, groups); err != nil {
@@ -174,13 +174,13 @@ func (c *AtomixController) GetPartitionGroups(ctx context.Context, r *controller
 
 		pbgroups := make([]*controller.PartitionGroup, 0, len(groups.Items))
 		for _, group := range groups.Items {
-			pbgroup, err := util.NewPartitionGroupProto(&group, c.protocols)
+			pbgroup, err := k8sutil.NewPartitionGroupProto(&group, c.protocols)
 			if err != nil {
 				return nil, err
 			}
 
 			options := &client.ListOptions{
-				LabelSelector: labels.SelectorFromSet(util.GetPartitionLabels(&group)),
+				LabelSelector: labels.SelectorFromSet(k8sutil.GetPartitionLabels(&group)),
 			}
 			partitions := &v1alpha1.PartitionList{}
 			err = c.client.List(context.TODO(), options, partitions)
@@ -190,7 +190,7 @@ func (c *AtomixController) GetPartitionGroups(ctx context.Context, r *controller
 
 			pbpartitions := []*controller.Partition{}
 			for _, partition := range partitions.Items {
-				pbpartition, err := util.NewPartitionProto(&partition)
+				pbpartition, err := k8sutil.NewPartitionProto(&partition)
 				if err != nil {
 					return nil, err
 				}
@@ -319,8 +319,8 @@ func (e *election) enter(candidate string, ch chan term) error {
 	// Initialize the ConfigMap and create a namespaced name
 	cm := &v1.ConfigMap{}
 	name := types.NamespacedName{
-		Namespace: util.GetControllerNamespace(),
-		Name:      util.GetControllerName() + "-elections",
+		Namespace: k8sutil.GetControllerNamespace(),
+		Name:      k8sutil.GetControllerName() + "-elections",
 	}
 
 	// Ensure the elections ConfigMap has been created in k8s
@@ -390,8 +390,8 @@ func (e *election) leave(candidate string) error {
 	// Initialize the ConfigMap and create a namespaced name
 	cm := &v1.ConfigMap{}
 	name := types.NamespacedName{
-		Namespace: util.GetControllerNamespace(),
-		Name:      util.GetControllerName() + "-elections",
+		Namespace: k8sutil.GetControllerNamespace(),
+		Name:      k8sutil.GetControllerName() + "-elections",
 	}
 
 	// Read the elections ConfigMap and return if it does not exist
