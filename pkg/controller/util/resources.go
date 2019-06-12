@@ -50,13 +50,20 @@ const (
 	ServiceSuffix          = "service"
 	HeadlessServiceSuffix  = "hs"
 	DisruptionBudgetSuffix = "pdb"
-	InitSuffix             = "init"
+	ConfigSuffix           = "config"
 )
 
 const (
-	InitScriptsVolume  = "init-scripts"
-	SystemConfigVolume = "system-config"
-	DataVolume         = "data"
+	ConfigPath          = "/etc/atomix"
+	PartitionConfigFile = "partition.json"
+	ProtocolConfigFile  = "protocol.json"
+)
+
+const (
+	InitScriptsVolume = "init-scripts"
+	EnvVolume         = "env"
+	ConfigVolume      = "config"
+	DataVolume        = "data"
 )
 
 const (
@@ -143,66 +150,27 @@ func newAffinity(group string, partition int) *corev1.Affinity {
 	}
 }
 
-func newInitContainers(size int32) []corev1.Container {
+func newPersistentContainers(image string, env []corev1.EnvVar, resources corev1.ResourceRequirements) []corev1.Container {
 	return []corev1.Container{
-		newInitContainer(size),
+		newPersistentContainer(image, env, resources),
 	}
 }
 
-func newInitContainer(size int32) corev1.Container {
-	return corev1.Container{
-		Name:  "configure",
-		Image: "ubuntu:16.04",
-		Env: []corev1.EnvVar{
-			{
-				Name:  "ATOMIX_REPLICAS",
-				Value: fmt.Sprint(size),
+func newPersistentContainer(image string, env []corev1.EnvVar, resources corev1.ResourceRequirements) corev1.Container {
+	env = append(env, corev1.EnvVar{
+		Name: "NODE_ID",
+		ValueFrom: &corev1.EnvVarSource{
+			FieldRef: &corev1.ObjectFieldSelector{
+				FieldPath: "metadata.name",
 			},
 		},
-		Command: []string{
-			"bash",
-			"-c",
-			"/scripts/create_config.sh $ATOMIX_REPLICAS > /config/atomix.yaml",
-		},
-		VolumeMounts: []corev1.VolumeMount{
-			{
-				Name:      InitScriptsVolume,
-				MountPath: "/scripts",
-			},
-			{
-				Name:      SystemConfigVolume,
-				MountPath: "/config",
-			},
-		},
-	}
-}
-
-func newPersistentContainers(version string, env []corev1.EnvVar, resources corev1.ResourceRequirements) []corev1.Container {
-	return []corev1.Container{
-		newPersistentContainer(version, env, resources),
-	}
-}
-
-func newPersistentContainer(version string, env []corev1.EnvVar, resources corev1.ResourceRequirements) corev1.Container {
+	})
 	args := []string{
-		"--config",
-		"/etc/atomix/atomix.yaml",
+		"$(NODE_ID)",
+		fmt.Sprintf("%s/%s", ConfigPath, PartitionConfigFile),
+		fmt.Sprintf("%s/%s", ConfigPath, ProtocolConfigFile),
 	}
-	return newContainer(fmt.Sprintf("atomix/atomix-server:%s", version), args, env, resources, newPersistentVolumeMounts())
-}
-
-func newEphemeralContainers(version string, env []corev1.EnvVar, resources corev1.ResourceRequirements) []corev1.Container {
-	return []corev1.Container{
-		newEphemeralContainer(version, env, resources),
-	}
-}
-
-func newEphemeralContainer(version string, env []corev1.EnvVar, resources corev1.ResourceRequirements) corev1.Container {
-	args := []string{
-		"--config",
-		"/etc/atomix/atomix.yaml",
-	}
-	return newContainer(fmt.Sprintf("atomix/atomix-server:%s", version), args, env, resources, newEphemeralVolumeMounts())
+	return newContainer(image, args, env, resources, newPersistentVolumeMounts())
 }
 
 func newContainer(image string, args []string, env []corev1.EnvVar, resources corev1.ResourceRequirements, volumeMounts []corev1.VolumeMount) corev1.Container {
@@ -245,13 +213,7 @@ func newContainer(image string, args []string, env []corev1.EnvVar, resources co
 func newPersistentVolumeMounts() []corev1.VolumeMount {
 	return []corev1.VolumeMount{
 		newDataVolumeMount(),
-		newSystemConfigVolumeMount(),
-	}
-}
-
-func newEphemeralVolumeMounts() []corev1.VolumeMount {
-	return []corev1.VolumeMount{
-		newSystemConfigVolumeMount(),
+		newConfigVolumeMount(),
 	}
 }
 
@@ -262,48 +224,35 @@ func newDataVolumeMount() corev1.VolumeMount {
 	}
 }
 
-func newSystemConfigVolumeMount() corev1.VolumeMount {
+func newConfigVolumeMount() corev1.VolumeMount {
 	return corev1.VolumeMount{
-		Name:      SystemConfigVolume,
-		MountPath: "/etc/atomix",
+		Name:      ConfigVolume,
+		MountPath: ConfigPath,
 	}
 }
 
-func newVolumes(initScriptsName string, storageClass *string) []corev1.Volume {
+func newVolumes(configName string, storageClass *string) []corev1.Volume {
 	if storageClass == nil {
 		return []corev1.Volume{
-			newInitScriptsVolume(initScriptsName),
-			newSystemConfigVolume(),
+			newConfigVolume(configName),
 			newDataVolume(),
 		}
 	} else {
 		return []corev1.Volume{
-			newInitScriptsVolume(initScriptsName),
-			newSystemConfigVolume(),
+			newConfigVolume(configName),
 		}
 	}
 }
 
-func newInitScriptsVolume(name string) corev1.Volume {
-	defaultMode := int32(0744)
+func newConfigVolume(name string) corev1.Volume {
 	return corev1.Volume{
-		Name: InitScriptsVolume,
+		Name: ConfigVolume,
 		VolumeSource: corev1.VolumeSource{
 			ConfigMap: &corev1.ConfigMapVolumeSource{
 				LocalObjectReference: corev1.LocalObjectReference{
 					Name: name,
 				},
-				DefaultMode: &defaultMode,
 			},
-		},
-	}
-}
-
-func newSystemConfigVolume() corev1.Volume {
-	return corev1.Volume{
-		Name: SystemConfigVolume,
-		VolumeSource: corev1.VolumeSource{
-			EmptyDir: &corev1.EmptyDirVolumeSource{},
 		},
 	}
 }

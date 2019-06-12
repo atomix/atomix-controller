@@ -3,7 +3,10 @@ kind: PartitionGroup
 metadata:
   name: raft
 spec:
-  version: latest
   partitions: 3
   partitionSize: 3
-  raft: {}
+  type: raft
+  image: atomix/atomix-server-raft:latest
+  config: |
+    electionTimeout: 5s
+    heartbeatInterval: 1s

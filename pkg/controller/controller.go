@@ -23,9 +23,9 @@ import (
 	"github.com/atomix/atomix-k8s-controller/pkg/apis/k8s/v1alpha1"
 	"github.com/atomix/atomix-k8s-controller/pkg/controller/partition"
 	"github.com/atomix/atomix-k8s-controller/pkg/controller/partitiongroup"
+	"github.com/atomix/atomix-k8s-controller/pkg/controller/protocol"
 	"github.com/atomix/atomix-k8s-controller/pkg/controller/util"
 	"github.com/atomix/atomix-k8s-controller/proto/atomix/controller"
-	partitionpb "github.com/atomix/atomix-k8s-controller/proto/atomix/partition"
 	"google.golang.org/grpc"
 	"io"
 	"k8s.io/api/core/v1"
@@ -45,13 +45,15 @@ var log = logf.Log.WithName("controller_atomix")
 
 // AddController adds the Atomix controller to the k8s controller manager
 func AddController(mgr manager.Manager) error {
-	c := newController(mgr.GetClient(), mgr.GetScheme(), mgr.GetConfig())
+	protocols := protocol.NewManager()
+
+	c := newController(mgr.GetClient(), mgr.GetScheme(), mgr.GetConfig(), protocols)
 	err := mgr.Add(c)
 	if err != nil {
 		return err
 	}
 
-	if err = partition.Add(mgr); err != nil {
+	if err = partition.Add(mgr, protocols); err != nil {
 		return err
 	}
 	if err = partitiongroup.Add(mgr); err != nil {
@@ -61,12 +63,13 @@ func AddController(mgr manager.Manager) error {
 }
 
 // newController creates a new controller server
-func newController(client client.Client, scheme *runtime.Scheme, config *rest.Config, opts ...grpc.ServerOption) *AtomixController {
+func newController(client client.Client, scheme *runtime.Scheme, config *rest.Config, protocols *protocol.ProtocolManager, opts ...grpc.ServerOption) *AtomixController {
 	return &AtomixController{
 		client:    client,
 		scheme:    scheme,
 		config:    config,
 		opts:      opts,
+		protocols: protocols,
 		elections: make(map[electionId]*election),
 	}
 }
@@ -79,6 +82,7 @@ type AtomixController struct {
 	scheme    *runtime.Scheme
 	config    *rest.Config
 	opts      []grpc.ServerOption
+	protocols *protocol.ProtocolManager
 	elections map[electionId]*election
 }
 
@@ -89,7 +93,10 @@ func (c *AtomixController) CreatePartitionGroup(ctx context.Context, r *controll
 
 	err := c.client.Get(ctx, name, group)
 	if err != nil && k8serrors.IsNotFound(err) {
-		group = util.NewPartitionGroup(r.Id, r.Spec)
+		group, err = util.NewPartitionGroup(r.Id, r.Spec, c.protocols)
+		if err != nil {
+			return nil, err
+		}
 		if err = c.client.Create(context.TODO(), group); err != nil {
 			return nil, err
 		}
@@ -121,13 +128,13 @@ func (c *AtomixController) GetPartitionGroups(ctx context.Context, r *controller
 		if err != nil {
 			if k8serrors.IsNotFound(err) {
 				return &controller.GetPartitionGroupsResponse{
-					Groups: []*partitionpb.PartitionGroup{},
+					Groups: []*controller.PartitionGroup{},
 				}, nil
 			}
 			return nil, err
 		}
 
-		proto, err := util.NewPartitionGroupProto(group)
+		proto, err := util.NewPartitionGroupProto(group, c.protocols)
 		if err != nil {
 			return nil, err
 		}
@@ -141,7 +148,7 @@ func (c *AtomixController) GetPartitionGroups(ctx context.Context, r *controller
 			return nil, err
 		}
 
-		partitionProtos := []*partitionpb.Partition{}
+		partitionProtos := []*controller.Partition{}
 		for _, partition := range partitions.Items {
 			partitionProto, err := util.NewPartitionProto(&partition)
 			if err != nil {
@@ -152,7 +159,7 @@ func (c *AtomixController) GetPartitionGroups(ctx context.Context, r *controller
 		proto.Partitions = partitionProtos
 
 		return &controller.GetPartitionGroupsResponse{
-			Groups: []*partitionpb.PartitionGroup{proto},
+			Groups: []*controller.PartitionGroup{proto},
 		}, nil
 	} else {
 		groups := &v1alpha1.PartitionGroupList{}
@@ -165,9 +172,9 @@ func (c *AtomixController) GetPartitionGroups(ctx context.Context, r *controller
 			return nil, err
 		}
 
-		pbgroups := make([]*partitionpb.PartitionGroup, 0, len(groups.Items))
+		pbgroups := make([]*controller.PartitionGroup, 0, len(groups.Items))
 		for _, group := range groups.Items {
-			pbgroup, err := util.NewPartitionGroupProto(&group)
+			pbgroup, err := util.NewPartitionGroupProto(&group, c.protocols)
 			if err != nil {
 				return nil, err
 			}
@@ -181,7 +188,7 @@ func (c *AtomixController) GetPartitionGroups(ctx context.Context, r *controller
 				return nil, err
 			}
 
-			pbpartitions := []*partitionpb.Partition{}
+			pbpartitions := []*controller.Partition{}
 			for _, partition := range partitions.Items {
 				pbpartition, err := util.NewPartitionProto(&partition)
 				if err != nil {

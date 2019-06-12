@@ -2,9 +2,6 @@ syntax = "proto3";
 
 package atomix.log;
 
-option java_package = "io.atomix.api.log";
-option java_multiple_files = true;
-
 message ProduceRequest {
     bytes value = 1;
 }

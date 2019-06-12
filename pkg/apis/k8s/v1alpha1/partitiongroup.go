@@ -21,34 +21,19 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-const (
-	RaftType          PartitionGroupType = "raft"
-	PrimaryBackupType PartitionGroupType = "primary-backup"
-	LogType           PartitionGroupType = "log"
-)
-
 type PartitionGroupType string
 
 type PartitionGroupSpec struct {
-	Version             string                      `json:"version,omitempty"`
-	Partitions          int                         `json:"partitions,omitempty"`
-	PartitionSize       int                         `json:"partitionSize,omitempty"`
-	MemberGroupStrategy MemberGroupStrategy         `json:"memberGroupStrategy,omitempty"`
-	Env                 []corev1.EnvVar             `json:"env,omitempty"`
-	Resources           corev1.ResourceRequirements `json:"resources,omitempty"`
-	Raft                *RaftProtocol               `json:"raft,omitempty"`
-	PrimaryBackup       *PrimaryBackupProtocol      `json:"primaryBackup,omitempty"`
-	Log                 *DistributedLogProtocol     `json:"log:omitempty"`
+	Partitions    int                         `json:"partitions,omitempty"`
+	PartitionSize int                         `json:"partitionSize,omitempty"`
+	Env           []corev1.EnvVar             `json:"env,omitempty"`
+	Resources     corev1.ResourceRequirements `json:"resources,omitempty"`
+	StorageClass  *string                     `json:"storageClass,omitempty"`
+	StorageSize   string                      `json:"storageSize,omitempty"`
+	Type          string                      `json:"type,omitempty"`
+	Image         string                      `json:"image,omitempty"`
+	Config        string                      `json:"config,omitempty"`
 }
-
-// MemberGroupStrategy describes the way partition members are balanced among member groups.
-type MemberGroupStrategy string
-
-const (
-	NodeAwareMemberGroupStrategy MemberGroupStrategy = "node_aware"
-	RackAwareMemberGroupStrategy MemberGroupStrategy = "rack_aware"
-	ZoneAwareMemberGroupStrategy MemberGroupStrategy = "zone_aware"
-)
 
 // PartitionGroupStatus defines the observed state of Partition
 type PartitionGroupStatus struct {

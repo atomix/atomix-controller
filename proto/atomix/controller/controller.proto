@@ -3,25 +3,22 @@ syntax = "proto3";
 package atomix.controller;
 
 import "google/protobuf/any.proto";
-import "atomix/partition/partition.proto";
-
-option java_package = "io.atomix.api.controller";
-option java_multiple_files = true;
+import "atomix/controller/partition.proto";
 
 // Gets a list of partition groups in the given namespace
 message GetPartitionGroupsRequest {
-    atomix.partition.PartitionGroupId id = 1;
+    atomix.controller.PartitionGroupId id = 1;
 }
 
 // Returns a list of partition groups
 message GetPartitionGroupsResponse {
-    repeated atomix.partition.PartitionGroup groups = 1;
+    repeated atomix.controller.PartitionGroup groups = 1;
 }
 
 // Creates a new partition group
 message CreatePartitionGroupRequest {
-    atomix.partition.PartitionGroupId id = 1;
-    atomix.partition.PartitionGroupSpec spec = 2;
+    atomix.controller.PartitionGroupId id = 1;
+    atomix.controller.PartitionGroupSpec spec = 2;
 }
 
 // Returns the status of a partition group
@@ -31,7 +28,7 @@ message CreatePartitionGroupResponse {
 
 // Deletes a partition group
 message DeletePartitionGroupRequest {
-    atomix.partition.PartitionGroupId id = 1;
+    atomix.controller.PartitionGroupId id = 1;
 }
 
 // Returns the result of deleting a partition group
@@ -41,7 +38,7 @@ message DeletePartitionGroupResponse {
 
 // Enters a primary election
 message PartitionElectionRequest {
-    atomix.partition.PartitionId partition_id = 1;
+    atomix.controller.PartitionId partition_id = 1;
     string member = 2;
 }
 

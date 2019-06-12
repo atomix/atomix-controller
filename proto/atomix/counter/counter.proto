@@ -4,9 +4,6 @@ import "atomix/headers/headers.proto";
 
 package atomix.counter;
 
-option java_package = "io.atomix.api.counter";
-option java_multiple_files = true;
-
 message CreateRequest {
     atomix.headers.RequestHeader header = 1;
 }

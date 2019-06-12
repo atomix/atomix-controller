@@ -16,43 +16,13 @@
 
 package v1alpha1
 
-type PersistentProtocol struct {
-	Storage    Storage    `json:"storage,omitempty"`
-	Compaction Compaction `json:"compaction,omitempty"`
-}
-
-type RaftProtocol struct {
-	PersistentProtocol `json:",inline"`
-	ElectionTimeout    *int64 `json:"electionTimeout,omitempty"`
-	HeartbeatInterval  *int64 `json:"heartbeatInterval,omitempty"`
-}
-
-type PrimaryBackupProtocol struct {
-}
-
-type DistributedLogProtocol struct {
-	PersistentProtocol `json:",inline"`
-}
-
-// StorageLevel describes the storage level of commit logs.
-type StorageLevel string
-
-const (
-	DiskStorage   StorageLevel = "disk"
-	MappedStorage StorageLevel = "mapped"
+import (
+	"github.com/atomix/atomix-k8s-controller/pkg/controller/protocol"
+	log "github.com/atomix/atomix-k8s-controller/proto/atomix/protocols/log"
+	raft "github.com/atomix/atomix-k8s-controller/proto/atomix/protocols/raft"
 )
 
-type Storage struct {
-	Size          string       `json:"size,omitempty"`
-	ClassName     *string      `json:"className,omitempty"`
-	SegmentSize   string       `json:"segmentSize,omitempty"`
-	EntrySize     string       `json:"entrySize,omitempty"`
-	Level         StorageLevel `json:"level,omitempty"`
-	FlushOnCommit bool         `json:"flushOnCommit,omitempty"`
-}
-
-type Compaction struct {
-	Dynamic          bool    `json:"dynamic,omitempty"`
-	FreeDiskBuffer   float32 `json:"freeDiskBuffer,omitempty"`
-	FreeMemoryBuffer float32 `json:"freeMemoryBuffer,omitempty"`
+func init() {
+	protocol.Registry.Register("raft", "atomix/atomix-server-raft:latest", &raft.RaftProtocol{})
+	protocol.Registry.Register("log", "atomix/atomix-server-log:latest", &log.LogProtocol{})
 }

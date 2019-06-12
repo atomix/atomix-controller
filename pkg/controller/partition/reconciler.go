@@ -19,6 +19,7 @@ package partition
 import (
 	"context"
 	"github.com/atomix/atomix-k8s-controller/pkg/apis/k8s/v1alpha1"
+	"github.com/atomix/atomix-k8s-controller/pkg/controller/protocol"
 	"github.com/atomix/atomix-k8s-controller/pkg/controller/util"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -42,11 +43,12 @@ var log = logf.Log.WithName("controller_partition")
 
 // AddController creates a new Partition ManagementGroup and adds it to the Manager. The Manager will set fields on the ManagementGroup
 // and Start it when the Manager is Started.
-func Add(mgr manager.Manager) error {
+func Add(mgr manager.Manager, protocols *protocol.ProtocolManager) error {
 	r := &PartitionReconciler{
-		client: mgr.GetClient(),
-		scheme: mgr.GetScheme(),
-		config: mgr.GetConfig(),
+		client:    mgr.GetClient(),
+		scheme:    mgr.GetScheme(),
+		config:    mgr.GetConfig(),
+		protocols: protocols,
 	}
 
 	// Create a new controller
@@ -79,9 +81,10 @@ var _ reconcile.Reconciler = &PartitionReconciler{}
 type PartitionReconciler struct {
 	// This client, initialized using mgr.Client() above, is a split client
 	// that reads objects from the cache and writes to the apiserver
-	client client.Client
-	scheme *runtime.Scheme
-	config *rest.Config
+	client    client.Client
+	scheme    *runtime.Scheme
+	config    *rest.Config
+	protocols *protocol.ProtocolManager
 }
 
 // Reconcile reads that state of the partition for a Partition object and makes changes based on the state read
@@ -106,8 +109,8 @@ func (r *PartitionReconciler) Reconcile(request reconcile.Request) (reconcile.Re
 
 	v1alpha1.SetDefaults_Partition(partition)
 
-	// Reconcile the init script
-	err = r.reconcileInitScript(partition)
+	// Reconcile the partition config map
+	err = r.reconcileConfigMap(partition)
 	if err != nil {
 		return reconcile.Result{}, err
 	}
@@ -148,11 +151,11 @@ func (r *PartitionReconciler) Reconcile(request reconcile.Request) (reconcile.Re
 	return reconcile.Result{}, nil
 }
 
-func (r *PartitionReconciler) reconcileInitScript(partition *v1alpha1.Partition) error {
+func (r *PartitionReconciler) reconcileConfigMap(partition *v1alpha1.Partition) error {
 	cm := &corev1.ConfigMap{}
-	err := r.client.Get(context.TODO(), types.NamespacedName{Name: util.GetPartitionInitConfigMapName(partition), Namespace: partition.Namespace}, cm)
+	err := r.client.Get(context.TODO(), types.NamespacedName{Name: util.GetPartitionConfigMapName(partition), Namespace: partition.Namespace}, cm)
 	if err != nil && errors.IsNotFound(err) {
-		err = r.addInitScript(partition)
+		err = r.addConfigMap(partition)
 	}
 	return err
 }
@@ -209,9 +212,12 @@ func (r *PartitionReconciler) reconcileEndpoints(partition *v1alpha1.Partition) 
 	return err
 }
 
-func (r *PartitionReconciler) addInitScript(partition *v1alpha1.Partition) error {
-	log.Info("Creating init ConfigMap", "Name", partition.Name, "Namespace", partition.Namespace)
-	cm := util.NewPartitionInitConfigMap(partition)
+func (r *PartitionReconciler) addConfigMap(partition *v1alpha1.Partition) error {
+	log.Info("Creating node ConfigMap", "Name", partition.Name, "Namespace", partition.Namespace)
+	cm, err := util.NewPartitionConfigMap(partition, r.protocols)
+	if err != nil {
+		return err
+	}
 	if err := controllerutil.SetControllerReference(partition, cm, r.scheme); err != nil {
 		return err
 	}

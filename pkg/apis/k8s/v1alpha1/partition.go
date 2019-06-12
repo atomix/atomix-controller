@@ -23,13 +23,14 @@ import (
 
 // PartitionSpec defines the desired state of Partition
 type PartitionSpec struct {
-	Version       string                  `json:"version,omitempty"`
-	Size          int32                   `json:"size,omitempty"`
-	Env           []v1.EnvVar             `json:"env,omitempty"`
-	Resources     v1.ResourceRequirements `json:"resources,omitempty"`
-	Raft          *RaftProtocol           `json:"raft,omitempty"`
-	PrimaryBackup *PrimaryBackupProtocol  `json:"primaryBackup,omitempty"`
-	Log           *DistributedLogProtocol `json:"log,omitempty"`
+	Size         int32                   `json:"size,omitempty"`
+	Env          []v1.EnvVar             `json:"env,omitempty"`
+	Resources    v1.ResourceRequirements `json:"resources,omitempty"`
+	StorageClass *string                 `json:"storageClass,omitempty"`
+	StorageSize  string                  `json:"storageSize,omitempty"`
+	Type         string                  `json:"type,omitempty"`
+	Image        string                  `json:"image,omitempty"`
+	Config       string                  `json:"config,omitempty"`
 }
 
 // PartitionStatus defines the observed state of Partition

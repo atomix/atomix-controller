@@ -15,10 +15,17 @@ To deploy the controller, first build the image using the make file:
 
 The build script will build an `atomix/atomix-k8s-controller` image with the `latest`
 tag. Once the image has been built, the controller can be deployed to k8s using the
-following sequence of commands:
+following command:
 
 ```bash
-> kubectl create -f deploy/atomix-controller.yaml
+> kubectl create -f https://raw.githubusercontent.com/atomix/atomix-k8s-controller/master/deploy/atomix-controller.yaml
+customresourcedefinition.apiextensions.k8s.io/partitiongroups.k8s.atomix.io created
+customresourcedefinition.apiextensions.k8s.io/partitions.k8s.atomix.io created
+clusterrole.rbac.authorization.k8s.io/atomix-controller created
+clusterrolebinding.rbac.authorization.k8s.io/atomix-controller created
+serviceaccount/atomix-controller created
+deployment.apps/atomix-controller created
+service/atomix-controller created
 ```
 
 The default configuration will deploy a controller named `atomix-controller` in the

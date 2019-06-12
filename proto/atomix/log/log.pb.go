@@ -34,7 +34,7 @@ func (m *ProduceRequest) Reset()         { *m = ProduceRequest{} }
 func (m *ProduceRequest) String() string { return proto.CompactTextString(m) }
 func (*ProduceRequest) ProtoMessage()    {}
 func (*ProduceRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_log_6825facfe73baeea, []int{0}
+	return fileDescriptor_log_9184781e25c6d043, []int{0}
 }
 func (m *ProduceRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ProduceRequest.Unmarshal(m, b)
@@ -71,7 +71,7 @@ func (m *ProduceResponse) Reset()         { *m = ProduceResponse{} }
 func (m *ProduceResponse) String() string { return proto.CompactTextString(m) }
 func (*ProduceResponse) ProtoMessage()    {}
 func (*ProduceResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_log_6825facfe73baeea, []int{1}
+	return fileDescriptor_log_9184781e25c6d043, []int{1}
 }
 func (m *ProduceResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ProduceResponse.Unmarshal(m, b)
@@ -102,7 +102,7 @@ func (m *ConsumeRequest) Reset()         { *m = ConsumeRequest{} }
 func (m *ConsumeRequest) String() string { return proto.CompactTextString(m) }
 func (*ConsumeRequest) ProtoMessage()    {}
 func (*ConsumeRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_log_6825facfe73baeea, []int{2}
+	return fileDescriptor_log_9184781e25c6d043, []int{2}
 }
 func (m *ConsumeRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ConsumeRequest.Unmarshal(m, b)
@@ -142,7 +142,7 @@ func (m *LogRecord) Reset()         { *m = LogRecord{} }
 func (m *LogRecord) String() string { return proto.CompactTextString(m) }
 func (*LogRecord) ProtoMessage()    {}
 func (*LogRecord) Descriptor() ([]byte, []int) {
-	return fileDescriptor_log_6825facfe73baeea, []int{3}
+	return fileDescriptor_log_9184781e25c6d043, []int{3}
 }
 func (m *LogRecord) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_LogRecord.Unmarshal(m, b)
@@ -356,10 +356,10 @@ var _LogService_serviceDesc = grpc.ServiceDesc{
 	Metadata: "atomix/log/log.proto",
 }
 
-func init() { proto.RegisterFile("atomix/log/log.proto", fileDescriptor_log_6825facfe73baeea) }
+func init() { proto.RegisterFile("atomix/log/log.proto", fileDescriptor_log_9184781e25c6d043) }
 
-var fileDescriptor_log_6825facfe73baeea = []byte{
-	// 246 bytes of a gzipped FileDescriptorProto
+var fileDescriptor_log_9184781e25c6d043 = []byte{
+	// 231 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0x12, 0x49, 0x2c, 0xc9, 0xcf,
 	0xcd, 0xac, 0xd0, 0xcf, 0xc9, 0x4f, 0x07, 0x61, 0xbd, 0x82, 0xa2, 0xfc, 0x92, 0x7c, 0x21, 0x2e,
 	0x88, 0xa8, 0x5e, 0x4e, 0x7e, 0xba, 0x92, 0x1a, 0x17, 0x5f, 0x40, 0x51, 0x7e, 0x4a, 0x69, 0x72,
@@ -373,7 +373,6 @@ var fileDescriptor_log_6825facfe73baeea = []byte{
 	0xc1, 0xa9, 0x45, 0x65, 0x99, 0xc9, 0xa9, 0x42, 0x6e, 0x5c, 0xec, 0x50, 0x47, 0x0a, 0x49, 0xe9,
 	0x21, 0x3c, 0xa9, 0x87, 0xea, 0x43, 0x29, 0x69, 0xac, 0x72, 0x50, 0x5f, 0x31, 0x68, 0x30, 0x0a,
 	0x39, 0x70, 0xb1, 0x43, 0x7d, 0x86, 0x6a, 0x0e, 0xaa, 0x77, 0xa5, 0x44, 0x91, 0xe5, 0xe0, 0x1e,
-	0x54, 0x62, 0x30, 0x60, 0x74, 0x12, 0xe5, 0x12, 0xcc, 0xcc, 0x87, 0x49, 0x27, 0x16, 0x64, 0x82,
-	0x94, 0x04, 0x30, 0x26, 0xb1, 0x81, 0x23, 0xc0, 0x18, 0x10, 0x00, 0x00, 0xff, 0xff, 0x13, 0xda,
-	0x53, 0xdb, 0x98, 0x01, 0x00, 0x00,
+	0x54, 0x62, 0x30, 0x60, 0x4c, 0x62, 0x03, 0x87, 0xb4, 0x31, 0x20, 0x00, 0x00, 0xff, 0xff, 0x36,
+	0x05, 0xfb, 0x4c, 0x81, 0x01, 0x00, 0x00,
 }

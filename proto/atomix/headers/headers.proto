@@ -2,9 +2,6 @@ syntax = "proto3";
 
 package atomix.headers;
 
-option java_package = "io.atomix.api.headers";
-option java_multiple_files = true;
-
 // Namespaced primitive name
 message Name {
     string name = 1;
