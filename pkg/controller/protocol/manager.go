@@ -7,6 +7,7 @@ import (
 	"github.com/gogo/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
 	"reflect"
+	"strings"
 )
 
 var (
@@ -25,18 +26,22 @@ type ProtocolRegistry struct {
 	protocolNames map[string]*ProtocolHandler
 }
 
-func (r *ProtocolRegistry) Register(name string, image string, obj interface{}) {
+func (r *ProtocolRegistry) Register(name string, image string, obj proto.Message) {
 	typeOf := reflect.ValueOf(obj).Elem().Type()
 	handler := &ProtocolHandler{
 		Name:      name,
 		Image:     image,
 		protoType: typeOf,
 	}
-	r.protocolTypes[typeOf.String()] = handler
+	r.protocolTypes[proto.MessageName(obj)] = handler
 	r.protocolNames[name] = handler
 }
 
 func (r *ProtocolRegistry) getByType(name string) (*ProtocolHandler, error) {
+	parts := strings.Split(name, "/")
+	if len(parts) > 1 {
+		name = parts[len(parts)-1]
+	}
 	handler, ok := r.protocolTypes[name]
 	if !ok {
 		return nil, errors.New("unknown protocol type " + name)
