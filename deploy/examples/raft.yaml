@@ -5,8 +5,7 @@ metadata:
 spec:
   partitions: 3
   partitionSize: 3
-  type: raft
-  image: atomix/atomix-server-raft:latest
+  protocol: raft
   config: |
     electionTimeout: 5s
     heartbeatInterval: 1s

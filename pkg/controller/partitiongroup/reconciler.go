@@ -19,6 +19,7 @@ package partitiongroup
 import (
 	"context"
 	"github.com/atomix/atomix-k8s-controller/pkg/apis/k8s/v1alpha1"
+	"github.com/atomix/atomix-k8s-controller/pkg/controller/protocol"
 	"github.com/atomix/atomix-k8s-controller/pkg/controller/util"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -38,11 +39,12 @@ var log = logf.Log.WithName("controller_partitiongroup")
 
 // AddController creates a new PartitionGroup controller and adds it to the Manager. The Manager will set fields on the
 // controller and Start it when the Manager is Started.
-func Add(mgr manager.Manager) error {
+func Add(mgr manager.Manager, protocols *protocol.ProtocolManager) error {
 	r := &PartitionGroupReconciler{
 		client: mgr.GetClient(),
 		scheme: mgr.GetScheme(),
 		config: mgr.GetConfig(),
+		protocols: protocols,
 	}
 
 	// Create a new controller
@@ -78,6 +80,7 @@ type PartitionGroupReconciler struct {
 	client client.Client
 	scheme *runtime.Scheme
 	config *rest.Config
+	protocols *protocol.ProtocolManager
 }
 
 // Reconcile reads that state of the partition for a PartitionGroup object and makes changes based on the state read
@@ -100,7 +103,7 @@ func (r *PartitionGroupReconciler) Reconcile(request reconcile.Request) (reconci
 		return reconcile.Result{}, err
 	}
 
-	v1alpha1.SetDefaults_PartitionGroup(group)
+	v1alpha1.SetDefaults_PartitionGroup(group, r.protocols)
 
 	if err = r.reconcileService(group); err != nil {
 		return reconcile.Result{}, err

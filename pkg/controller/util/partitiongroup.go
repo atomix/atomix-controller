@@ -114,7 +114,7 @@ func NewPartitionGroupProto(group *v1alpha1.PartitionGroup, protocols *protocol.
 }
 
 func newPartitionGroupSpecProto(group *v1alpha1.PartitionGroup, protocols *protocol.ProtocolManager) (*controller.PartitionGroupSpec, error) {
-	protocol, err := protocols.GetProtocolByName(group.Spec.Type)
+	protocol, err := protocols.GetProtocolByName(group.Spec.Protocol)
 	if err != nil {
 		return nil, err
 	}
@@ -163,7 +163,7 @@ func NewPartitionGroup(id *controller.PartitionGroupId, pbspec *controller.Parti
 		Spec: v1alpha1.PartitionGroupSpec{
 			Partitions:    int(pbspec.Partitions),
 			PartitionSize: int(pbspec.PartitionSize),
-			Type:          protocol.Name,
+			Protocol:      protocol.Name,
 			Image:         protocol.Image,
 			Config:        string(yaml),
 		},

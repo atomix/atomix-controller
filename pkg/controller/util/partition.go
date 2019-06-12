@@ -53,7 +53,7 @@ func NewPartition(group *v1alpha1.PartitionGroup, partition int) *v1alpha1.Parti
 		Size:      int32(group.Spec.PartitionSize),
 		Env:       group.Spec.Env,
 		Resources: group.Spec.Resources,
-		Type:      group.Spec.Type,
+		Type:      group.Spec.Protocol,
 		Image:     group.Spec.Image,
 		Config:    group.Spec.Config,
 	}

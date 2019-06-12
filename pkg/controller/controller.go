@@ -56,7 +56,7 @@ func AddController(mgr manager.Manager) error {
 	if err = partition.Add(mgr, protocols); err != nil {
 		return err
 	}
-	if err = partitiongroup.Add(mgr); err != nil {
+	if err = partitiongroup.Add(mgr, protocols); err != nil {
 		return err
 	}
 	return nil
