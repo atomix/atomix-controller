@@ -4,6 +4,7 @@ export CGO_ENABLED=0
 
 .PHONY: proto build push dev deploy
 
+all: build
 proto: # @HELP build protobuf services
 	docker build -t atomix/atomix-go-build:0.1 build/proto
 	docker run -it -v `pwd`:/go/src/github.com/atomix/atomix-k8s-controller atomix/atomix-go-build:0.1 build
@@ -19,4 +20,3 @@ deploy: # @HELP deploy the controller to a Kubernetes partition
 	kubectl create -f deploy/service_account.yaml
 	kubectl create -f deploy/role_binding.yaml
 	kubectl create -f deploy/controller.yaml
-all: build
