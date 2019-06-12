@@ -23,6 +23,6 @@ import (
 )
 
 func init() {
-	protocol.Registry.Register("raft", "atomix/atomix-server-raft:latest", &raft.RaftProtocol{})
-	protocol.Registry.Register("log", "atomix/atomix-server-log:latest", &log.LogProtocol{})
+	protocol.Registry.Register("raft", "atomix/atomix-raft-protocol:latest", &raft.RaftProtocol{})
+	protocol.Registry.Register("log", "atomix/atomix-raft-protocol:latest", &log.LogProtocol{})
 }
