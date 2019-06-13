@@ -1,5 +1,5 @@
 apiVersion: k8s.atomix.io/v1alpha1
-kind: PartitionGroup
+kind: PartitionSet
 metadata:
   name: raft
 spec:

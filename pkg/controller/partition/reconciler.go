@@ -295,12 +295,12 @@ func (r *PartitionReconciler) addEndpoints(partition *v1alpha1.Partition, servic
 				Hostname: service.Name,
 			},
 		},
-		Ports: k8sutil.NewPartitionGroupEndpointPorts(),
+		Ports: k8sutil.NewPartitionSetEndpointPorts(),
 	})
 	notReadyAddresses += 1
 
 	// Load the parent partition group.
-	group := &v1alpha1.PartitionGroup{}
+	group := &v1alpha1.PartitionSet{}
 	err = r.client.Get(context.TODO(), k8sutil.GetPartitionPartitionGroupNamespacedName(partition), group)
 	if err != nil {
 		return err
@@ -332,7 +332,7 @@ func (r *PartitionReconciler) addEndpoints(partition *v1alpha1.Partition, servic
 		endpoints.Subsets = []corev1.EndpointSubset{
 			{
 				Addresses: addresses,
-				Ports:     k8sutil.NewPartitionGroupEndpointPorts(),
+				Ports:     k8sutil.NewPartitionSetEndpointPorts(),
 			},
 		}
 	}

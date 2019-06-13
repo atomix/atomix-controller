@@ -30,7 +30,7 @@ func SetDefaults_Partition(partition *Partition, protocols *protocol.ProtocolMan
 	}
 }
 
-func SetDefaults_PartitionGroup(group *PartitionGroup) {
+func SetDefaults_PartitionGroup(group *PartitionSet) {
 	if group.Spec.Partitions == 0 {
 		group.Spec.Partitions = 1
 	}

@@ -19,7 +19,7 @@ following command:
 
 ```bash
 > kubectl create -f https://raw.githubusercontent.com/atomix/atomix-k8s-controller/master/deploy/atomix-controller.yaml
-customresourcedefinition.apiextensions.k8s.io/partitiongroups.k8s.atomix.io created
+customresourcedefinition.apiextensions.k8s.io/partitionsets.k8s.atomix.io created
 customresourcedefinition.apiextensions.k8s.io/partitions.k8s.atomix.io created
 clusterrole.rbac.authorization.k8s.io/atomix-controller created
 clusterrolebinding.rbac.authorization.k8s.io/atomix-controller created
@@ -30,7 +30,7 @@ service/atomix-controller created
 
 The default configuration will deploy a controller named `atomix-controller` in the
 `kube-system` namespace. It will also configure the Kubernetes cluter with two custom
-resource types: `PartitionGroup` and `Partition`. Once the controller has been deployed,
+resource types: `PartitionSet` and `Partition`. Once the controller has been deployed,
 it can be used to create Atomix partitions either using the Atomix client API or through
 standard Kubernetes CLI and other APIs.
 
@@ -40,26 +40,30 @@ The role of an Atomix controller is to manage partition groups and partitions wi
 specific environment. The Kubernetes Atomix controller manages partition groups using
 [custom resources][custom-resources]. The controller adds two custom resources to the 
 k8s cluster:
-* `PartitionGroup` defines a set of partitions and the protocol they implement
-* `Partition` is used by the `PartitionGroup` controller to configure a single partition
+* `PartitionSet` defines a set of partitions and the protocol they implement
+* `Partition` is used by the `PartitionSet` controller to configure a single partition
 
 Because the k8s controller uses custom resources for partition management, partition groups
 and partitions can be managed directly through the k8s API. To add a partition group via the
-k8s API, simply define a `PartitionGroup` object:
+k8s API, simply define a `PartitionSet` object:
 
 ```yaml
 apiVersion: k8s.atomix.io/v1alpha1
-kind: PartitionGroup
+kind: PartitionSet
 metadata:
   name: raft
 spec:
-  version: latest
   partitions: 6
-  partitionSize: 3
-  raft: {}
+  template:
+    spec:
+      size: 3
+      protocol: raft
+      config: |
+        electionTimeout: 5s
+        heartbeatInterval: 1s
 ```
 
-The `PartitionGroup` spec requires three fields:
+The `PartitionSet` spec requires three fields:
 * `partitions` - the number of partitions to create
 * `partitionSize` - the number of pods in each partition
 * A protocol configuration
@@ -77,14 +81,14 @@ To create the partitions, use `kubectl` to create the resource:
 
 ```bash
 > kubectl create -f raft.yaml
-partitiongroup.k8s.atomix.io/raft created
+partitionset.k8s.atomix.io/raft created
 ```
 
 Once the partition group has been created, you should be able to see the partition group 
 via `kubectl`:
 
 ```bash
-> kubectl get partitiongroups
+> kubectl get partitionsets
 NAME   AGE
 raft   12s
 ```
@@ -110,7 +114,7 @@ raft-2   1/1     2m11s
 raft-3   1/1     2m11s
 ```
 
-And each `StatefulSet` contains a number of pods equal to the group's `partitionSize`:
+And each `StatefulSet` contains a number of pods equal to the partition template's `size`:
 
 ```bash
 > kubectl get pods
@@ -201,17 +205,17 @@ Partition groups and partitions can be managed either through the
 
 The Atomix controller provides two custom Kubernetes controllers for managing partition
 groups and partitions. When a partition group is created via the Atomix controller API,
-the Atomix controller creates a `PartitionGroup` resource, and the remainder of the deployment
-process is managed by custom Kubernetes controllers. The `PartitionGroup` controller
-creates a set of `Partition` resources from the `PartitionGroup`, and the `Partition`
+the Atomix controller creates a `PartitionSet` resource, and the remainder of the deployment
+process is managed by custom Kubernetes controllers. The `PartitionSet` controller
+creates a set of `Partition` resources from the `PartitionSet`, and the `Partition`
 controller creates `StatefulSet` resources, `Service`s, and other resources necessary to
-run the protocol specified by the `PartitionGroup` configuration.
+run the protocol specified by the `PartitionSet` configuration.
 
 ![Custom Resources](https://i.imgur.com/mbiTCI6.png)
 
 ### The control loop
 
-When a `PartitionGroup` is created, the k8s partition group controller will create a
+When a `PartitionSet` is created, the k8s partition group controller will create a
 `Service` for the partition group:
 
 ```bash
@@ -224,7 +228,7 @@ raft         ClusterIP   10.97.241.64    <none>        5678/TCP   96s
 The partition group service is a special service used to resolve the partitions in the
 group via DNS using SRV records, much like pod IPs are resolved for headless services.
 
-When a `PartitionGroup` is created, the k8s partition group controller will create a
+When a `PartitionSet` is created, the k8s partition group controller will create a
 `Partition` resource for each partition specified in the group's spec:
 
 ```bash

@@ -37,39 +37,39 @@ func getPartitionResourceName(partition *v1alpha1.Partition, resource string) st
 	return fmt.Sprintf("%s-%s", partition.Name, resource)
 }
 
-func GetPartitionName(group *v1alpha1.PartitionGroup, partition int) string {
-	return fmt.Sprintf("%s-%d", group.Name, partition)
+func GetPartitionName(set *v1alpha1.PartitionSet, partition int) string {
+	return fmt.Sprintf("%s-%d", set.Name, partition)
 }
 
-func GetPartitionNamespacedName(group *v1alpha1.PartitionGroup, partition int) types.NamespacedName {
+func GetPartitionNamespacedName(set *v1alpha1.PartitionSet, partition int) types.NamespacedName {
 	return types.NamespacedName{
-		Name:      GetPartitionName(group, partition),
-		Namespace: group.Namespace,
+		Name:      GetPartitionName(set, partition),
+		Namespace: set.Namespace,
 	}
 }
 
-func NewPartition(group *v1alpha1.PartitionGroup, partition int) *v1alpha1.Partition {
-	meta := group.Spec.Template.ObjectMeta
-	meta.Name = GetPartitionName(group, partition)
-	meta.Namespace = group.Namespace
+func NewPartition(set *v1alpha1.PartitionSet, partition int) *v1alpha1.Partition {
+	meta := set.Spec.Template.ObjectMeta
+	meta.Name = GetPartitionName(set, partition)
+	meta.Namespace = set.Namespace
 	if meta.Labels == nil {
 		meta.Labels = make(map[string]string)
 	}
-	for key, value := range GetPartitionGroupPartitionLabels(group) {
+	for key, value := range newPartitionLabels(set, partition) {
 		meta.Labels[key] = value
 	}
-	meta.Annotations = newPartitionAnnotations(group, partition)
+	meta.Annotations = newPartitionAnnotations(set, partition)
 	return &v1alpha1.Partition{
 		ObjectMeta: meta,
-		Spec:       group.Spec.Template.Spec,
+		Spec:       set.Spec.Template.Spec,
 	}
 }
 
-func GetPartitionGroupPartitionLabels(group *v1alpha1.PartitionGroup) map[string]string {
+func GetPartitionSetPartitionLabels(set *v1alpha1.PartitionSet) map[string]string {
 	return map[string]string{
 		AppKey:   AtomixApp,
 		TypeKey:  PartitionType,
-		GroupKey: group.Name,
+		GroupKey: set.Name,
 	}
 }
 
@@ -84,21 +84,21 @@ func GetPartitionLabels(partition *v1alpha1.Partition) map[string]string {
 	if value, ok := partition.Labels[GroupKey]; ok {
 		labels[GroupKey] = value
 	}
+	if value, ok := partition.Labels[PartitionKey]; ok {
+		labels[PartitionKey] = value
+	}
 	return labels
 }
 
 // newPartitionLabels returns a new labels map containing the partition app
-func newPartitionLabels(group *v1alpha1.PartitionGroup, partition int) map[string]string {
-	return map[string]string{
-		AppKey:       AtomixApp,
-		TypeKey:      PartitionType,
-		GroupKey:     group.Name,
-		PartitionKey: fmt.Sprint(partition),
-	}
+func newPartitionLabels(set *v1alpha1.PartitionSet, partition int) map[string]string {
+	labels := GetPartitionSetPartitionLabels(set)
+	labels[PartitionKey] = fmt.Sprint(partition)
+	return labels
 }
 
 // newPartitionAnnotations returns annotations for the given partition
-func newPartitionAnnotations(group *v1alpha1.PartitionGroup, partition int) map[string]string {
+func newPartitionAnnotations(group *v1alpha1.PartitionSet, partition int) map[string]string {
 	return map[string]string{
 		ControllerAnnotation: GetControllerNameString(),
 		TypeAnnotation:       PartitionType,
