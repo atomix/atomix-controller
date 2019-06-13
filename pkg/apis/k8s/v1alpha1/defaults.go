@@ -18,23 +18,20 @@ package v1alpha1
 
 import "github.com/atomix/atomix-k8s-controller/pkg/controller/protocol"
 
-func SetDefaults_Partition(partition *Partition) {
+func SetDefaults_Partition(partition *Partition, protocols *protocol.ProtocolManager) {
 	if partition.Spec.Size == 0 {
 		partition.Spec.Size = 1
 	}
+	if partition.Spec.Image == "" {
+		protocol, err := protocols.GetProtocolByName(partition.Spec.Protocol)
+		if err == nil {
+			partition.Spec.Image = protocol.Image
+		}
+	}
 }
 
-func SetDefaults_PartitionGroup(group *PartitionGroup, protocols *protocol.ProtocolManager) {
+func SetDefaults_PartitionGroup(group *PartitionGroup) {
 	if group.Spec.Partitions == 0 {
 		group.Spec.Partitions = 1
-	}
-	if group.Spec.PartitionSize == 0 {
-		group.Spec.PartitionSize = 1
-	}
-	if group.Spec.Image == "" {
-		protocol, err := protocols.GetProtocolByName(group.Spec.Protocol)
-		if err == nil {
-			group.Spec.Image = protocol.Image
-		}
 	}
 }

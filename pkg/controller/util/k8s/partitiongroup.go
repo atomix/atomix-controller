@@ -114,12 +114,12 @@ func NewPartitionGroupProto(group *v1alpha1.PartitionGroup, protocols *protocol.
 }
 
 func newPartitionGroupSpecProto(group *v1alpha1.PartitionGroup, protocols *protocol.ProtocolManager) (*controller.PartitionGroupSpec, error) {
-	protocol, err := protocols.GetProtocolByName(group.Spec.Protocol)
+	protocol, err := protocols.GetProtocolByName(group.Spec.Template.Spec.Protocol)
 	if err != nil {
 		return nil, err
 	}
 
-	message, err := protocol.YamlToMessage([]byte(group.Spec.Config))
+	message, err := protocol.YamlToMessage([]byte(group.Spec.Template.Spec.Config))
 	if err != nil {
 		return nil, err
 	}
@@ -130,7 +130,7 @@ func newPartitionGroupSpecProto(group *v1alpha1.PartitionGroup, protocols *proto
 
 	return &controller.PartitionGroupSpec{
 		Partitions:    uint32(group.Spec.Partitions),
-		PartitionSize: uint32(group.Spec.PartitionSize),
+		PartitionSize: uint32(group.Spec.Template.Spec.Size),
 		Protocol: &any.Any{
 			TypeUrl: "type.googleapis.com/" + proto.MessageName(message),
 			Value:   bytes,
@@ -161,11 +161,15 @@ func NewPartitionGroup(id *controller.PartitionGroupId, pbspec *controller.Parti
 			Labels:    newPartitionGroupLabels(id.Name),
 		},
 		Spec: v1alpha1.PartitionGroupSpec{
-			Partitions:    int(pbspec.Partitions),
-			PartitionSize: int(pbspec.PartitionSize),
-			Protocol:      protocol.Name,
-			Image:         protocol.Image,
-			Config:        string(yaml),
+			Partitions: int(pbspec.Partitions),
+			Template: v1alpha1.PartitionTemplateSpec{
+				Spec: v1alpha1.PartitionSpec{
+					Size:     int32(pbspec.PartitionSize),
+					Protocol: protocol.Name,
+					Image:    protocol.Image,
+					Config:   string(yaml),
+				},
+			},
 		},
 	}, nil
 }

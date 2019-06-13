@@ -28,7 +28,7 @@ type PartitionSpec struct {
 	Resources    v1.ResourceRequirements `json:"resources,omitempty"`
 	StorageClass *string                 `json:"storageClass,omitempty"`
 	StorageSize  string                  `json:"storageSize,omitempty"`
-	Type         string                  `json:"type,omitempty"`
+	Protocol     string                  `json:"protocol,omitempty"`
 	Image        string                  `json:"image,omitempty"`
 	Config       string                  `json:"config,omitempty"`
 }

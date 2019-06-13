@@ -103,7 +103,7 @@ func (r *PartitionGroupReconciler) Reconcile(request reconcile.Request) (reconci
 		return reconcile.Result{}, err
 	}
 
-	v1alpha1.SetDefaults_PartitionGroup(group, r.protocols)
+	v1alpha1.SetDefaults_PartitionGroup(group)
 
 	if err = r.reconcileService(group); err != nil {
 		return reconcile.Result{}, err

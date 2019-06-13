@@ -49,32 +49,42 @@ func GetPartitionNamespacedName(group *v1alpha1.PartitionGroup, partition int) t
 }
 
 func NewPartition(group *v1alpha1.PartitionGroup, partition int) *v1alpha1.Partition {
-	spec := v1alpha1.PartitionSpec{
-		Size:      int32(group.Spec.PartitionSize),
-		Env:       group.Spec.Env,
-		Resources: group.Spec.Resources,
-		Type:      group.Spec.Protocol,
-		Image:     group.Spec.Image,
-		Config:    group.Spec.Config,
+	meta := group.Spec.Template.ObjectMeta
+	meta.Name = GetPartitionName(group, partition)
+	meta.Namespace = group.Namespace
+	if meta.Labels == nil {
+		meta.Labels = make(map[string]string)
 	}
-
+	for key, value := range GetPartitionGroupPartitionLabels(group) {
+		meta.Labels[key] = value
+	}
+	meta.Annotations = newPartitionAnnotations(group, partition)
 	return &v1alpha1.Partition{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:        GetPartitionName(group, partition),
-			Namespace:   group.Namespace,
-			Labels:      newPartitionLabels(group, partition),
-			Annotations: newPartitionAnnotations(group, partition),
-		},
-		Spec: spec,
+		ObjectMeta: meta,
+		Spec:       group.Spec.Template.Spec,
 	}
 }
 
-func GetPartitionLabels(group *v1alpha1.PartitionGroup) map[string]string {
+func GetPartitionGroupPartitionLabels(group *v1alpha1.PartitionGroup) map[string]string {
 	return map[string]string{
 		AppKey:   AtomixApp,
 		TypeKey:  PartitionType,
 		GroupKey: group.Name,
 	}
+}
+
+func GetPartitionLabels(partition *v1alpha1.Partition) map[string]string {
+	labels := make(map[string]string)
+	if value, ok := partition.Labels[AppKey]; ok {
+		labels[AppKey] = value
+	}
+	if value, ok := partition.Labels[TypeKey]; ok {
+		labels[TypeKey] = value
+	}
+	if value, ok := partition.Labels[GroupKey]; ok {
+		labels[GroupKey] = value
+	}
+	return labels
 }
 
 // newPartitionLabels returns a new labels map containing the partition app
@@ -226,7 +236,7 @@ func toNodeConfig(partition *v1alpha1.Partition) (string, error) {
 }
 
 func toProtocolConfig(partition *v1alpha1.Partition, protocols *protocol.ProtocolManager) (string, error) {
-	protocol, err := protocols.GetProtocolByName(partition.Spec.Type)
+	protocol, err := protocols.GetProtocolByName(partition.Spec.Protocol)
 	if err != nil {
 		return "", err
 	}
@@ -300,7 +310,7 @@ func NewPartitionService(partition *v1alpha1.Partition) *corev1.Service {
 					Port: 5678,
 				},
 			},
-			Selector: partition.Labels,
+			Selector: GetPartitionLabels(partition),
 		},
 	}
 }
@@ -325,7 +335,7 @@ func NewPartitionHeadlessService(partition *v1alpha1.Partition) *corev1.Service 
 			},
 			PublishNotReadyAddresses: true,
 			ClusterIP:                "None",
-			Selector:                 partition.Labels,
+			Selector:                 GetPartitionLabels(partition),
 		},
 	}
 }
@@ -354,7 +364,7 @@ func NewPartitionStatefulSet(partition *v1alpha1.Partition) (*appsv1.StatefulSet
 			ServiceName: GetPartitionServiceName(partition),
 			Replicas:    &partition.Spec.Size,
 			Selector: &metav1.LabelSelector{
-				MatchLabels: partition.Labels,
+				MatchLabels: GetPartitionLabels(partition),
 			},
 			UpdateStrategy: appsv1.StatefulSetUpdateStrategy{
 				Type: appsv1.RollingUpdateStatefulSetStrategyType,

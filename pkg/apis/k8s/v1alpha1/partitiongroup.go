@@ -17,22 +17,19 @@
 package v1alpha1
 
 import (
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 type PartitionGroupType string
 
 type PartitionGroupSpec struct {
-	Partitions    int                         `json:"partitions,omitempty"`
-	PartitionSize int                         `json:"partitionSize,omitempty"`
-	Env           []corev1.EnvVar             `json:"env,omitempty"`
-	Resources     corev1.ResourceRequirements `json:"resources,omitempty"`
-	StorageClass  *string                     `json:"storageClass,omitempty"`
-	StorageSize   string                      `json:"storageSize,omitempty"`
-	Protocol      string                      `json:"protocol,omitempty"`
-	Image         string                      `json:"image,omitempty"`
-	Config        string                      `json:"config,omitempty"`
+	Partitions int                   `json:"partitions,omitempty"`
+	Template   PartitionTemplateSpec `json:"template,omitempty"`
+}
+
+type PartitionTemplateSpec struct {
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+	Spec              PartitionSpec `json:"spec,omitempty"`
 }
 
 // PartitionGroupStatus defines the observed state of Partition

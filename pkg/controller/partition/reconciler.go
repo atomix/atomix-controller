@@ -107,7 +107,7 @@ func (r *PartitionReconciler) Reconcile(request reconcile.Request) (reconcile.Re
 		return reconcile.Result{}, err
 	}
 
-	v1alpha1.SetDefaults_Partition(partition)
+	v1alpha1.SetDefaults_Partition(partition, r.protocols)
 
 	// Reconcile the partition config map
 	err = r.reconcileConfigMap(partition)

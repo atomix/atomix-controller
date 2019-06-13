@@ -4,8 +4,10 @@ metadata:
   name: raft
 spec:
   partitions: 3
-  partitionSize: 3
-  protocol: raft
-  config: |
-    electionTimeout: 5s
-    heartbeatInterval: 1s
+  template:
+    spec:
+      size: 3
+      protocol: raft
+      config: |
+        electionTimeout: 5s
+        heartbeatInterval: 1s

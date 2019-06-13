@@ -140,7 +140,7 @@ func (c *AtomixController) GetPartitionGroups(ctx context.Context, r *controller
 		}
 
 		options := &client.ListOptions{
-			LabelSelector: labels.SelectorFromSet(k8sutil.GetPartitionLabels(group)),
+			LabelSelector: labels.SelectorFromSet(k8sutil.GetPartitionGroupPartitionLabels(group)),
 		}
 		partitions := &v1alpha1.PartitionList{}
 		err = c.client.List(context.TODO(), options, partitions)
@@ -180,7 +180,7 @@ func (c *AtomixController) GetPartitionGroups(ctx context.Context, r *controller
 			}
 
 			options := &client.ListOptions{
-				LabelSelector: labels.SelectorFromSet(k8sutil.GetPartitionLabels(&group)),
+				LabelSelector: labels.SelectorFromSet(k8sutil.GetPartitionGroupPartitionLabels(&group)),
 			}
 			partitions := &v1alpha1.PartitionList{}
 			err = c.client.List(context.TODO(), options, partitions)
