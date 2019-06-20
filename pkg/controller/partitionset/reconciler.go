@@ -174,7 +174,7 @@ func (r *PartitionSetReconciler) reconcileStatus(set *v1alpha1.PartitionSet, id 
 	if set.Status.ReadyPartitions != partition.Status.ReadyReplicas {
 		log.Info("Updating partition set status", "Name", set.Name, "Namespace", set.Namespace)
 		set.Status.ReadyPartitions = partition.Status.ReadyReplicas
-		err = r.client.Status().Update(context.TODO(), partition)
+		err = r.client.Status().Update(context.TODO(), set)
 	}
 	return err
 }
