@@ -39,6 +39,7 @@ type PartitionStatus struct {
 	ServiceName string `json:"serviceName,omitempty"`
 }
 
+// +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // Partition is the Schema for the atomixclusters API
