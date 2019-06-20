@@ -148,6 +148,12 @@ func (r *PartitionReconciler) Reconcile(request reconcile.Request) (reconcile.Re
 		return reconcile.Result{}, err
 	}
 
+	// Reconcile the partition status
+	err = r.reconcileStatus(partition)
+	if err != nil {
+		return reconcile.Result{}, err
+	}
+
 	return reconcile.Result{}, nil
 }
 
@@ -208,6 +214,24 @@ func (r *PartitionReconciler) reconcileEndpoints(partition *v1alpha1.Partition) 
 	}
 	if service.Spec.ClusterIP != "" {
 		err = r.addEndpoints(partition, service)
+	}
+	return err
+}
+
+func (r *PartitionReconciler) reconcileStatus(partition *v1alpha1.Partition) error {
+	set := &appsv1.StatefulSet{}
+	err := r.client.Get(context.TODO(), types.NamespacedName{Name: k8sutil.GetPartitionStatefulSetName(partition), Namespace: partition.Namespace}, set)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			return nil
+		}
+		return err
+	}
+
+	if set.Status.ReadyReplicas != partition.Status.ReadyReplicas {
+		log.Info("Updating partition status", "Name", partition.Name, "Namespace", partition.Namespace)
+		partition.Status.ReadyReplicas = set.Status.ReadyReplicas
+		err = r.client.Status().Update(context.TODO(), partition)
 	}
 	return err
 }

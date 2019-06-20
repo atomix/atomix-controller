@@ -32,8 +32,8 @@ type PartitionTemplateSpec struct {
 
 // PartitionSetStatus defines the observed state of Partition
 type PartitionSetStatus struct {
-	// ServiceName is the name of the headless service used to access controller nodes.
-	ServiceName string `json:"serviceName,omitempty"`
+	// ReadyPartitions is the number of partitions in the set that have been marked ready
+	ReadyPartitions int32 `json:"readyPartitions,omitempty"`
 }
 
 // +genclient

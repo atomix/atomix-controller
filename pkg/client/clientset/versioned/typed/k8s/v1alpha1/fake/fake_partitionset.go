@@ -131,7 +131,7 @@ func (c *FakePartitionSets) DeleteCollection(options *v1.DeleteOptions, listOpti
 // Patch applies the patch and returns the patched partitionSet.
 func (c *FakePartitionSets) Patch(name string, pt types.PatchType, data []byte, subresources ...string) (result *v1alpha1.PartitionSet, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewPatchSubresourceAction(partitionsetsResource, c.ns, name, pt, data, subresources...), &v1alpha1.PartitionSet{})
+		Invokes(testing.NewPatchSubresourceAction(partitionsetsResource, c.ns, name, data, subresources...), &v1alpha1.PartitionSet{})
 
 	if obj == nil {
 		return nil, err

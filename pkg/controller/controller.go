@@ -22,7 +22,7 @@ import (
 	"fmt"
 	"github.com/atomix/atomix-k8s-controller/pkg/apis/k8s/v1alpha1"
 	"github.com/atomix/atomix-k8s-controller/pkg/controller/partition"
-	"github.com/atomix/atomix-k8s-controller/pkg/controller/partitiongroup"
+	"github.com/atomix/atomix-k8s-controller/pkg/controller/partitionset"
 	"github.com/atomix/atomix-k8s-controller/pkg/controller/protocol"
 	k8sutil "github.com/atomix/atomix-k8s-controller/pkg/controller/util/k8s"
 	"github.com/atomix/atomix-k8s-controller/proto/atomix/controller"
@@ -56,7 +56,7 @@ func AddController(mgr manager.Manager) error {
 	if err = partition.Add(mgr, protocols); err != nil {
 		return err
 	}
-	if err = partitiongroup.Add(mgr, protocols); err != nil {
+	if err = partitionset.Add(mgr, protocols); err != nil {
 		return err
 	}
 	return nil

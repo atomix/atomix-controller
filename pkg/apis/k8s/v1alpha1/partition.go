@@ -35,8 +35,8 @@ type PartitionSpec struct {
 
 // PartitionStatus defines the observed state of Partition
 type PartitionStatus struct {
-	// ServiceName is the name of the service used to access partition nodes.
-	ServiceName string `json:"serviceName,omitempty"`
+	// ReadyReplicas is the number of replicas in the partition that have been marked ready
+	ReadyReplicas int32 `json:"readyReplicas,omitempty"`
 }
 
 // +genclient
