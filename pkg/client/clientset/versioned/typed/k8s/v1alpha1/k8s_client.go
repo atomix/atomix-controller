@@ -19,8 +19,10 @@ limitations under the License.
 package v1alpha1
 
 import (
-	"github.com/atomix/atomix-k8s-controller/pkg/apis/k8s/v1alpha1"
-	"k8s.io/client-go/rest"
+	v1alpha1 "github.com/atomix/atomix-k8s-controller/pkg/apis/k8s/v1alpha1"
+	"github.com/atomix/atomix-k8s-controller/pkg/client/clientset/versioned/scheme"
+	serializer "k8s.io/apimachinery/pkg/runtime/serializer"
+	rest "k8s.io/client-go/rest"
 )
 
 type K8sV1alpha1Interface interface {
@@ -74,6 +76,7 @@ func setConfigDefaults(config *rest.Config) error {
 	gv := v1alpha1.SchemeGroupVersion
 	config.GroupVersion = &gv
 	config.APIPath = "/apis"
+	config.NegotiatedSerializer = serializer.DirectCodecFactory{CodecFactory: scheme.Codecs}
 
 	if config.UserAgent == "" {
 		config.UserAgent = rest.DefaultKubernetesUserAgent()
