@@ -189,13 +189,13 @@ func newContainer(image string, args []string, env []corev1.EnvVar, resources co
 		Args: args,
 		ReadinessProbe: &corev1.Probe{
 			Handler: corev1.Handler{
-				TCPSocket: &corev1.TCPSocketAction{
-					Port: intstr.IntOrString{Type: intstr.Int, IntVal: 5678},
+				Exec: &corev1.ExecAction{
+					Command: []string{"stat", "/tmp/atomix-ready"},
 				},
 			},
-			InitialDelaySeconds: 60,
+			InitialDelaySeconds: 5,
 			TimeoutSeconds:      10,
-			FailureThreshold:    6,
+			FailureThreshold:    12,
 		},
 		LivenessProbe: &corev1.Probe{
 			Handler: corev1.Handler{
