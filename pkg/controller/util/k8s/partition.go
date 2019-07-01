@@ -143,8 +143,8 @@ func getPodName(partition *v1alpha1.Partition, pod int) string {
 	return fmt.Sprintf("%s-%d", partition.Name, pod)
 }
 
-func getPodServiceDnsName(partition *v1alpha1.Partition, pod int) string {
-	return fmt.Sprintf("%s-%d.%s.%s.svc.cluster.local", partition.Name, pod, partition.Name, partition.Namespace)
+func getPodDnsName(partition *v1alpha1.Partition, pod int) string {
+	return fmt.Sprintf("%s-%d.%s.%s.svc.cluster.local", partition.Name, pod, GetPartitionHeadlessServiceName(partition), partition.Namespace)
 }
 
 func GetPartitionServiceNamespacedName(partition *v1alpha1.Partition) types.NamespacedName {
@@ -210,7 +210,7 @@ func toNodeConfig(partition *v1alpha1.Partition) (string, error) {
 	for i := 0; i < int(partition.Spec.Size); i++ {
 		nodes[i] = &controller.NodeConfig{
 			Id:   getPodName(partition, i),
-			Host: getPodServiceDnsName(partition, i),
+			Host: getPodDnsName(partition, i),
 			Port: 5678,
 		}
 	}
@@ -361,7 +361,7 @@ func NewPartitionStatefulSet(partition *v1alpha1.Partition) (*appsv1.StatefulSet
 			Labels:    partition.Labels,
 		},
 		Spec: appsv1.StatefulSetSpec{
-			ServiceName: GetPartitionServiceName(partition),
+			ServiceName: GetPartitionHeadlessServiceName(partition),
 			Replicas:    &partition.Spec.Size,
 			Selector: &metav1.LabelSelector{
 				MatchLabels: GetPartitionLabels(partition),
