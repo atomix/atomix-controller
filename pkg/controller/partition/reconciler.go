@@ -151,6 +151,9 @@ func (r *PartitionReconciler) Reconcile(request reconcile.Request) (reconcile.Re
 	// Reconcile the partition status
 	err = r.reconcileStatus(partition)
 	if err != nil {
+		if errors.IsConflict(err) {
+			return reconcile.Result{Requeue: true}, nil
+		}
 		return reconcile.Result{}, err
 	}
 

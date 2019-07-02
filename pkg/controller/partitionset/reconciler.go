@@ -120,6 +120,9 @@ func (r *PartitionSetReconciler) Reconcile(request reconcile.Request) (reconcile
 	}
 
 	if err = r.reconcileStatus(set); err != nil {
+		if errors.IsConflict(err) {
+			return reconcile.Result{Requeue: true}, nil
+		}
 		return reconcile.Result{}, err
 	}
 
