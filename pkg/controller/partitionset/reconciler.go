@@ -41,9 +41,9 @@ var log = logf.Log.WithName("controller_partitiongroup")
 // controller and Start it when the Manager is Started.
 func Add(mgr manager.Manager, protocols *protocol.ProtocolManager) error {
 	r := &PartitionSetReconciler{
-		client: mgr.GetClient(),
-		scheme: mgr.GetScheme(),
-		config: mgr.GetConfig(),
+		client:    mgr.GetClient(),
+		scheme:    mgr.GetScheme(),
+		config:    mgr.GetConfig(),
 		protocols: protocols,
 	}
 
@@ -77,9 +77,9 @@ var _ reconcile.Reconciler = &PartitionSetReconciler{}
 type PartitionSetReconciler struct {
 	// This client, initialized using mgr.Client() above, is a split client
 	// that reads objects from the cache and writes to the apiserver
-	client client.Client
-	scheme *runtime.Scheme
-	config *rest.Config
+	client    client.Client
+	scheme    *runtime.Scheme
+	config    *rest.Config
 	protocols *protocol.ProtocolManager
 }
 
@@ -117,9 +117,10 @@ func (r *PartitionSetReconciler) Reconcile(request reconcile.Request) (reconcile
 		if err = r.reconcilePartition(set, i); err != nil {
 			return reconcile.Result{}, err
 		}
-		if err = r.reconcileStatus(set, i); err != nil {
-			return reconcile.Result{}, err
-		}
+	}
+
+	if err = r.reconcileStatus(set); err != nil {
+		return reconcile.Result{}, err
 	}
 
 	return reconcile.Result{}, nil
@@ -161,22 +162,29 @@ func (r *PartitionSetReconciler) addEndpoints(set *v1alpha1.PartitionSet) error 
 	return r.client.Create(context.TODO(), endpoints)
 }
 
-func (r *PartitionSetReconciler) reconcileStatus(set *v1alpha1.PartitionSet, id int) error {
-	partition := &v1alpha1.Partition{}
-	err := r.client.Get(context.TODO(), k8sutil.GetPartitionNamespacedName(set, id), partition)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			return nil
+func (r *PartitionSetReconciler) reconcileStatus(set *v1alpha1.PartitionSet) error {
+	readyPartitions := 0
+	for i := 1; i <= set.Spec.Partitions; i++ {
+		partition := &v1alpha1.Partition{}
+		err := r.client.Get(context.TODO(), k8sutil.GetPartitionNamespacedName(set, i), partition)
+		if err != nil {
+			if errors.IsNotFound(err) {
+				continue
+			}
+			return err
 		}
-		return err
+
+		if partition.Status.ReadyReplicas == partition.Spec.Size {
+			readyPartitions += 1
+		}
 	}
 
-	if set.Status.ReadyPartitions != partition.Status.ReadyReplicas {
+	if int(set.Status.ReadyPartitions) != readyPartitions {
 		log.Info("Updating partition set status", "Name", set.Name, "Namespace", set.Namespace)
-		set.Status.ReadyPartitions = partition.Status.ReadyReplicas
-		err = r.client.Status().Update(context.TODO(), set)
+		set.Status.ReadyPartitions = int32(readyPartitions)
+		return r.client.Status().Update(context.TODO(), set)
 	}
-	return err
+	return nil
 }
 
 func (r *PartitionSetReconciler) reconcilePartition(set *v1alpha1.PartitionSet, id int) error {
