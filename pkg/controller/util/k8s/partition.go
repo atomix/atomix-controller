@@ -211,7 +211,7 @@ func toNodeConfig(partition *v1alpha1.Partition) (string, error) {
 		nodes[i] = &controller.NodeConfig{
 			Id:   getPodName(partition, i),
 			Host: getPodDnsName(partition, i),
-			Port: 5678,
+			Port: 5679,
 		}
 	}
 
@@ -331,6 +331,10 @@ func NewPartitionHeadlessService(partition *v1alpha1.Partition) *corev1.Service 
 				{
 					Name: "api",
 					Port: 5678,
+				},
+				{
+					Name: "protocol",
+					Port: 5679,
 				},
 			},
 			PublishNotReadyAddresses: true,

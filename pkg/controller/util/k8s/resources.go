@@ -185,6 +185,10 @@ func newContainer(image string, args []string, env []corev1.EnvVar, resources co
 				Name:          "api",
 				ContainerPort: 5678,
 			},
+			{
+				Name:          "protocol",
+				ContainerPort: 5679,
+			},
 		},
 		Args: args,
 		ReadinessProbe: &corev1.Probe{
