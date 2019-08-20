@@ -4,10 +4,6 @@ export CGO_ENABLED=0
 
 .PHONY: proto build push dev deploy
 
-all: build
-proto: # @HELP build protobuf services
-	docker build -t atomix/atomix-go-build:0.1 build/proto
-	docker run -it -v `pwd`:/go/src/github.com/atomix/atomix-k8s-controller atomix/atomix-go-build:0.1 build
 build: # @HELP build the controller Docker image
 	go build -o build/controller/_output/bin/atomix-k8s-controller ./cmd/controller
 	docker build . -f build/controller/Dockerfile -t atomix/atomix-k8s-controller:latest

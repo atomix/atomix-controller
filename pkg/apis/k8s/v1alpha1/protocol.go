@@ -17,9 +17,9 @@
 package v1alpha1
 
 import (
+	"github.com/atomix/atomix-api/proto/atomix/protocols/log"
+	"github.com/atomix/atomix-api/proto/atomix/protocols/raft"
 	"github.com/atomix/atomix-k8s-controller/pkg/controller/protocol"
-	log "github.com/atomix/atomix-k8s-controller/proto/atomix/protocols/log"
-	raft "github.com/atomix/atomix-k8s-controller/proto/atomix/protocols/raft"
 )
 
 func init() {

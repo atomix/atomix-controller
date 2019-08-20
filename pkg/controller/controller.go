@@ -20,12 +20,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	api "github.com/atomix/atomix-api/proto/atomix/controller"
 	"github.com/atomix/atomix-k8s-controller/pkg/apis/k8s/v1alpha1"
 	"github.com/atomix/atomix-k8s-controller/pkg/controller/partition"
 	"github.com/atomix/atomix-k8s-controller/pkg/controller/partitionset"
 	"github.com/atomix/atomix-k8s-controller/pkg/controller/protocol"
 	k8sutil "github.com/atomix/atomix-k8s-controller/pkg/controller/util/k8s"
-	"github.com/atomix/atomix-k8s-controller/proto/atomix/controller"
 	"google.golang.org/grpc"
 	"io"
 	"k8s.io/api/core/v1"
@@ -76,7 +76,7 @@ func newController(client client.Client, scheme *runtime.Scheme, config *rest.Co
 
 // Controller server
 type AtomixController struct {
-	controller.ControllerServiceServer
+	api.ControllerServiceServer
 
 	client    client.Client
 	scheme    *runtime.Scheme
@@ -87,13 +87,13 @@ type AtomixController struct {
 }
 
 // CreatePartitionGroup creates a partition group via the k8s API
-func (c *AtomixController) CreatePartitionGroup(ctx context.Context, r *controller.CreatePartitionGroupRequest) (*controller.CreatePartitionGroupResponse, error) {
+func (c *AtomixController) CreatePartitionGroup(ctx context.Context, r *api.CreatePartitionGroupRequest) (*api.CreatePartitionGroupResponse, error) {
 	group := &v1alpha1.PartitionSet{}
-	name := k8sutil.GetPartitionSetNamespacedName(r.Id)
+	name := k8sutil.GetPartitionSetNamespacedName(r.ID)
 
 	err := c.client.Get(ctx, name, group)
 	if err != nil && k8serrors.IsNotFound(err) {
-		group, err = k8sutil.NewPartitionSetFromProto(r.Id, r.Spec, c.protocols)
+		group, err = k8sutil.NewPartitionSetFromProto(r.ID, r.Spec, c.protocols)
 		if err != nil {
 			return nil, err
 		}
@@ -101,13 +101,13 @@ func (c *AtomixController) CreatePartitionGroup(ctx context.Context, r *controll
 			return nil, err
 		}
 	}
-	return &controller.CreatePartitionGroupResponse{}, nil
+	return &api.CreatePartitionGroupResponse{}, nil
 }
 
 // DeletePartitionGroup deletes a partition group via the k8s API
-func (c *AtomixController) DeletePartitionGroup(ctx context.Context, r *controller.DeletePartitionGroupRequest) (*controller.DeletePartitionGroupResponse, error) {
+func (c *AtomixController) DeletePartitionGroup(ctx context.Context, r *api.DeletePartitionGroupRequest) (*api.DeletePartitionGroupResponse, error) {
 	group := &v1alpha1.PartitionSet{}
-	name := k8sutil.GetPartitionSetNamespacedName(r.Id)
+	name := k8sutil.GetPartitionSetNamespacedName(r.ID)
 
 	if err := c.client.Get(ctx, name, group); err != nil {
 		return nil, err
@@ -116,19 +116,19 @@ func (c *AtomixController) DeletePartitionGroup(ctx context.Context, r *controll
 	if err := c.client.Delete(ctx, group); err != nil {
 		return nil, err
 	}
-	return &controller.DeletePartitionGroupResponse{}, nil
+	return &api.DeletePartitionGroupResponse{}, nil
 }
 
 // GetPartitionGroups returns a list of partition groups read from the k8s API
-func (c *AtomixController) GetPartitionGroups(ctx context.Context, r *controller.GetPartitionGroupsRequest) (*controller.GetPartitionGroupsResponse, error) {
-	if r.Id.Name != "" {
+func (c *AtomixController) GetPartitionGroups(ctx context.Context, r *api.GetPartitionGroupsRequest) (*api.GetPartitionGroupsResponse, error) {
+	if r.ID.Name != "" {
 		group := &v1alpha1.PartitionSet{}
-		name := k8sutil.GetPartitionSetNamespacedName(r.Id)
+		name := k8sutil.GetPartitionSetNamespacedName(r.ID)
 		err := c.client.Get(context.TODO(), name, group)
 		if err != nil {
 			if k8serrors.IsNotFound(err) {
-				return &controller.GetPartitionGroupsResponse{
-					Groups: []*controller.PartitionGroup{},
+				return &api.GetPartitionGroupsResponse{
+					Groups: []*api.PartitionGroup{},
 				}, nil
 			}
 			return nil, err
@@ -148,7 +148,7 @@ func (c *AtomixController) GetPartitionGroups(ctx context.Context, r *controller
 			return nil, err
 		}
 
-		partitionProtos := []*controller.Partition{}
+		partitionProtos := []*api.Partition{}
 		for _, partition := range partitions.Items {
 			partitionProto, err := k8sutil.NewPartitionProto(&partition)
 			if err != nil {
@@ -158,21 +158,21 @@ func (c *AtomixController) GetPartitionGroups(ctx context.Context, r *controller
 		}
 		proto.Partitions = partitionProtos
 
-		return &controller.GetPartitionGroupsResponse{
-			Groups: []*controller.PartitionGroup{proto},
+		return &api.GetPartitionGroupsResponse{
+			Groups: []*api.PartitionGroup{proto},
 		}, nil
 	} else {
 		groups := &v1alpha1.PartitionSetList{}
 
 		opts := &client.ListOptions{
-			Namespace: k8sutil.GetPartitionSetNamespace(r.Id),
+			Namespace: k8sutil.GetPartitionSetNamespace(r.ID),
 		}
 
 		if err := c.client.List(ctx, opts, groups); err != nil {
 			return nil, err
 		}
 
-		pbgroups := make([]*controller.PartitionGroup, 0, len(groups.Items))
+		pbgroups := make([]*api.PartitionGroup, 0, len(groups.Items))
 		for _, group := range groups.Items {
 			pbgroup, err := k8sutil.NewPartitionGroupProtoFromSet(&group, c.protocols)
 			if err != nil {
@@ -188,7 +188,7 @@ func (c *AtomixController) GetPartitionGroups(ctx context.Context, r *controller
 				return nil, err
 			}
 
-			pbpartitions := []*controller.Partition{}
+			pbpartitions := []*api.Partition{}
 			for _, partition := range partitions.Items {
 				pbpartition, err := k8sutil.NewPartitionProto(&partition)
 				if err != nil {
@@ -201,18 +201,18 @@ func (c *AtomixController) GetPartitionGroups(ctx context.Context, r *controller
 			pbgroups = append(pbgroups, pbgroup)
 		}
 
-		return &controller.GetPartitionGroupsResponse{
+		return &api.GetPartitionGroupsResponse{
 			Groups: pbgroups,
 		}, nil
 	}
 }
 
 // EnterElection is unimplemented
-func (c *AtomixController) EnterElection(r *controller.PartitionElectionRequest, s controller.ControllerService_EnterElectionServer) error {
+func (c *AtomixController) EnterElection(r *api.PartitionElectionRequest, s api.ControllerService_EnterElectionServer) error {
 	id := electionId{
-		namespace: r.PartitionId.Group.Namespace,
-		name:      r.PartitionId.Group.Name,
-		partition: int(r.PartitionId.Partition),
+		namespace: r.PartitionID.Group.Namespace,
+		name:      r.PartitionID.Group.Name,
+		partition: int(r.PartitionID.Partition),
 	}
 
 	election, ok := c.elections[id]
@@ -229,8 +229,8 @@ func (c *AtomixController) EnterElection(r *controller.PartitionElectionRequest,
 
 	for {
 		term := <-ch
-		response := &controller.PartitionElectionResponse{
-			Term: &controller.PrimaryTerm{
+		response := &api.PartitionElectionResponse{
+			Term: &api.PrimaryTerm{
 				Term:       term.term,
 				Primary:    term.primary,
 				Candidates: term.candidates,
@@ -257,7 +257,7 @@ func (c *AtomixController) Start(stop <-chan struct{}) error {
 
 	s := grpc.NewServer(c.opts...)
 	go func() {
-		controller.RegisterControllerServiceServer(s, c)
+		api.RegisterControllerServiceServer(s, c)
 		if err := s.Serve(lis); err != nil {
 			errs <- err
 		}

@@ -19,9 +19,9 @@ package k8s
 import (
 	"errors"
 	"fmt"
+	api "github.com/atomix/atomix-api/proto/atomix/controller"
 	"github.com/atomix/atomix-k8s-controller/pkg/apis/k8s/v1alpha1"
 	"github.com/atomix/atomix-k8s-controller/pkg/controller/protocol"
-	"github.com/atomix/atomix-k8s-controller/proto/atomix/controller"
 	"github.com/golang/protobuf/jsonpb"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -206,25 +206,25 @@ func toNodeConfig(partition *v1alpha1.Partition) (string, error) {
 		return "", err
 	}
 
-	nodes := make([]*controller.NodeConfig, partition.Spec.Size)
+	nodes := make([]*api.NodeConfig, partition.Spec.Size)
 	for i := 0; i < int(partition.Spec.Size); i++ {
-		nodes[i] = &controller.NodeConfig{
-			Id:   getPodName(partition, i),
+		nodes[i] = &api.NodeConfig{
+			ID:   getPodName(partition, i),
 			Host: getPodDnsName(partition, i),
 			Port: 5679,
 		}
 	}
 
-	config := &controller.PartitionConfig{
-		Partition: &controller.PartitionId{
+	config := &api.PartitionConfig{
+		Partition: &api.PartitionId{
 			Partition: int32(partitionId),
-			Group: &controller.PartitionGroupId{
+			Group: &api.PartitionGroupId{
 				Name:      partitionGroup,
 				Namespace: partition.Namespace,
 			},
 		},
-		Controller: &controller.NodeConfig{
-			Id:   GetControllerName(),
+		Controller: &api.NodeConfig{
+			ID:   GetControllerName(),
 			Host: getControllerServiceDnsName(),
 			Port: 5679,
 		},

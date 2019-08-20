@@ -1,11 +1,12 @@
 module github.com/atomix/atomix-k8s-controller
 
 require (
+	github.com/atomix/atomix-api v0.0.0-20190820204356-60f1a3d2c6c0
 	github.com/evanphx/json-patch v4.0.0+incompatible // indirect
 	github.com/ghodss/yaml v1.0.0
 	github.com/go-logr/logr v0.1.0 // indirect
 	github.com/go-logr/zapr v0.1.0 // indirect
-	github.com/gogo/protobuf v1.2.0
+	github.com/gogo/protobuf v1.2.1
 	github.com/golang/groupcache v0.0.0-20181024230925-c65c006176ff // indirect
 	github.com/golang/protobuf v1.3.1
 	github.com/google/btree v1.0.0 // indirect

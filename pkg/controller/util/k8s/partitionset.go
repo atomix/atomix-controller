@@ -1,21 +1,21 @@
 package k8s
 
 import (
+	api "github.com/atomix/atomix-api/proto/atomix/controller"
 	"github.com/atomix/atomix-k8s-controller/pkg/apis/k8s/v1alpha1"
 	"github.com/atomix/atomix-k8s-controller/pkg/controller/protocol"
-	"github.com/atomix/atomix-k8s-controller/proto/atomix/controller"
+	gogotypes "github.com/gogo/protobuf/types"
 	"github.com/golang/protobuf/proto"
-	"github.com/golang/protobuf/ptypes/any"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 )
 
-func GetPartitionSetName(id *controller.PartitionGroupId) string {
+func GetPartitionSetName(id *api.PartitionGroupId) string {
 	return id.Name
 }
 
-func GetPartitionSetNamespace(id *controller.PartitionGroupId) string {
+func GetPartitionSetNamespace(id *api.PartitionGroupId) string {
 	if id.Namespace != "" {
 		return id.Namespace
 	} else {
@@ -23,7 +23,7 @@ func GetPartitionSetNamespace(id *controller.PartitionGroupId) string {
 	}
 }
 
-func GetPartitionSetNamespacedName(id *controller.PartitionGroupId) types.NamespacedName {
+func GetPartitionSetNamespacedName(id *api.PartitionGroupId) types.NamespacedName {
 	return types.NamespacedName{
 		Name:      GetPartitionSetName(id),
 		Namespace: GetPartitionSetNamespace(id),
@@ -83,14 +83,14 @@ func NewPartitionSetEndpointPorts() []corev1.EndpointPort {
 	}
 }
 
-func NewPartitionProto(p *v1alpha1.Partition) (*controller.Partition, error) {
+func NewPartitionProto(p *v1alpha1.Partition) (*api.Partition, error) {
 	id, err := getPartitionIdFromAnnotation(p)
 	if err != nil {
 		return nil, err
 	}
-	return &controller.Partition{
-		PartitionId: int32(id),
-		Endpoints: []*controller.PartitionEndpoint{
+	return &api.Partition{
+		PartitionID: int32(id),
+		Endpoints: []*api.PartitionEndpoint{
 			{
 				Host: GetPartitionServiceName(p),
 				Port: 5678,
@@ -99,13 +99,13 @@ func NewPartitionProto(p *v1alpha1.Partition) (*controller.Partition, error) {
 	}, nil
 }
 
-func NewPartitionGroupProtoFromSet(set *v1alpha1.PartitionSet, protocols *protocol.ProtocolManager) (*controller.PartitionGroup, error) {
+func NewPartitionGroupProtoFromSet(set *v1alpha1.PartitionSet, protocols *protocol.ProtocolManager) (*api.PartitionGroup, error) {
 	spec, err := newPartitionGroupSpecProto(set, protocols)
 	if err != nil {
 		return nil, err
 	}
-	return &controller.PartitionGroup{
-		Id: &controller.PartitionGroupId{
+	return &api.PartitionGroup{
+		ID: &api.PartitionGroupId{
 			Name:      set.Name,
 			Namespace: set.Namespace,
 		},
@@ -113,7 +113,7 @@ func NewPartitionGroupProtoFromSet(set *v1alpha1.PartitionSet, protocols *protoc
 	}, nil
 }
 
-func newPartitionGroupSpecProto(set *v1alpha1.PartitionSet, protocols *protocol.ProtocolManager) (*controller.PartitionGroupSpec, error) {
+func newPartitionGroupSpecProto(set *v1alpha1.PartitionSet, protocols *protocol.ProtocolManager) (*api.PartitionGroupSpec, error) {
 	protocol, err := protocols.GetProtocolByName(set.Spec.Template.Spec.Protocol)
 	if err != nil {
 		return nil, err
@@ -128,17 +128,17 @@ func newPartitionGroupSpecProto(set *v1alpha1.PartitionSet, protocols *protocol.
 		return nil, err
 	}
 
-	return &controller.PartitionGroupSpec{
+	return &api.PartitionGroupSpec{
 		Partitions:    uint32(set.Spec.Partitions),
 		PartitionSize: uint32(set.Spec.Template.Spec.Size),
-		Protocol: &any.Any{
+		Protocol: &gogotypes.Any{
 			TypeUrl: "type.googleapis.com/" + proto.MessageName(message),
 			Value:   bytes,
 		},
 	}, nil
 }
 
-func NewPartitionSetFromProto(id *controller.PartitionGroupId, pbspec *controller.PartitionGroupSpec, protocols *protocol.ProtocolManager) (*v1alpha1.PartitionSet, error) {
+func NewPartitionSetFromProto(id *api.PartitionGroupId, pbspec *api.PartitionGroupSpec, protocols *protocol.ProtocolManager) (*v1alpha1.PartitionSet, error) {
 	protocol, err := protocols.GetProtocolByType(pbspec.Protocol.TypeUrl)
 	if err != nil {
 		return nil, err
