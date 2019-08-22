@@ -1,0 +1,6 @@
+#!/bin/bash
+
+go get github.com/go-playground/overalls && go get github.com/mattn/goveralls
+
+overalls -project=github.com/atomix/atomix-k8s-controller -covermode=count -ignore=".git,vendor"
+goveralls -coverprofile=overalls.coverprofile -service travis-ci

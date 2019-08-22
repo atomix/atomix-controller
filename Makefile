@@ -1,18 +1,41 @@
-export GOOS=linux
-export GOARCH=amd64
-export CGO_ENABLED=0
+.PHONY: build
 
-.PHONY: proto build push dev deploy
+ATOMIX_K8S_CONTROLLER_VERSION := latest
 
-build: # @HELP build the controller Docker image
+all: image
+
+build: # @HELP build the source code
+build:
 	go build -o build/controller/_output/bin/atomix-k8s-controller ./cmd/controller
-	docker build . -f build/controller/Dockerfile -t atomix/atomix-k8s-controller:latest
-push: # @HELP push the controller Docker image
-	docker push atomix/atomix-k8s-controller:latest
-dev: # @HELP run the controller in locally development mode
-	CONTROLLER_NAME=atomix-controller go run cmd/controller/main.go
-deploy: # @HELP deploy the controller to a Kubernetes partition
-	kubectl create -f deploy/role.yaml
-	kubectl create -f deploy/service_account.yaml
-	kubectl create -f deploy/role_binding.yaml
-	kubectl create -f deploy/controller.yaml
+
+image: # @HELP build atomix-go-raft Docker image
+image:
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o build/controller/_output/bin/atomix-k8s-controller ./cmd/controller
+	docker build . -f build/controller/Dockerfile -t atomix/atomix-k8s-controller:${ATOMIX_K8S_CONTROLLER_VERSION}
+
+proto: # @HELP build Protobuf/gRPC generated types
+proto:
+	docker run -it -v `pwd`:/go/src/github.com/atomix/atomix-go-raft \
+		-w /go/src/github.com/atomix/atomix-go-raft \
+		--entrypoint build/bin/compile_protos.sh \
+		onosproject/protoc-go:stable
+
+test: # @HELP run the unit tests and source code validation
+test: build deps license_check linters
+	go test github.com/atomix/atomix-k8s-controller/cmd/...
+	go test github.com/atomix/atomix-k8s-controller/pkg/...
+
+coverage: # @HELP generate unit test coverage data
+coverage: build deps linters license_check
+	./build/bin/coveralls-coverage
+
+deps: # @HELP ensure that the required dependencies are in place
+	go build -v ./...
+	bash -c "diff -u <(echo -n) <(git diff go.mod)"
+	bash -c "diff -u <(echo -n) <(git diff go.sum)"
+
+linters: # @HELP examines Go source code and reports coding problems
+	golangci-lint run
+
+license_check: # @HELP examine and ensure license headers exist
+	./build/licensing/boilerplate.py -v
