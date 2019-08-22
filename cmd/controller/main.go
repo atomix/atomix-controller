@@ -58,7 +58,7 @@ func main() {
 	}
 
 	// Become the leader before proceeding
-	leader.Become(context.TODO())
+	_ = leader.Become(context.TODO())
 
 	r := ready.NewFileReady()
 	err = r.Set()
@@ -66,7 +66,9 @@ func main() {
 		log.Error(err, "")
 		os.Exit(1)
 	}
-	defer r.Unset()
+	defer func() {
+		_ = r.Unset()
+	}()
 
 	// Create a new Cmd to provide shared dependencies and start components
 	mgr, err := manager.New(cfg, manager.Options{})

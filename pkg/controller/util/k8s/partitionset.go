@@ -171,7 +171,7 @@ func NewPartitionSetFromProto(id *api.PartitionGroupId, pbspec *api.PartitionGro
 	return &v1alpha1.PartitionSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      id.Name,
-			Namespace: id.Namespace,
+			Namespace: ns,
 		},
 		Spec: v1alpha1.PartitionSetSpec{
 			Partitions: int(pbspec.Partitions),

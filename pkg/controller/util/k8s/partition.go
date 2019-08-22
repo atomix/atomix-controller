@@ -345,8 +345,17 @@ func NewPartitionHeadlessService(partition *v1alpha1.Partition) *corev1.Service 
 // NewPartitionStatefulSet returns a new StatefulSet for a partition group
 func NewPartitionStatefulSet(partition *v1alpha1.Partition) (*appsv1.StatefulSet, error) {
 	var affinity *corev1.Affinity
+
 	group, err := getPartitionGroupFromAnnotation(partition)
+	if err != nil {
+		return nil, err
+	}
+
 	id, err := getPartitionIdFromAnnotation(partition)
+	if err != nil {
+		return nil, err
+	}
+
 	if group != "" && id != 0 {
 		affinity = newAffinity(group, id)
 	}
