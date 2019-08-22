@@ -1,5 +1,11 @@
 # Atomix Kubernetes Controller
 
+[![Build Status](https://travis-ci.org/atomix/atomix-k8s-controller.svg?branch=master)](https://travis-ci.org/atomix/atomix-k8s-controller)
+[![Integration Test Status](https://img.shields.io/travis/atomix/atomix-k8s-controller?label=Atomix%20Tests&logo=Atomix)](https://travis-ci.org/onosproject/onos-test)
+[![Go Report Card](https://goreportcard.com/badge/github.com/atomix/atomix-k8s-controller)](https://goreportcard.com/report/github.com/atomix/atomix-k8s-controller)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://github.com/gojp/goreportcard/blob/master/LICENSE)
+[![GoDoc](https://godoc.org/github.com/atomix/atomix-k8s-controller?status.svg)](https://godoc.org/github.com/atomix/atomix-k8s-controller)
+
 This project provides an [Atomix] controller for [Kubernetes]. The controller
 implements the Atomix controller API and uses [custom Kubernetes resources][custom-resources]
 to provide seamless integration, allowing standard k8s tools to be used to deploy and scale
