@@ -30,8 +30,8 @@ import (
 var log = logf.Log.WithName("leader")
 
 const (
-	PodNameEnv      = "POD_NAME"
-	PodNamespaceEnv = "POD_NAMESPACE"
+	podNameEnv      = "POD_NAME"
+	podNamespaceEnv = "POD_NAMESPACE"
 
 	maxBackoffInterval = time.Second * 16
 )
@@ -46,13 +46,13 @@ const (
 func Become(ctx context.Context) error {
 	log.Info("Trying to become the leader.")
 
-	ns := os.Getenv(PodNamespaceEnv)
+	ns := os.Getenv(podNamespaceEnv)
 	if ns == "" {
 		log.Info("Skipping leader election; not running in a cluster.")
 		return nil
 	}
 
-	name := os.Getenv(PodNameEnv)
+	name := os.Getenv(podNameEnv)
 	if name == "" {
 		log.Info("Skipping leader election; not running in a cluster.")
 		return nil
@@ -90,9 +90,8 @@ func Become(ctx context.Context) error {
 				log.Info("Found existing lock with my name. I was likely restarted.")
 				log.Info("Continuing as the leader.")
 				return nil
-			} else {
-				log.Info("Found existing lock", "LockOwner", existingOwner.Name)
 			}
+			log.Info("Found existing lock", "LockOwner", existingOwner.Name)
 		}
 	case errors.IsNotFound(err):
 		log.Info("No pre-existing lock was found.")

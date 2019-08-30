@@ -18,14 +18,21 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// PartitionSetSpec is the k8s spec for a PartitionSet resource
 type PartitionSetSpec struct {
-	Partitions int                   `json:"partitions,omitempty"`
-	Template   PartitionTemplateSpec `json:"template,omitempty"`
+	// Partitions is the number of partitions in the set
+	Partitions int `json:"partitions,omitempty"`
+
+	// Template is the PartitionTemplateSpec to use to configure the partitions
+	Template PartitionTemplateSpec `json:"template,omitempty"`
 }
 
+// PartitionTemplateSpec is a template for partitions managed by the set
 type PartitionTemplateSpec struct {
 	metav1.ObjectMeta `json:"metadata,omitempty"`
-	Spec              PartitionSpec `json:"spec,omitempty"`
+
+	// Spec is the PartitionSpec for the partitions in the set
+	Spec PartitionSpec `json:"spec,omitempty"`
 }
 
 // PartitionSetStatus defines the observed state of Partition
@@ -42,8 +49,12 @@ type PartitionSetStatus struct {
 type PartitionSet struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
-	Spec              PartitionSetSpec   `json:"spec,omitempty"`
-	Status            PartitionSetStatus `json:"status,omitempty"`
+
+	// Spec is the PartitionSet specification
+	Spec PartitionSetSpec `json:"spec,omitempty"`
+
+	// Status if the current status of the PartitionSet
+	Status PartitionSetStatus `json:"status,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -52,7 +63,9 @@ type PartitionSet struct {
 type PartitionSetList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []PartitionSet `json:"items"`
+
+	// Items is the set of items in the list
+	Items []PartitionSet `json:"items"`
 }
 
 func init() {

@@ -39,10 +39,10 @@ import (
 
 var log = logf.Log.WithName("controller_partition")
 
-// AddController creates a new Partition ManagementGroup and adds it to the Manager. The Manager will set fields on the ManagementGroup
+// Add creates a new Partition ManagementGroup and adds it to the Manager. The Manager will set fields on the ManagementGroup
 // and Start it when the Manager is Started.
-func Add(mgr manager.Manager, protocols *protocol.ProtocolManager) error {
-	r := &PartitionReconciler{
+func Add(mgr manager.Manager, protocols *protocol.Manager) error {
+	r := &Reconciler{
 		client:    mgr.GetClient(),
 		scheme:    mgr.GetScheme(),
 		config:    mgr.GetConfig(),
@@ -73,21 +73,21 @@ func Add(mgr manager.Manager, protocols *protocol.ProtocolManager) error {
 	return nil
 }
 
-var _ reconcile.Reconciler = &PartitionReconciler{}
+var _ reconcile.Reconciler = &Reconciler{}
 
-// PartitionReconciler reconciles a Partition object
-type PartitionReconciler struct {
+// Reconciler reconciles a Partition object
+type Reconciler struct {
 	// This client, initialized using mgr.Client() above, is a split client
 	// that reads objects from the cache and writes to the apiserver
 	client    client.Client
 	scheme    *runtime.Scheme
 	config    *rest.Config
-	protocols *protocol.ProtocolManager
+	protocols *protocol.Manager
 }
 
 // Reconcile reads that state of the partition for a Partition object and makes changes based on the state read
 // and what is in the Partition.Spec
-func (r *PartitionReconciler) Reconcile(request reconcile.Request) (reconcile.Result, error) {
+func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, error) {
 	logger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
 	logger.Info("Reconciling Partition")
 
@@ -105,7 +105,7 @@ func (r *PartitionReconciler) Reconcile(request reconcile.Request) (reconcile.Re
 		return reconcile.Result{}, err
 	}
 
-	v1alpha1.SetDefaults_Partition(partition, r.protocols)
+	v1alpha1.SetPartitionDefaults(partition, r.protocols)
 
 	// Reconcile the partition config map
 	err = r.reconcileConfigMap(partition)
@@ -158,7 +158,7 @@ func (r *PartitionReconciler) Reconcile(request reconcile.Request) (reconcile.Re
 	return reconcile.Result{}, nil
 }
 
-func (r *PartitionReconciler) reconcileConfigMap(partition *v1alpha1.Partition) error {
+func (r *Reconciler) reconcileConfigMap(partition *v1alpha1.Partition) error {
 	cm := &corev1.ConfigMap{}
 	err := r.client.Get(context.TODO(), types.NamespacedName{Name: k8sutil.GetPartitionConfigMapName(partition), Namespace: partition.Namespace}, cm)
 	if err != nil && errors.IsNotFound(err) {
@@ -167,7 +167,7 @@ func (r *PartitionReconciler) reconcileConfigMap(partition *v1alpha1.Partition) 
 	return err
 }
 
-func (r *PartitionReconciler) reconcileDisruptionBudget(partition *v1alpha1.Partition) error {
+func (r *Reconciler) reconcileDisruptionBudget(partition *v1alpha1.Partition) error {
 	budget := &v1beta1.PodDisruptionBudget{}
 	err := r.client.Get(context.TODO(), types.NamespacedName{Name: k8sutil.GetPartitionDisruptionBudgetName(partition), Namespace: partition.Namespace}, budget)
 	if err != nil && errors.IsNotFound(err) {
@@ -176,7 +176,7 @@ func (r *PartitionReconciler) reconcileDisruptionBudget(partition *v1alpha1.Part
 	return err
 }
 
-func (r *PartitionReconciler) reconcileStatefulSet(partition *v1alpha1.Partition) error {
+func (r *Reconciler) reconcileStatefulSet(partition *v1alpha1.Partition) error {
 	set := &appsv1.StatefulSet{}
 	err := r.client.Get(context.TODO(), types.NamespacedName{Name: k8sutil.GetPartitionStatefulSetName(partition), Namespace: partition.Namespace}, set)
 	if err != nil && errors.IsNotFound(err) {
@@ -185,7 +185,7 @@ func (r *PartitionReconciler) reconcileStatefulSet(partition *v1alpha1.Partition
 	return err
 }
 
-func (r *PartitionReconciler) reconcileService(partition *v1alpha1.Partition) error {
+func (r *Reconciler) reconcileService(partition *v1alpha1.Partition) error {
 	service := &corev1.Service{}
 	err := r.client.Get(context.TODO(), k8sutil.GetPartitionServiceNamespacedName(partition), service)
 	if err != nil && errors.IsNotFound(err) {
@@ -194,7 +194,7 @@ func (r *PartitionReconciler) reconcileService(partition *v1alpha1.Partition) er
 	return err
 }
 
-func (r *PartitionReconciler) reconcileHeadlessService(partition *v1alpha1.Partition) error {
+func (r *Reconciler) reconcileHeadlessService(partition *v1alpha1.Partition) error {
 	service := &corev1.Service{}
 	err := r.client.Get(context.TODO(), types.NamespacedName{Name: k8sutil.GetPartitionHeadlessServiceName(partition), Namespace: partition.Namespace}, service)
 	if err != nil && errors.IsNotFound(err) {
@@ -203,15 +203,14 @@ func (r *PartitionReconciler) reconcileHeadlessService(partition *v1alpha1.Parti
 	return err
 }
 
-func (r *PartitionReconciler) reconcileEndpoints(partition *v1alpha1.Partition) error {
+func (r *Reconciler) reconcileEndpoints(partition *v1alpha1.Partition) error {
 	service := &corev1.Service{}
 	err := r.client.Get(context.TODO(), k8sutil.GetPartitionServiceNamespacedName(partition), service)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			return nil
-		} else {
-			return err
 		}
+		return err
 	}
 	if service.Spec.ClusterIP != "" {
 		err = r.addEndpoints(partition, service)
@@ -219,7 +218,7 @@ func (r *PartitionReconciler) reconcileEndpoints(partition *v1alpha1.Partition) 
 	return err
 }
 
-func (r *PartitionReconciler) reconcileStatus(partition *v1alpha1.Partition) error {
+func (r *Reconciler) reconcileStatus(partition *v1alpha1.Partition) error {
 	set := &appsv1.StatefulSet{}
 	err := r.client.Get(context.TODO(), types.NamespacedName{Name: k8sutil.GetPartitionStatefulSetName(partition), Namespace: partition.Namespace}, set)
 	if err != nil {
@@ -237,7 +236,7 @@ func (r *PartitionReconciler) reconcileStatus(partition *v1alpha1.Partition) err
 	return err
 }
 
-func (r *PartitionReconciler) addConfigMap(partition *v1alpha1.Partition) error {
+func (r *Reconciler) addConfigMap(partition *v1alpha1.Partition) error {
 	log.Info("Creating node ConfigMap", "Name", partition.Name, "Namespace", partition.Namespace)
 	cm, err := k8sutil.NewPartitionConfigMap(partition, r.protocols)
 	if err != nil {
@@ -249,7 +248,7 @@ func (r *PartitionReconciler) addConfigMap(partition *v1alpha1.Partition) error 
 	return r.client.Create(context.TODO(), cm)
 }
 
-func (r *PartitionReconciler) addStatefulSet(partition *v1alpha1.Partition) error {
+func (r *Reconciler) addStatefulSet(partition *v1alpha1.Partition) error {
 	log.Info("Creating partition set", "Name", partition.Name, "Namespace", partition.Namespace)
 	set, err := k8sutil.NewPartitionStatefulSet(partition)
 	if err != nil {
@@ -261,7 +260,7 @@ func (r *PartitionReconciler) addStatefulSet(partition *v1alpha1.Partition) erro
 	return r.client.Create(context.TODO(), set)
 }
 
-func (r *PartitionReconciler) addService(partition *v1alpha1.Partition) error {
+func (r *Reconciler) addService(partition *v1alpha1.Partition) error {
 	log.Info("Creating partition service", "Name", partition.Name, "Namespace", partition.Namespace)
 	service := k8sutil.NewPartitionService(partition)
 	if err := controllerutil.SetControllerReference(partition, service, r.scheme); err != nil {
@@ -270,7 +269,7 @@ func (r *PartitionReconciler) addService(partition *v1alpha1.Partition) error {
 	return r.client.Create(context.TODO(), service)
 }
 
-func (r *PartitionReconciler) addHeadlessService(partition *v1alpha1.Partition) error {
+func (r *Reconciler) addHeadlessService(partition *v1alpha1.Partition) error {
 	log.Info("Creating headless partition service", "Name", partition.Name, "Namespace", partition.Namespace)
 	service := k8sutil.NewPartitionHeadlessService(partition)
 	if err := controllerutil.SetControllerReference(partition, service, r.scheme); err != nil {
@@ -279,7 +278,7 @@ func (r *PartitionReconciler) addHeadlessService(partition *v1alpha1.Partition) 
 	return r.client.Create(context.TODO(), service)
 }
 
-func (r *PartitionReconciler) addDisruptionBudget(partition *v1alpha1.Partition) error {
+func (r *Reconciler) addDisruptionBudget(partition *v1alpha1.Partition) error {
 	log.Info("Creating pod disruption budget", "Name", partition.Name, "Namespace", partition.Namespace)
 	budget := k8sutil.NewPartitionDisruptionBudget(partition)
 	if err := controllerutil.SetControllerReference(partition, budget, r.scheme); err != nil {
@@ -288,7 +287,7 @@ func (r *PartitionReconciler) addDisruptionBudget(partition *v1alpha1.Partition)
 	return r.client.Create(context.TODO(), budget)
 }
 
-func (r *PartitionReconciler) addEndpoints(partition *v1alpha1.Partition, service *corev1.Service) error {
+func (r *Reconciler) addEndpoints(partition *v1alpha1.Partition, service *corev1.Service) error {
 	log.Info("Creating endpoint", "Name", partition.Name, "Namespace", partition.Namespace)
 	endpoints := &corev1.Endpoints{}
 	err := r.client.Get(context.TODO(), k8sutil.GetPartitionPartitionGroupServiceNamespacedName(partition), endpoints)
@@ -303,7 +302,7 @@ func (r *PartitionReconciler) addEndpoints(partition *v1alpha1.Partition, servic
 			if address.Hostname == service.Name {
 				return nil
 			}
-			notReadyAddresses += 1
+			notReadyAddresses++
 		}
 		for _, address := range subset.Addresses {
 			if address.Hostname == service.Name {
@@ -322,7 +321,7 @@ func (r *PartitionReconciler) addEndpoints(partition *v1alpha1.Partition, servic
 		},
 		Ports: k8sutil.NewPartitionSetEndpointPorts(),
 	})
-	notReadyAddresses += 1
+	notReadyAddresses++
 
 	// Load the parent partition group.
 	group := &v1alpha1.PartitionSet{}
@@ -339,15 +338,15 @@ func (r *PartitionReconciler) addEndpoints(partition *v1alpha1.Partition, servic
 		for _, subset := range endpoints.Subsets {
 			for _, address := range subset.NotReadyAddresses {
 				addresses[i] = address
-				i += 1
+				i++
 			}
 		}
 		sort.Slice(addresses, func(i, j int) bool {
-			iid, err := k8sutil.GetPartitionIdFromPartitionName(addresses[i].Hostname)
+			iid, err := k8sutil.GetPartitionIDFromPartitionName(addresses[i].Hostname)
 			if err != nil {
 				return false
 			}
-			jid, err := k8sutil.GetPartitionIdFromPartitionName(addresses[j].Hostname)
+			jid, err := k8sutil.GetPartitionIDFromPartitionName(addresses[j].Hostname)
 			if err != nil {
 				return false
 			}

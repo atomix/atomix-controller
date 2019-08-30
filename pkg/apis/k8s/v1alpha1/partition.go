@@ -19,16 +19,33 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// PartitionSpec defines the desired state of Partition
+// PartitionSpec is the k8s configuration for a single partition
 type PartitionSpec struct {
-	Size         int32                   `json:"size,omitempty"`
-	Env          []v1.EnvVar             `json:"env,omitempty"`
-	Resources    v1.ResourceRequirements `json:"resources,omitempty"`
-	StorageClass *string                 `json:"storageClass,omitempty"`
-	StorageSize  string                  `json:"storageSize,omitempty"`
-	Protocol     string                  `json:"protocol,omitempty"`
-	Image        string                  `json:"image,omitempty"`
-	Config       string                  `json:"config,omitempty"`
+	// Size is the number of nodes in the partition
+	Size int32 `json:"size,omitempty"`
+
+	// Env is a set of environment variables to pass to partition nodes
+	Env []v1.EnvVar `json:"env,omitempty"`
+
+	// Resources is the resources to allocate for the partition nodes
+	Resources v1.ResourceRequirements `json:"resources,omitempty"`
+
+	// StorageClass is an optional storage class to configure storage for the nodes. If the StorageClass is
+	// nil then EmptyDir will be used for persistent protocols.
+	StorageClass *string `json:"storageClass,omitempty"`
+
+	// StorageSize is the size of the storage to allocate for the each node in the partition
+	StorageSize string `json:"storageSize,omitempty"`
+
+	// Protocol is the protocol to run in the partition
+	Protocol string `json:"protocol,omitempty"`
+
+	// Image is the image to run in the partition. If the image is unspecified, the default image for the protocol
+	// will be used.
+	Image string `json:"image,omitempty"`
+
+	// Config is the partition configuration to pass to its nodes
+	Config string `json:"config,omitempty"`
 }
 
 // PartitionStatus defines the observed state of Partition
@@ -45,8 +62,12 @@ type PartitionStatus struct {
 type Partition struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
-	Spec              PartitionSpec   `json:"spec,omitempty"`
-	Status            PartitionStatus `json:"status,omitempty"`
+
+	// Spec is the spec for the partition
+	Spec PartitionSpec `json:"spec,omitempty"`
+
+	// Status is the status of the partition
+	Status PartitionStatus `json:"status,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -55,7 +76,9 @@ type Partition struct {
 type PartitionList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []Partition `json:"items"`
+
+	// Items is the set of items in the list
+	Items []Partition `json:"items"`
 }
 
 func init() {

@@ -24,83 +24,71 @@ import (
 )
 
 const (
-	AppKey        = "app"
-	AtomixApp     = "atomix"
-	ControllerKey = "controller"
-	TypeKey       = "type"
-	GroupKey      = "group"
-	PartitionKey  = "partition"
+	appKey       = "app"
+	atomixApp    = "atomix"
+	typeKey      = "type"
+	groupKey     = "group"
+	partitionKey = "partition"
 )
 
 const (
-	ControllerAnnotation = "k8s.atomix.io/controller"
-	TypeAnnotation       = "k8s.atomix.io/type"
-	GroupAnnotation      = "k8s.atomix.io/group"
-	PartitionAnnotation  = "k8s.atomix.io/partition"
+	controllerAnnotation = "k8s.atomix.io/controller"
+	typeAnnotation       = "k8s.atomix.io/type"
+	groupAnnotation      = "k8s.atomix.io/group"
+	partitionAnnotation  = "k8s.atomix.io/partition"
 )
 
 const (
-	GroupType     = "group"
-	PartitionType = "partition"
+	partitionType = "partition"
 )
 
 const (
-	ServiceSuffix          = "service"
-	HeadlessServiceSuffix  = "hs"
-	DisruptionBudgetSuffix = "pdb"
-	ConfigSuffix           = "config"
+	headlessServiceSuffix  = "hs"
+	disruptionBudgetSuffix = "pdb"
+	configSuffix           = "config"
 )
 
 const (
-	ConfigPath          = "/etc/atomix"
-	PartitionConfigFile = "partition.json"
-	ProtocolConfigFile  = "protocol.json"
+	configPath          = "/etc/atomix"
+	partitionConfigFile = "partition.json"
+	protocolConfigFile  = "protocol.json"
 )
 
 const (
-	InitScriptsVolume = "init-scripts"
-	EnvVolume         = "env"
-	ConfigVolume      = "config"
-	DataVolume        = "data"
+	configVolume = "config"
+	dataVolume   = "data"
 )
 
 const (
-	ControllerNameVar      = "CONTROLLER_NAME"
-	ControllerNamespaceVar = "CONTROLLER_NAMESPACE"
+	controllerNameVar      = "CONTROLLER_NAME"
+	controllerNamespaceVar = "CONTROLLER_NAMESPACE"
 )
 
 const (
-	DefaultNamespace = "default"
+	defaultNamespace = "default"
 )
 
+// GetControllerName gets the name of the current controller from the environment
 func GetControllerName() string {
-	return os.Getenv(ControllerNameVar)
+	return os.Getenv(controllerNameVar)
 }
 
+// GetControllerNamespace gets the controller's namespace from the environment
 func GetControllerNamespace() string {
-	return os.Getenv(ControllerNamespaceVar)
+	return os.Getenv(controllerNamespaceVar)
 }
 
-func GetControllerNameString() string {
+// GetQualifiedControllerName returns the qualified controller name
+func GetQualifiedControllerName() string {
 	return fmt.Sprintf("%s.%s", GetControllerNamespace(), GetControllerName())
 }
 
-func GetControllerLabels() map[string]string {
-	return map[string]string{
-		AppKey:        AtomixApp,
-		ControllerKey: GetControllerNameString(),
-	}
-}
-
-// GetServiceDnsName returns the DNS hostname for a service
-func GetServiceDnsName(service *corev1.Service) string {
-	return fmt.Sprintf("%s.%s.svc.cluster.local", service.Name, service.Namespace)
-}
-
-func getControllerServiceDnsName() string {
+// getControllerServiceDNSName returns the fully qualified DNS address for the controller
+func getControllerServiceDNSName() string {
 	return fmt.Sprintf("%s.%s.svc.cluster.local", GetControllerName(), GetControllerNamespace())
 }
 
+// newAffinity returns a new affinity policy for the given partition
 func newAffinity(group string, partition int) *corev1.Affinity {
 	return &corev1.Affinity{
 		PodAntiAffinity: &corev1.PodAntiAffinity{
@@ -111,28 +99,28 @@ func newAffinity(group string, partition int) *corev1.Affinity {
 						LabelSelector: &metav1.LabelSelector{
 							MatchExpressions: []metav1.LabelSelectorRequirement{
 								{
-									Key:      AppKey,
+									Key:      appKey,
 									Operator: metav1.LabelSelectorOpIn,
 									Values: []string{
-										AtomixApp,
+										atomixApp,
 									},
 								},
 								{
-									Key:      TypeKey,
+									Key:      typeKey,
 									Operator: metav1.LabelSelectorOpIn,
 									Values: []string{
-										PartitionType,
+										partitionType,
 									},
 								},
 								{
-									Key:      GroupKey,
+									Key:      groupKey,
 									Operator: metav1.LabelSelectorOpIn,
 									Values: []string{
 										group,
 									},
 								},
 								{
-									Key:      PartitionKey,
+									Key:      partitionKey,
 									Operator: metav1.LabelSelectorOpIn,
 									Values: []string{
 										fmt.Sprint(partition),
@@ -148,12 +136,14 @@ func newAffinity(group string, partition int) *corev1.Affinity {
 	}
 }
 
+// newPersistentContainers returns the containers for a node
 func newPersistentContainers(image string, env []corev1.EnvVar, resources corev1.ResourceRequirements) []corev1.Container {
 	return []corev1.Container{
 		newPersistentContainer(image, env, resources),
 	}
 }
 
+// newPersistentContainer returns a container for a node
 func newPersistentContainer(image string, env []corev1.EnvVar, resources corev1.ResourceRequirements) corev1.Container {
 	env = append(env, corev1.EnvVar{
 		Name: "NODE_ID",
@@ -165,12 +155,13 @@ func newPersistentContainer(image string, env []corev1.EnvVar, resources corev1.
 	})
 	args := []string{
 		"$(NODE_ID)",
-		fmt.Sprintf("%s/%s", ConfigPath, PartitionConfigFile),
-		fmt.Sprintf("%s/%s", ConfigPath, ProtocolConfigFile),
+		fmt.Sprintf("%s/%s", configPath, partitionConfigFile),
+		fmt.Sprintf("%s/%s", configPath, protocolConfigFile),
 	}
 	return newContainer(image, args, env, resources, newPersistentVolumeMounts())
 }
 
+// newContainer returns the container for a node
 func newContainer(image string, args []string, env []corev1.EnvVar, resources corev1.ResourceRequirements, volumeMounts []corev1.VolumeMount) corev1.Container {
 	return corev1.Container{
 		Name:            "atomix",
@@ -212,6 +203,7 @@ func newContainer(image string, args []string, env []corev1.EnvVar, resources co
 	}
 }
 
+// newPersistentVolumeMounts returns the persistent volume mounts for a node
 func newPersistentVolumeMounts() []corev1.VolumeMount {
 	return []corev1.VolumeMount{
 		newDataVolumeMount(),
@@ -219,36 +211,39 @@ func newPersistentVolumeMounts() []corev1.VolumeMount {
 	}
 }
 
+// newDataVolumeMount returns a data volume mount for a pod
 func newDataVolumeMount() corev1.VolumeMount {
 	return corev1.VolumeMount{
-		Name:      DataVolume,
+		Name:      dataVolume,
 		MountPath: "/var/lib/atomix",
 	}
 }
 
+// newConfigVolumeMount returns a configuration volume mount for a pod
 func newConfigVolumeMount() corev1.VolumeMount {
 	return corev1.VolumeMount{
-		Name:      ConfigVolume,
-		MountPath: ConfigPath,
+		Name:      configVolume,
+		MountPath: configPath,
 	}
 }
 
+// newVolumes returns the volumes for a pod
 func newVolumes(configName string, storageClass *string) []corev1.Volume {
 	if storageClass == nil {
 		return []corev1.Volume{
 			newConfigVolume(configName),
 			newDataVolume(),
 		}
-	} else {
-		return []corev1.Volume{
-			newConfigVolume(configName),
-		}
+	}
+	return []corev1.Volume{
+		newConfigVolume(configName),
 	}
 }
 
+// newConfigVolume returns the configuration volume for a pod
 func newConfigVolume(name string) corev1.Volume {
 	return corev1.Volume{
-		Name: ConfigVolume,
+		Name: configVolume,
 		VolumeSource: corev1.VolumeSource{
 			ConfigMap: &corev1.ConfigMapVolumeSource{
 				LocalObjectReference: corev1.LocalObjectReference{
@@ -259,15 +254,17 @@ func newConfigVolume(name string) corev1.Volume {
 	}
 }
 
+// newDataVolume returns the data volume for a pod
 func newDataVolume() corev1.Volume {
 	return corev1.Volume{
-		Name: DataVolume,
+		Name: dataVolume,
 		VolumeSource: corev1.VolumeSource{
 			EmptyDir: &corev1.EmptyDirVolumeSource{},
 		},
 	}
 }
 
+// newPersistentVolumeClaims returns the persistent volume claims for a pod
 func newPersistentVolumeClaims(className *string, size string) ([]corev1.PersistentVolumeClaim, error) {
 	if className == nil {
 		return []corev1.PersistentVolumeClaim{}, nil
@@ -282,6 +279,7 @@ func newPersistentVolumeClaims(className *string, size string) ([]corev1.Persist
 	}, nil
 }
 
+// newPersistentVolumeClaim returns the persistent volume claim for a pod
 func newPersistentVolumeClaim(className *string, size string) (corev1.PersistentVolumeClaim, error) {
 	quantity, err := resource.ParseQuantity(size)
 	if err != nil {
@@ -289,7 +287,7 @@ func newPersistentVolumeClaim(className *string, size string) (corev1.Persistent
 	}
 	return corev1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: DataVolume,
+			Name: dataVolume,
 		},
 		Spec: corev1.PersistentVolumeClaimSpec{
 			StorageClassName: className,

@@ -15,5 +15,6 @@
 package version
 
 var (
-	Version = "0.0.1"
+	// Version is the version of the controller
+	Version = "0.0.2"
 )

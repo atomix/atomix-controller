@@ -16,7 +16,8 @@ package v1alpha1
 
 import "github.com/atomix/atomix-k8s-controller/pkg/controller/protocol"
 
-func SetDefaults_Partition(partition *Partition, protocols *protocol.ProtocolManager) {
+// SetPartitionDefaults sets the default values for the given Partition
+func SetPartitionDefaults(partition *Partition, protocols *protocol.Manager) {
 	if partition.Spec.Size == 0 {
 		partition.Spec.Size = 1
 	}
@@ -28,7 +29,8 @@ func SetDefaults_Partition(partition *Partition, protocols *protocol.ProtocolMan
 	}
 }
 
-func SetDefaults_PartitionGroup(group *PartitionSet) {
+// SetPartitionSetDefaults sets the defaults for the given PartitionSet
+func SetPartitionSetDefaults(group *PartitionSet) {
 	if group.Spec.Partitions == 0 {
 		group.Spec.Partitions = 1
 	}

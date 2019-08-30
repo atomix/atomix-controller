@@ -31,14 +31,17 @@ import (
 	"strings"
 )
 
+// getPartitionResourceName returns the given resource name for the given partition
 func getPartitionResourceName(partition *v1alpha1.Partition, resource string) string {
 	return fmt.Sprintf("%s-%s", partition.Name, resource)
 }
 
+// GetPartitionName returns the partition name for the given partition
 func GetPartitionName(set *v1alpha1.PartitionSet, partition int) string {
 	return fmt.Sprintf("%s-%d", set.Name, partition)
 }
 
+// GetPartitionNamespacedName returns the NamespacedName for the given partition
 func GetPartitionNamespacedName(set *v1alpha1.PartitionSet, partition int) types.NamespacedName {
 	return types.NamespacedName{
 		Name:      GetPartitionName(set, partition),
@@ -46,6 +49,7 @@ func GetPartitionNamespacedName(set *v1alpha1.PartitionSet, partition int) types
 	}
 }
 
+// NewPartition returns the configuration for the given partition
 func NewPartition(set *v1alpha1.PartitionSet, partition int) *v1alpha1.Partition {
 	meta := set.Spec.Template.ObjectMeta
 	meta.Name = GetPartitionName(set, partition)
@@ -63,58 +67,62 @@ func NewPartition(set *v1alpha1.PartitionSet, partition int) *v1alpha1.Partition
 	}
 }
 
-func GetPartitionSetPartitionLabels(set *v1alpha1.PartitionSet) map[string]string {
+// GetPartitionLabelsForPartitionSet returns the labels for the partitions in the given set
+func GetPartitionLabelsForPartitionSet(set *v1alpha1.PartitionSet) map[string]string {
 	return map[string]string{
-		AppKey:   AtomixApp,
-		TypeKey:  PartitionType,
-		GroupKey: set.Name,
+		appKey:   atomixApp,
+		typeKey:  partitionType,
+		groupKey: set.Name,
 	}
 }
 
+// GetPartitionLabels returns the labels for the given partition
 func GetPartitionLabels(partition *v1alpha1.Partition) map[string]string {
 	labels := make(map[string]string)
-	if value, ok := partition.Labels[AppKey]; ok {
-		labels[AppKey] = value
+	if value, ok := partition.Labels[appKey]; ok {
+		labels[appKey] = value
 	}
-	if value, ok := partition.Labels[TypeKey]; ok {
-		labels[TypeKey] = value
+	if value, ok := partition.Labels[typeKey]; ok {
+		labels[typeKey] = value
 	}
-	if value, ok := partition.Labels[GroupKey]; ok {
-		labels[GroupKey] = value
+	if value, ok := partition.Labels[groupKey]; ok {
+		labels[groupKey] = value
 	}
-	if value, ok := partition.Labels[PartitionKey]; ok {
-		labels[PartitionKey] = value
+	if value, ok := partition.Labels[partitionKey]; ok {
+		labels[partitionKey] = value
 	}
 	return labels
 }
 
 // newPartitionLabels returns a new labels map containing the partition app
 func newPartitionLabels(set *v1alpha1.PartitionSet, partition int) map[string]string {
-	labels := GetPartitionSetPartitionLabels(set)
-	labels[PartitionKey] = fmt.Sprint(partition)
+	labels := GetPartitionLabelsForPartitionSet(set)
+	labels[partitionKey] = fmt.Sprint(partition)
 	return labels
 }
 
 // newPartitionAnnotations returns annotations for the given partition
 func newPartitionAnnotations(group *v1alpha1.PartitionSet, partition int) map[string]string {
 	return map[string]string{
-		ControllerAnnotation: GetControllerNameString(),
-		TypeAnnotation:       PartitionType,
-		GroupAnnotation:      group.Name,
-		PartitionAnnotation:  fmt.Sprint(partition),
+		controllerAnnotation: GetQualifiedControllerName(),
+		typeAnnotation:       partitionType,
+		groupAnnotation:      group.Name,
+		partitionAnnotation:  fmt.Sprint(partition),
 	}
 }
 
+// getPartitionGroupFromAnnotation returns the partition group name from the given partition annotations
 func getPartitionGroupFromAnnotation(partition *v1alpha1.Partition) (string, error) {
-	group, ok := partition.Annotations[GroupAnnotation]
+	group, ok := partition.Annotations[groupAnnotation]
 	if !ok {
 		return "", errors.New("partition missing group annotation")
 	}
 	return group, nil
 }
 
-func getPartitionIdFromAnnotation(partition *v1alpha1.Partition) (int, error) {
-	idstr, ok := partition.Annotations[PartitionAnnotation]
+// getPartitionIDFromAnnotation returns the partition ID from the given partition annotations
+func getPartitionIDFromAnnotation(partition *v1alpha1.Partition) (int, error) {
+	idstr, ok := partition.Annotations[partitionAnnotation]
 	if !ok {
 		return 0, errors.New("partition missing partition ID annotation")
 	}
@@ -126,25 +134,30 @@ func getPartitionIdFromAnnotation(partition *v1alpha1.Partition) (int, error) {
 	return int(id), nil
 }
 
-func GetPartitionIdFromPartitionName(name string) (int, error) {
+// GetPartitionIDFromPartitionName returns the partition ID from the given partition name
+func GetPartitionIDFromPartitionName(name string) (int, error) {
 	parts := strings.Split(name, "-")
 	idstr := parts[len(parts)-1]
 	id, err := strconv.ParseInt(idstr, 0, 32)
 	return int(id), err
 }
 
+// GetPartitionServiceName returns the given partition's service name
 func GetPartitionServiceName(partition *v1alpha1.Partition) string {
 	return partition.Name
 }
 
+// getPodName returns the name of the pod for the given pod ID
 func getPodName(partition *v1alpha1.Partition, pod int) string {
 	return fmt.Sprintf("%s-%d", partition.Name, pod)
 }
 
-func getPodDnsName(partition *v1alpha1.Partition, pod int) string {
+// getPodDNSName returns the fully qualified DNS name for the given pod ID
+func getPodDNSName(partition *v1alpha1.Partition, pod int) string {
 	return fmt.Sprintf("%s-%d.%s.%s.svc.cluster.local", partition.Name, pod, GetPartitionHeadlessServiceName(partition), partition.Namespace)
 }
 
+// GetPartitionServiceNamespacedName returns the given partition's NamespacedName
 func GetPartitionServiceNamespacedName(partition *v1alpha1.Partition) types.NamespacedName {
 	return types.NamespacedName{
 		Name:      partition.Name,
@@ -152,30 +165,34 @@ func GetPartitionServiceNamespacedName(partition *v1alpha1.Partition) types.Name
 	}
 }
 
+// GetPartitionHeadlessServiceName returns the headless service name for the given partition
 func GetPartitionHeadlessServiceName(partition *v1alpha1.Partition) string {
-	return getPartitionResourceName(partition, HeadlessServiceSuffix)
+	return getPartitionResourceName(partition, headlessServiceSuffix)
 }
 
+// GetPartitionDisruptionBudgetName returns the pod disruption budget name for the given partition
 func GetPartitionDisruptionBudgetName(partition *v1alpha1.Partition) string {
-	return getPartitionResourceName(partition, DisruptionBudgetSuffix)
+	return getPartitionResourceName(partition, disruptionBudgetSuffix)
 }
 
+// GetPartitionConfigMapName returns the ConfigMap name for the given partition
 func GetPartitionConfigMapName(partition *v1alpha1.Partition) string {
-	return getPartitionResourceName(partition, ConfigSuffix)
+	return getPartitionResourceName(partition, configSuffix)
 }
 
+// GetPartitionStatefulSetName returns the StatefulSet name for the given partition
 func GetPartitionStatefulSetName(partition *v1alpha1.Partition) string {
 	return partition.Name
 }
 
 // NewPartitionConfigMap returns a new ConfigMap for initializing Atomix clusters
-func NewPartitionConfigMap(partition *v1alpha1.Partition, protocols *protocol.ProtocolManager) (*corev1.ConfigMap, error) {
-	partitionConfig, err := toNodeConfig(partition)
+func NewPartitionConfigMap(partition *v1alpha1.Partition, protocols *protocol.Manager) (*corev1.ConfigMap, error) {
+	partitionConfig, err := newNodeConfigString(partition)
 	if err != nil {
 		return nil, err
 	}
 
-	protocolConfig, err := toProtocolConfig(partition, protocols)
+	protocolConfig, err := newProtocolConfigString(partition, protocols)
 	if err != nil {
 		return nil, err
 	}
@@ -187,14 +204,15 @@ func NewPartitionConfigMap(partition *v1alpha1.Partition, protocols *protocol.Pr
 			Labels:    partition.Labels,
 		},
 		Data: map[string]string{
-			PartitionConfigFile: partitionConfig,
-			ProtocolConfigFile:  protocolConfig,
+			partitionConfigFile: partitionConfig,
+			protocolConfigFile:  protocolConfig,
 		},
 	}, nil
 }
 
-func toNodeConfig(partition *v1alpha1.Partition) (string, error) {
-	partitionId, err := getPartitionIdFromAnnotation(partition)
+// newNodeConfigString creates a node configuration string for the given partition
+func newNodeConfigString(partition *v1alpha1.Partition) (string, error) {
+	partitionID, err := getPartitionIDFromAnnotation(partition)
 	if err != nil {
 		return "", err
 	}
@@ -208,14 +226,14 @@ func toNodeConfig(partition *v1alpha1.Partition) (string, error) {
 	for i := 0; i < int(partition.Spec.Size); i++ {
 		nodes[i] = &api.NodeConfig{
 			ID:   getPodName(partition, i),
-			Host: getPodDnsName(partition, i),
+			Host: getPodDNSName(partition, i),
 			Port: 5679,
 		}
 	}
 
 	config := &api.PartitionConfig{
 		Partition: &api.PartitionId{
-			Partition: int32(partitionId),
+			Partition: int32(partitionID),
 			Group: &api.PartitionGroupId{
 				Name:      partitionGroup,
 				Namespace: partition.Namespace,
@@ -223,7 +241,7 @@ func toNodeConfig(partition *v1alpha1.Partition) (string, error) {
 		},
 		Controller: &api.NodeConfig{
 			ID:   GetControllerName(),
-			Host: getControllerServiceDnsName(),
+			Host: getControllerServiceDNSName(),
 			Port: 5679,
 		},
 		Members: nodes,
@@ -233,12 +251,13 @@ func toNodeConfig(partition *v1alpha1.Partition) (string, error) {
 	return marshaller.MarshalToString(config)
 }
 
-func toProtocolConfig(partition *v1alpha1.Partition, protocols *protocol.ProtocolManager) (string, error) {
+// newProtocolConfigString creates a protocol configuration string for the given partition and protocol
+func newProtocolConfigString(partition *v1alpha1.Partition, protocols *protocol.Manager) (string, error) {
 	protocol, err := protocols.GetProtocolByName(partition.Spec.Protocol)
 	if err != nil {
 		return "", err
 	}
-	bytes, err := protocol.YamlToJson([]byte(partition.Spec.Config))
+	bytes, err := protocol.YAMLToJSON([]byte(partition.Spec.Config))
 	if err != nil {
 		return "", err
 	}
@@ -351,7 +370,7 @@ func NewPartitionStatefulSet(partition *v1alpha1.Partition) (*appsv1.StatefulSet
 		return nil, err
 	}
 
-	id, err := getPartitionIdFromAnnotation(partition)
+	id, err := getPartitionIDFromAnnotation(partition)
 	if err != nil {
 		return nil, err
 	}

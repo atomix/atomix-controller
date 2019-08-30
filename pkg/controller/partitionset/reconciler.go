@@ -35,10 +35,10 @@ import (
 
 var log = logf.Log.WithName("controller_partitiongroup")
 
-// AddController creates a new PartitionSet controller and adds it to the Manager. The Manager will set fields on the
+// Add creates a new PartitionSet controller and adds it to the Manager. The Manager will set fields on the
 // controller and Start it when the Manager is Started.
-func Add(mgr manager.Manager, protocols *protocol.ProtocolManager) error {
-	r := &PartitionSetReconciler{
+func Add(mgr manager.Manager, protocols *protocol.Manager) error {
+	r := &Reconciler{
 		client:    mgr.GetClient(),
 		scheme:    mgr.GetScheme(),
 		config:    mgr.GetConfig(),
@@ -69,21 +69,21 @@ func Add(mgr manager.Manager, protocols *protocol.ProtocolManager) error {
 	return nil
 }
 
-var _ reconcile.Reconciler = &PartitionSetReconciler{}
+var _ reconcile.Reconciler = &Reconciler{}
 
-// PartitionSetReconciler reconciles a PartitionSet object
-type PartitionSetReconciler struct {
+// Reconciler reconciles a PartitionSet object
+type Reconciler struct {
 	// This client, initialized using mgr.Client() above, is a split client
 	// that reads objects from the cache and writes to the apiserver
 	client    client.Client
 	scheme    *runtime.Scheme
 	config    *rest.Config
-	protocols *protocol.ProtocolManager
+	protocols *protocol.Manager
 }
 
 // Reconcile reads that state of the partition for a PartitionSet object and makes changes based on the state read
 // and what is in the PartitionSet.Spec
-func (r *PartitionSetReconciler) Reconcile(request reconcile.Request) (reconcile.Result, error) {
+func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, error) {
 	logger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
 	logger.Info("Reconciling PartitionSet")
 
@@ -101,7 +101,7 @@ func (r *PartitionSetReconciler) Reconcile(request reconcile.Request) (reconcile
 		return reconcile.Result{}, err
 	}
 
-	v1alpha1.SetDefaults_PartitionGroup(set)
+	v1alpha1.SetPartitionSetDefaults(set)
 
 	if err = r.reconcileService(set); err != nil {
 		return reconcile.Result{}, err
@@ -127,7 +127,7 @@ func (r *PartitionSetReconciler) Reconcile(request reconcile.Request) (reconcile
 	return reconcile.Result{}, nil
 }
 
-func (r *PartitionSetReconciler) reconcileService(set *v1alpha1.PartitionSet) error {
+func (r *Reconciler) reconcileService(set *v1alpha1.PartitionSet) error {
 	service := &corev1.Service{}
 	err := r.client.Get(context.TODO(), k8sutil.GetPartitionSetServiceNamespacedName(set), service)
 	if err != nil && errors.IsNotFound(err) {
@@ -136,7 +136,7 @@ func (r *PartitionSetReconciler) reconcileService(set *v1alpha1.PartitionSet) er
 	return err
 }
 
-func (r *PartitionSetReconciler) addService(set *v1alpha1.PartitionSet) error {
+func (r *Reconciler) addService(set *v1alpha1.PartitionSet) error {
 	log.Info("Creating service", "Name", set.Name, "Namespace", set.Namespace)
 	service := k8sutil.NewPartitionSetService(set)
 	if err := controllerutil.SetControllerReference(set, service, r.scheme); err != nil {
@@ -145,7 +145,7 @@ func (r *PartitionSetReconciler) addService(set *v1alpha1.PartitionSet) error {
 	return r.client.Create(context.TODO(), service)
 }
 
-func (r *PartitionSetReconciler) reconcileEndpoints(set *v1alpha1.PartitionSet) error {
+func (r *Reconciler) reconcileEndpoints(set *v1alpha1.PartitionSet) error {
 	endpoints := &corev1.Endpoints{}
 	err := r.client.Get(context.TODO(), k8sutil.GetPartitionSetServiceNamespacedName(set), endpoints)
 	if err != nil && errors.IsNotFound(err) {
@@ -154,7 +154,7 @@ func (r *PartitionSetReconciler) reconcileEndpoints(set *v1alpha1.PartitionSet) 
 	return err
 }
 
-func (r *PartitionSetReconciler) addEndpoints(set *v1alpha1.PartitionSet) error {
+func (r *Reconciler) addEndpoints(set *v1alpha1.PartitionSet) error {
 	log.Info("Creating endpoints", "Name", set.Name, "Namespace", set.Namespace)
 	endpoints := k8sutil.NewPartitionSetEndpoints(set)
 	if err := controllerutil.SetControllerReference(set, endpoints, r.scheme); err != nil {
@@ -163,7 +163,7 @@ func (r *PartitionSetReconciler) addEndpoints(set *v1alpha1.PartitionSet) error 
 	return r.client.Create(context.TODO(), endpoints)
 }
 
-func (r *PartitionSetReconciler) reconcileStatus(set *v1alpha1.PartitionSet) error {
+func (r *Reconciler) reconcileStatus(set *v1alpha1.PartitionSet) error {
 	readyPartitions := 0
 	for i := 1; i <= set.Spec.Partitions; i++ {
 		partition := &v1alpha1.Partition{}
@@ -176,7 +176,7 @@ func (r *PartitionSetReconciler) reconcileStatus(set *v1alpha1.PartitionSet) err
 		}
 
 		if partition.Status.ReadyReplicas == partition.Spec.Size {
-			readyPartitions += 1
+			readyPartitions++
 		}
 	}
 
@@ -188,7 +188,7 @@ func (r *PartitionSetReconciler) reconcileStatus(set *v1alpha1.PartitionSet) err
 	return nil
 }
 
-func (r *PartitionSetReconciler) reconcilePartition(set *v1alpha1.PartitionSet, id int) error {
+func (r *Reconciler) reconcilePartition(set *v1alpha1.PartitionSet, id int) error {
 	partition := &v1alpha1.Partition{}
 	err := r.client.Get(context.TODO(), k8sutil.GetPartitionNamespacedName(set, id), partition)
 	if err != nil && errors.IsNotFound(err) {
@@ -197,7 +197,7 @@ func (r *PartitionSetReconciler) reconcilePartition(set *v1alpha1.PartitionSet, 
 	return err
 }
 
-func (r *PartitionSetReconciler) addPartition(set *v1alpha1.PartitionSet, id int) error {
+func (r *Reconciler) addPartition(set *v1alpha1.PartitionSet, id int) error {
 	log.Info("Creating partition", "Name", k8sutil.GetPartitionName(set, id), "Namespace", set.Namespace)
 	partition := k8sutil.NewPartition(set, id)
 	if err := controllerutil.SetControllerReference(set, partition, r.scheme); err != nil {

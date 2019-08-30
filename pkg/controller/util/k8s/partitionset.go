@@ -25,18 +25,20 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 )
 
+// GetPartitionSetName returns the PartitionSet name for the given partition group ID
 func GetPartitionSetName(id *api.PartitionGroupId) string {
 	return id.Name
 }
 
+// GetPartitionSetNamespace returns the PartitionSet namespace for the given partition group ID
 func GetPartitionSetNamespace(id *api.PartitionGroupId) string {
 	if id.Namespace != "" {
 		return id.Namespace
-	} else {
-		return DefaultNamespace
 	}
+	return defaultNamespace
 }
 
+// GetPartitionSetNamespacedName returns the NamespacedName for the given partition group ID
 func GetPartitionSetNamespacedName(id *api.PartitionGroupId) types.NamespacedName {
 	return types.NamespacedName{
 		Name:      GetPartitionSetName(id),
@@ -97,8 +99,9 @@ func NewPartitionSetEndpointPorts() []corev1.EndpointPort {
 	}
 }
 
+// NewPartitionProto returns the partition proto message for the given Partition
 func NewPartitionProto(p *v1alpha1.Partition) (*api.Partition, error) {
-	id, err := getPartitionIdFromAnnotation(p)
+	id, err := getPartitionIDFromAnnotation(p)
 	if err != nil {
 		return nil, err
 	}
@@ -113,7 +116,8 @@ func NewPartitionProto(p *v1alpha1.Partition) (*api.Partition, error) {
 	}, nil
 }
 
-func NewPartitionGroupProtoFromSet(set *v1alpha1.PartitionSet, protocols *protocol.ProtocolManager) (*api.PartitionGroup, error) {
+// NewPartitionGroupProtoFromSet returns the PartitionGroup proto message for the given PartitionSet
+func NewPartitionGroupProtoFromSet(set *v1alpha1.PartitionSet, protocols *protocol.Manager) (*api.PartitionGroup, error) {
 	spec, err := newPartitionGroupSpecProto(set, protocols)
 	if err != nil {
 		return nil, err
@@ -127,13 +131,14 @@ func NewPartitionGroupProtoFromSet(set *v1alpha1.PartitionSet, protocols *protoc
 	}, nil
 }
 
-func newPartitionGroupSpecProto(set *v1alpha1.PartitionSet, protocols *protocol.ProtocolManager) (*api.PartitionGroupSpec, error) {
+// newPartitionGroupSpecProto returns the PartitionGroupSpec proto message for the given PartitionSet
+func newPartitionGroupSpecProto(set *v1alpha1.PartitionSet, protocols *protocol.Manager) (*api.PartitionGroupSpec, error) {
 	protocol, err := protocols.GetProtocolByName(set.Spec.Template.Spec.Protocol)
 	if err != nil {
 		return nil, err
 	}
 
-	message, err := protocol.YamlToMessage([]byte(set.Spec.Template.Spec.Config))
+	message, err := protocol.YAMLToProto([]byte(set.Spec.Template.Spec.Config))
 	if err != nil {
 		return nil, err
 	}
@@ -152,7 +157,8 @@ func newPartitionGroupSpecProto(set *v1alpha1.PartitionSet, protocols *protocol.
 	}, nil
 }
 
-func NewPartitionSetFromProto(id *api.PartitionGroupId, pbspec *api.PartitionGroupSpec, protocols *protocol.ProtocolManager) (*v1alpha1.PartitionSet, error) {
+// NewPartitionSetFromProto returns a PartitionSet from the given PartitionGroupSpec
+func NewPartitionSetFromProto(id *api.PartitionGroupId, pbspec *api.PartitionGroupSpec, protocols *protocol.Manager) (*v1alpha1.PartitionSet, error) {
 	protocol, err := protocols.GetProtocolByType(pbspec.Protocol.TypeUrl)
 	if err != nil {
 		return nil, err
@@ -160,10 +166,10 @@ func NewPartitionSetFromProto(id *api.PartitionGroupId, pbspec *api.PartitionGro
 
 	ns := id.Namespace
 	if ns == "" {
-		ns = DefaultNamespace
+		ns = defaultNamespace
 	}
 
-	yaml, err := protocol.ProtoToYaml(pbspec.Protocol.Value)
+	yaml, err := protocol.ProtoToYAML(pbspec.Protocol.Value)
 	if err != nil {
 		return nil, err
 	}

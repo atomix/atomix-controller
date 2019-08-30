@@ -16,7 +16,7 @@ package ready
 
 import "os"
 
-const FileName = "/tmp/atomix-controller-ready"
+const fileName = "/tmp/atomix-controller-ready"
 
 // Ready holds state about whether the operator is ready and communicates that
 // to a Kubernetes readiness probe.
@@ -40,10 +40,10 @@ func NewFileReady() Ready {
 
 type fileReady struct{}
 
-// Set creates a file on disk whose presense can be used by a readiness probe
+// Set creates a file on disk whose presence can be used by a readiness probe
 // to determine that the operator is ready.
 func (r fileReady) Set() error {
-	f, err := os.Create(FileName)
+	f, err := os.Create(fileName)
 	if err != nil {
 		return err
 	}
@@ -52,5 +52,5 @@ func (r fileReady) Set() error {
 
 // Unset removes the file on disk that was created by Set().
 func (r fileReady) Unset() error {
-	return os.Remove(FileName)
+	return os.Remove(fileName)
 }
