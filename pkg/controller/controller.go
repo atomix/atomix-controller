@@ -145,6 +145,7 @@ func (c *Controller) getPartitionGroups(ctx context.Context, request *api.GetPar
 		}
 
 		options := &client.ListOptions{
+			Namespace:     k8sutil.GetPartitionSetNamespace(request.ID),
 			LabelSelector: labels.SelectorFromSet(k8sutil.GetPartitionLabelsForPartitionSet(&group)),
 		}
 		partitions := &v1alpha1.PartitionList{}
@@ -191,6 +192,7 @@ func (c *Controller) getPartitionGroup(ctx context.Context, request *api.GetPart
 	}
 
 	options := &client.ListOptions{
+		Namespace:     k8sutil.GetPartitionSetNamespace(request.ID),
 		LabelSelector: labels.SelectorFromSet(k8sutil.GetPartitionLabelsForPartitionSet(group)),
 	}
 	partitions := &v1alpha1.PartitionList{}
