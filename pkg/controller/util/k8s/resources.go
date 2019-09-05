@@ -137,14 +137,14 @@ func newAffinity(group string, partition int) *corev1.Affinity {
 }
 
 // newPersistentContainers returns the containers for a node
-func newPersistentContainers(image string, env []corev1.EnvVar, resources corev1.ResourceRequirements) []corev1.Container {
+func newPersistentContainers(image string, pullPolicy corev1.PullPolicy, env []corev1.EnvVar, resources corev1.ResourceRequirements) []corev1.Container {
 	return []corev1.Container{
-		newPersistentContainer(image, env, resources),
+		newPersistentContainer(image, pullPolicy, env, resources),
 	}
 }
 
 // newPersistentContainer returns a container for a node
-func newPersistentContainer(image string, env []corev1.EnvVar, resources corev1.ResourceRequirements) corev1.Container {
+func newPersistentContainer(image string, pullPolicy corev1.PullPolicy, env []corev1.EnvVar, resources corev1.ResourceRequirements) corev1.Container {
 	env = append(env, corev1.EnvVar{
 		Name: "NODE_ID",
 		ValueFrom: &corev1.EnvVarSource{

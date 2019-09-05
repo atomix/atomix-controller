@@ -14,7 +14,10 @@
 
 package v1alpha1
 
-import "github.com/atomix/atomix-k8s-controller/pkg/controller/protocol"
+import (
+	"github.com/atomix/atomix-k8s-controller/pkg/controller/protocol"
+	"k8s.io/api/core/v1"
+)
 
 // SetPartitionDefaults sets the default values for the given Partition
 func SetPartitionDefaults(partition *Partition, protocols *protocol.Manager) {
@@ -26,6 +29,9 @@ func SetPartitionDefaults(partition *Partition, protocols *protocol.Manager) {
 		if err == nil {
 			partition.Spec.Image = protocol.Image
 		}
+	}
+	if partition.Spec.ImagePullPolicy == "" {
+		partition.Spec.ImagePullPolicy = v1.PullIfNotPresent
 	}
 }
 

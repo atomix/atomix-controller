@@ -406,7 +406,7 @@ func NewPartitionStatefulSet(partition *v1alpha1.Partition) (*appsv1.StatefulSet
 				},
 				Spec: corev1.PodSpec{
 					Affinity:   affinity,
-					Containers: newPersistentContainers(partition.Spec.Image, partition.Spec.Env, partition.Spec.Resources),
+					Containers: newPersistentContainers(partition.Spec.Image, partition.Spec.ImagePullPolicy, partition.Spec.Env, partition.Spec.Resources),
 					Volumes:    newVolumes(GetPartitionConfigMapName(partition), partition.Spec.StorageClass),
 				},
 			},

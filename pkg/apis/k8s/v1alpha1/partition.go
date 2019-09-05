@@ -44,6 +44,9 @@ type PartitionSpec struct {
 	// will be used.
 	Image string `json:"image,omitempty"`
 
+	// ImagePullPolicy is the pull policy to apply to partition images
+	ImagePullPolicy v1.PullPolicy `json:"pullPolicy:omitempty"`
+
 	// Config is the partition configuration to pass to its nodes
 	Config string `json:"config,omitempty"`
 }
