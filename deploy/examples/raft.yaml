@@ -7,6 +7,7 @@ spec:
   template:
     spec:
       size: 3
+      image: atomix/atomix-raft-node:latest
       protocol: raft
       config: |
         electionTimeout: 5s
