@@ -17,7 +17,6 @@ package partitionset
 import (
 	"context"
 	"github.com/atomix/atomix-k8s-controller/pkg/apis/k8s/v1alpha1"
-	"github.com/atomix/atomix-k8s-controller/pkg/controller/protocol"
 	k8sutil "github.com/atomix/atomix-k8s-controller/pkg/controller/util/k8s"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -37,12 +36,11 @@ var log = logf.Log.WithName("controller_partitiongroup")
 
 // Add creates a new PartitionSet controller and adds it to the Manager. The Manager will set fields on the
 // controller and Start it when the Manager is Started.
-func Add(mgr manager.Manager, protocols *protocol.Manager) error {
+func Add(mgr manager.Manager) error {
 	r := &Reconciler{
-		client:    mgr.GetClient(),
-		scheme:    mgr.GetScheme(),
-		config:    mgr.GetConfig(),
-		protocols: protocols,
+		client: mgr.GetClient(),
+		scheme: mgr.GetScheme(),
+		config: mgr.GetConfig(),
 	}
 
 	// Create a new controller
@@ -75,10 +73,9 @@ var _ reconcile.Reconciler = &Reconciler{}
 type Reconciler struct {
 	// This client, initialized using mgr.Client() above, is a split client
 	// that reads objects from the cache and writes to the apiserver
-	client    client.Client
-	scheme    *runtime.Scheme
-	config    *rest.Config
-	protocols *protocol.Manager
+	client client.Client
+	scheme *runtime.Scheme
+	config *rest.Config
 }
 
 // Reconcile reads that state of the partition for a PartitionSet object and makes changes based on the state read

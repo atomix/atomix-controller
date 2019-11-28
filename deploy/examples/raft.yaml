@@ -7,8 +7,6 @@ spec:
   template:
     spec:
       size: 3
-      image: atomix/atomix-raft-node:latest
-      protocol: raft
-      config: |
-        electionTimeout: 5s
-        heartbeatInterval: 1s
+      raft:
+        electionTimeoutMillis: 5000
+        heartbeatPeriodMillis: 1000

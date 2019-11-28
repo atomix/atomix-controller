@@ -191,11 +191,6 @@ func (in *PartitionSpec) DeepCopyInto(out *PartitionSpec) {
 		}
 	}
 	in.Resources.DeepCopyInto(&out.Resources)
-	if in.StorageClass != nil {
-		in, out := &in.StorageClass, &out.StorageClass
-		*out = new(string)
-		**out = **in
-	}
 	return
 }
 

@@ -15,11 +15,11 @@
 package k8s
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	api "github.com/atomix/atomix-api/proto/atomix/controller"
 	"github.com/atomix/atomix-k8s-controller/pkg/apis/k8s/v1alpha1"
-	"github.com/atomix/atomix-k8s-controller/pkg/controller/protocol"
 	"github.com/golang/protobuf/jsonpb"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -186,13 +186,13 @@ func GetPartitionStatefulSetName(partition *v1alpha1.Partition) string {
 }
 
 // NewPartitionConfigMap returns a new ConfigMap for initializing Atomix clusters
-func NewPartitionConfigMap(partition *v1alpha1.Partition, protocols *protocol.Manager) (*corev1.ConfigMap, error) {
+func NewPartitionConfigMap(partition *v1alpha1.Partition, config map[string]interface{}) (*corev1.ConfigMap, error) {
 	partitionConfig, err := newNodeConfigString(partition)
 	if err != nil {
 		return nil, err
 	}
 
-	protocolConfig, err := newProtocolConfigString(partition, protocols)
+	protocolConfig, err := newProtocolConfigString(config)
 	if err != nil {
 		return nil, err
 	}
@@ -252,12 +252,8 @@ func newNodeConfigString(partition *v1alpha1.Partition) (string, error) {
 }
 
 // newProtocolConfigString creates a protocol configuration string for the given partition and protocol
-func newProtocolConfigString(partition *v1alpha1.Partition, protocols *protocol.Manager) (string, error) {
-	protocol, err := protocols.GetProtocolByName(partition.Spec.Protocol)
-	if err != nil {
-		return "", err
-	}
-	bytes, err := protocol.YAMLToJSON([]byte(partition.Spec.Config))
+func newProtocolConfigString(config map[string]interface{}) (string, error) {
+	bytes, err := json.Marshal(config)
 	if err != nil {
 		return "", err
 	}
@@ -362,7 +358,7 @@ func NewPartitionHeadlessService(partition *v1alpha1.Partition) *corev1.Service 
 }
 
 // NewPartitionStatefulSet returns a new StatefulSet for a partition group
-func NewPartitionStatefulSet(partition *v1alpha1.Partition) (*appsv1.StatefulSet, error) {
+func NewPartitionStatefulSet(partition *v1alpha1.Partition, image string, pullPolicy corev1.PullPolicy, probePort int32) (*appsv1.StatefulSet, error) {
 	var affinity *corev1.Affinity
 
 	group, err := getPartitionGroupFromAnnotation(partition)
@@ -377,11 +373,6 @@ func NewPartitionStatefulSet(partition *v1alpha1.Partition) (*appsv1.StatefulSet
 
 	if group != "" && id != 0 {
 		affinity = newAffinity(group, id)
-	}
-
-	claims, err := newPersistentVolumeClaims(partition.Spec.StorageClass, partition.Spec.StorageSize)
-	if err != nil {
-		return nil, err
 	}
 
 	return &appsv1.StatefulSet{
@@ -405,12 +396,19 @@ func NewPartitionStatefulSet(partition *v1alpha1.Partition) (*appsv1.StatefulSet
 					Labels: partition.Labels,
 				},
 				Spec: corev1.PodSpec{
-					Affinity:   affinity,
-					Containers: newPersistentContainers(partition.Spec.Image, partition.Spec.ImagePullPolicy, partition.Spec.Env, partition.Spec.Resources),
-					Volumes:    newVolumes(GetPartitionConfigMapName(partition), partition.Spec.StorageClass),
+					Affinity: affinity,
+					Containers: []corev1.Container{
+						newContainer(image, pullPolicy, partition.Spec.Env, partition.Spec.Resources, []corev1.VolumeMount{
+							newDataVolumeMount(),
+							newConfigVolumeMount(),
+						}, probePort),
+					},
+					Volumes: []corev1.Volume{
+						newConfigVolume(GetPartitionConfigMapName(partition)),
+						newDataVolume(),
+					},
 				},
 			},
-			VolumeClaimTemplates: claims,
 		},
 	}, err
 }

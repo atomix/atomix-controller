@@ -22,7 +22,6 @@ import (
 	"github.com/atomix/atomix-k8s-controller/pkg/apis/k8s/v1alpha1"
 	"github.com/atomix/atomix-k8s-controller/pkg/controller/partition"
 	"github.com/atomix/atomix-k8s-controller/pkg/controller/partitionset"
-	"github.com/atomix/atomix-k8s-controller/pkg/controller/protocol"
 	k8sutil "github.com/atomix/atomix-k8s-controller/pkg/controller/util/k8s"
 	"google.golang.org/grpc"
 	"io"
@@ -43,31 +42,28 @@ var log = logf.Log.WithName("controller_atomix")
 
 // AddController adds the Atomix controller to the k8s controller manager
 func AddController(mgr manager.Manager) error {
-	protocols := protocol.NewManager()
-
-	c := newController(mgr.GetClient(), mgr.GetScheme(), mgr.GetConfig(), protocols)
+	c := newController(mgr.GetClient(), mgr.GetScheme(), mgr.GetConfig())
 	err := mgr.Add(c)
 	if err != nil {
 		return err
 	}
 
-	if err = partition.Add(mgr, protocols); err != nil {
+	if err = partition.Add(mgr); err != nil {
 		return err
 	}
-	if err = partitionset.Add(mgr, protocols); err != nil {
+	if err = partitionset.Add(mgr); err != nil {
 		return err
 	}
 	return nil
 }
 
 // newController creates a new controller server
-func newController(client client.Client, scheme *runtime.Scheme, config *rest.Config, protocols *protocol.Manager, opts ...grpc.ServerOption) *Controller {
+func newController(client client.Client, scheme *runtime.Scheme, config *rest.Config, opts ...grpc.ServerOption) *Controller {
 	return &Controller{
 		client:    client,
 		scheme:    scheme,
 		config:    config,
 		opts:      opts,
-		protocols: protocols,
 		elections: make(map[electionID]*election),
 	}
 }
@@ -80,7 +76,6 @@ type Controller struct {
 	scheme    *runtime.Scheme
 	config    *rest.Config
 	opts      []grpc.ServerOption
-	protocols *protocol.Manager
 	elections map[electionID]*election
 }
 
@@ -91,7 +86,7 @@ func (c *Controller) CreatePartitionGroup(ctx context.Context, r *api.CreatePart
 
 	err := c.client.Get(ctx, name, group)
 	if err != nil && k8serrors.IsNotFound(err) {
-		group, err = k8sutil.NewPartitionSetFromProto(r.ID, r.Spec, c.protocols)
+		group, err = k8sutil.NewPartitionSetFromProto(r.ID, r.Spec)
 		if err != nil {
 			return nil, err
 		}
@@ -139,7 +134,7 @@ func (c *Controller) getPartitionGroups(ctx context.Context, request *api.GetPar
 
 	pbgroups := make([]*api.PartitionGroup, 0, len(groups.Items))
 	for _, group := range groups.Items {
-		pbgroup, err := k8sutil.NewPartitionGroupProtoFromSet(&group, c.protocols)
+		pbgroup, err := k8sutil.NewPartitionGroupProtoFromSet(&group)
 		if err != nil {
 			return nil, err
 		}
@@ -186,7 +181,7 @@ func (c *Controller) getPartitionGroup(ctx context.Context, request *api.GetPart
 		return nil, err
 	}
 
-	proto, err := k8sutil.NewPartitionGroupProtoFromSet(group, c.protocols)
+	proto, err := k8sutil.NewPartitionGroupProtoFromSet(group)
 	if err != nil {
 		return nil, err
 	}

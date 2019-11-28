@@ -30,25 +30,11 @@ type PartitionSpec struct {
 	// Resources is the resources to allocate for the partition nodes
 	Resources v1.ResourceRequirements `json:"resources,omitempty"`
 
-	// StorageClass is an optional storage class to configure storage for the nodes. If the StorageClass is
-	// nil then EmptyDir will be used for persistent protocols.
-	StorageClass *string `json:"storageClass,omitempty"`
+	// Raft configures the Raft consensus protocol
+	Raft *RaftProtocol `json:"raft,omitempty"`
 
-	// StorageSize is the size of the storage to allocate for the each node in the partition
-	StorageSize string `json:"storageSize,omitempty"`
-
-	// Protocol is the protocol to run in the partition
-	Protocol string `json:"protocol,omitempty"`
-
-	// Image is the image to run in the partition. If the image is unspecified, the default image for the protocol
-	// will be used.
-	Image string `json:"image,omitempty"`
-
-	// ImagePullPolicy is the pull policy to apply to partition images
-	ImagePullPolicy v1.PullPolicy `json:"pullPolicy:omitempty"`
-
-	// Config is the partition configuration to pass to its nodes
-	Config string `json:"config,omitempty"`
+	// NOPaxos configures the NOPaxos protocol
+	NOPaxos *NOPaxosProtocol `json:"nopaxos,omitempty"`
 }
 
 // PartitionStatus defines the observed state of Partition

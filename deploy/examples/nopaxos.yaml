@@ -1,0 +1,15 @@
+apiVersion: k8s.atomix.io/v1alpha1
+kind: PartitionSet
+metadata:
+  name: nopaxos
+spec:
+  partitions: 3
+  template:
+    spec:
+      size: 3
+      nopaxos:
+        protocol:
+          leaderTimeoutMillis: 5000
+          pingPeriodMillis: 1000
+        sequencer:
+          imagePullPolicy: IfNotPresent

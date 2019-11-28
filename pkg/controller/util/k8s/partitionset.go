@@ -17,9 +17,6 @@ package k8s
 import (
 	api "github.com/atomix/atomix-api/proto/atomix/controller"
 	"github.com/atomix/atomix-k8s-controller/pkg/apis/k8s/v1alpha1"
-	"github.com/atomix/atomix-k8s-controller/pkg/controller/protocol"
-	gogotypes "github.com/gogo/protobuf/types"
-	"github.com/golang/protobuf/proto"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -117,8 +114,8 @@ func NewPartitionProto(p *v1alpha1.Partition) (*api.Partition, error) {
 }
 
 // NewPartitionGroupProtoFromSet returns the PartitionGroup proto message for the given PartitionSet
-func NewPartitionGroupProtoFromSet(set *v1alpha1.PartitionSet, protocols *protocol.Manager) (*api.PartitionGroup, error) {
-	spec, err := newPartitionGroupSpecProto(set, protocols)
+func NewPartitionGroupProtoFromSet(set *v1alpha1.PartitionSet) (*api.PartitionGroup, error) {
+	spec, err := newPartitionGroupSpecProto(set)
 	if err != nil {
 		return nil, err
 	}
@@ -132,49 +129,21 @@ func NewPartitionGroupProtoFromSet(set *v1alpha1.PartitionSet, protocols *protoc
 }
 
 // newPartitionGroupSpecProto returns the PartitionGroupSpec proto message for the given PartitionSet
-func newPartitionGroupSpecProto(set *v1alpha1.PartitionSet, protocols *protocol.Manager) (*api.PartitionGroupSpec, error) {
-	protocol, err := protocols.GetProtocolByName(set.Spec.Template.Spec.Protocol)
-	if err != nil {
-		return nil, err
-	}
-
-	message, err := protocol.YAMLToProto([]byte(set.Spec.Template.Spec.Config))
-	if err != nil {
-		return nil, err
-	}
-	bytes, err := proto.Marshal(message)
-	if err != nil {
-		return nil, err
-	}
-
+func newPartitionGroupSpecProto(set *v1alpha1.PartitionSet) (*api.PartitionGroupSpec, error) {
 	return &api.PartitionGroupSpec{
 		Partitions:    uint32(set.Spec.Partitions),
 		PartitionSize: uint32(set.Spec.Template.Spec.Size),
-		Protocol: &gogotypes.Any{
-			TypeUrl: "type.googleapis.com/" + proto.MessageName(message),
-			Value:   bytes,
-		},
 	}, nil
 }
 
 // NewPartitionSetFromProto returns a PartitionSet from the given PartitionGroupSpec
-func NewPartitionSetFromProto(id *api.PartitionGroupId, pbspec *api.PartitionGroupSpec, protocols *protocol.Manager) (*v1alpha1.PartitionSet, error) {
-	protocol, err := protocols.GetProtocolByType(pbspec.Protocol.TypeUrl)
-	if err != nil {
-		return nil, err
-	}
-
+func NewPartitionSetFromProto(id *api.PartitionGroupId, pbspec *api.PartitionGroupSpec) (*v1alpha1.PartitionSet, error) {
 	ns := id.Namespace
 	if ns == "" {
 		ns = defaultNamespace
 	}
 
-	yaml, err := protocol.ProtoToYAML(pbspec.Protocol.Value)
-	if err != nil {
-		return nil, err
-	}
-
-	return &v1alpha1.PartitionSet{
+	set := &v1alpha1.PartitionSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      id.Name,
 			Namespace: ns,
@@ -183,12 +152,10 @@ func NewPartitionSetFromProto(id *api.PartitionGroupId, pbspec *api.PartitionGro
 			Partitions: int(pbspec.Partitions),
 			Template: v1alpha1.PartitionTemplateSpec{
 				Spec: v1alpha1.PartitionSpec{
-					Size:     int32(pbspec.PartitionSize),
-					Protocol: protocol.Name,
-					Image:    protocol.Image,
-					Config:   string(yaml),
+					Size: int32(pbspec.PartitionSize),
 				},
 			},
 		},
-	}, nil
+	}
+	return set, nil
 }

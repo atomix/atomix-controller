@@ -17,7 +17,6 @@ package k8s
 import (
 	"fmt"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"os"
@@ -40,6 +39,7 @@ const (
 
 const (
 	partitionType = "partition"
+	proxyType     = "proxy"
 )
 
 const (
@@ -136,15 +136,8 @@ func newAffinity(group string, partition int) *corev1.Affinity {
 	}
 }
 
-// newPersistentContainers returns the containers for a node
-func newPersistentContainers(image string, pullPolicy corev1.PullPolicy, env []corev1.EnvVar, resources corev1.ResourceRequirements) []corev1.Container {
-	return []corev1.Container{
-		newPersistentContainer(image, pullPolicy, env, resources),
-	}
-}
-
-// newPersistentContainer returns a container for a node
-func newPersistentContainer(image string, pullPolicy corev1.PullPolicy, env []corev1.EnvVar, resources corev1.ResourceRequirements) corev1.Container {
+// newContainer returns a container for a node
+func newContainer(image string, pullPolicy corev1.PullPolicy, env []corev1.EnvVar, resources corev1.ResourceRequirements, volumeMounts []corev1.VolumeMount, probePort int32) corev1.Container {
 	env = append(env, corev1.EnvVar{
 		Name: "NODE_ID",
 		ValueFrom: &corev1.EnvVarSource{
@@ -158,15 +151,10 @@ func newPersistentContainer(image string, pullPolicy corev1.PullPolicy, env []co
 		fmt.Sprintf("%s/%s", configPath, partitionConfigFile),
 		fmt.Sprintf("%s/%s", configPath, protocolConfigFile),
 	}
-	return newContainer(image, args, env, resources, newPersistentVolumeMounts())
-}
-
-// newContainer returns the container for a node
-func newContainer(image string, args []string, env []corev1.EnvVar, resources corev1.ResourceRequirements, volumeMounts []corev1.VolumeMount) corev1.Container {
 	return corev1.Container{
 		Name:            "atomix",
 		Image:           image,
-		ImagePullPolicy: corev1.PullIfNotPresent,
+		ImagePullPolicy: pullPolicy,
 		Env:             env,
 		Resources:       resources,
 		Ports: []corev1.ContainerPort{
@@ -193,21 +181,13 @@ func newContainer(image string, args []string, env []corev1.EnvVar, resources co
 		LivenessProbe: &corev1.Probe{
 			Handler: corev1.Handler{
 				TCPSocket: &corev1.TCPSocketAction{
-					Port: intstr.IntOrString{Type: intstr.Int, IntVal: 5678},
+					Port: intstr.IntOrString{Type: intstr.Int, IntVal: probePort},
 				},
 			},
 			InitialDelaySeconds: 60,
 			TimeoutSeconds:      10,
 		},
 		VolumeMounts: volumeMounts,
-	}
-}
-
-// newPersistentVolumeMounts returns the persistent volume mounts for a node
-func newPersistentVolumeMounts() []corev1.VolumeMount {
-	return []corev1.VolumeMount{
-		newDataVolumeMount(),
-		newConfigVolumeMount(),
 	}
 }
 
@@ -262,41 +242,4 @@ func newDataVolume() corev1.Volume {
 			EmptyDir: &corev1.EmptyDirVolumeSource{},
 		},
 	}
-}
-
-// newPersistentVolumeClaims returns the persistent volume claims for a pod
-func newPersistentVolumeClaims(className *string, size string) ([]corev1.PersistentVolumeClaim, error) {
-	if className == nil {
-		return []corev1.PersistentVolumeClaim{}, nil
-	}
-
-	claim, err := newPersistentVolumeClaim(className, size)
-	if err != nil {
-		return nil, err
-	}
-	return []corev1.PersistentVolumeClaim{
-		claim,
-	}, nil
-}
-
-// newPersistentVolumeClaim returns the persistent volume claim for a pod
-func newPersistentVolumeClaim(className *string, size string) (corev1.PersistentVolumeClaim, error) {
-	quantity, err := resource.ParseQuantity(size)
-	if err != nil {
-		return corev1.PersistentVolumeClaim{}, err
-	}
-	return corev1.PersistentVolumeClaim{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: dataVolume,
-		},
-		Spec: corev1.PersistentVolumeClaimSpec{
-			StorageClassName: className,
-			AccessModes:      []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
-			Resources: corev1.ResourceRequirements{
-				Requests: corev1.ResourceList{
-					corev1.ResourceStorage: quantity,
-				},
-			},
-		},
-	}, nil
 }
