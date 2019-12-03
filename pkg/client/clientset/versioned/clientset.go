@@ -28,8 +28,6 @@ import (
 type Interface interface {
 	Discovery() discovery.DiscoveryInterface
 	K8sV1alpha1() k8sv1alpha1.K8sV1alpha1Interface
-	// Deprecated: please explicitly pick a version if possible.
-	K8s() k8sv1alpha1.K8sV1alpha1Interface
 }
 
 // Clientset contains the clients for groups. Each group has exactly one
@@ -41,12 +39,6 @@ type Clientset struct {
 
 // K8sV1alpha1 retrieves the K8sV1alpha1Client
 func (c *Clientset) K8sV1alpha1() k8sv1alpha1.K8sV1alpha1Interface {
-	return c.k8sV1alpha1
-}
-
-// Deprecated: K8s retrieves the default version of K8sClient.
-// Please explicitly pick a version.
-func (c *Clientset) K8s() k8sv1alpha1.K8sV1alpha1Interface {
 	return c.k8sV1alpha1
 }
 
