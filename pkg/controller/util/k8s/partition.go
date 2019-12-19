@@ -31,6 +31,11 @@ import (
 	"strings"
 )
 
+const (
+	apiPort      = 5678
+	protocolPort = 5679
+)
+
 // getPartitionResourceName returns the given resource name for the given partition
 func getPartitionResourceName(partition *v1alpha1.Partition, resource string) string {
 	return fmt.Sprintf("%s-%s", partition.Name, resource)
@@ -225,9 +230,11 @@ func newNodeConfigString(partition *v1alpha1.Partition) (string, error) {
 	nodes := make([]*api.NodeConfig, partition.Spec.Size)
 	for i := 0; i < int(partition.Spec.Size); i++ {
 		nodes[i] = &api.NodeConfig{
-			ID:   getPodName(partition, i),
-			Host: getPodDNSName(partition, i),
-			Port: 5679,
+			ID:           getPodName(partition, i),
+			Host:         getPodDNSName(partition, i),
+			Port:         protocolPort,
+			ProtocolPort: protocolPort,
+			APIPort:      apiPort,
 		}
 	}
 
@@ -240,9 +247,11 @@ func newNodeConfigString(partition *v1alpha1.Partition) (string, error) {
 			},
 		},
 		Controller: &api.NodeConfig{
-			ID:   GetControllerName(),
-			Host: getControllerServiceDNSName(),
-			Port: 5679,
+			ID:           GetControllerName(),
+			Host:         getControllerServiceDNSName(),
+			Port:         protocolPort,
+			ProtocolPort: protocolPort,
+			APIPort:      apiPort,
 		},
 		Members: nodes,
 	}
@@ -320,7 +329,7 @@ func NewPartitionService(partition *v1alpha1.Partition) *corev1.Service {
 			Ports: []corev1.ServicePort{
 				{
 					Name: "api",
-					Port: 5678,
+					Port: apiPort,
 				},
 			},
 			Selector: GetPartitionLabels(partition),
@@ -343,11 +352,11 @@ func NewPartitionHeadlessService(partition *v1alpha1.Partition) *corev1.Service 
 			Ports: []corev1.ServicePort{
 				{
 					Name: "api",
-					Port: 5678,
+					Port: apiPort,
 				},
 				{
 					Name: "protocol",
-					Port: 5679,
+					Port: protocolPort,
 				},
 			},
 			PublishNotReadyAddresses: true,
