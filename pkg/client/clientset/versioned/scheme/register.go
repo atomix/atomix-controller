@@ -19,7 +19,7 @@ limitations under the License.
 package scheme
 
 import (
-	k8sv1alpha1 "github.com/atomix/atomix-k8s-controller/pkg/apis/k8s/v1alpha1"
+	k8sv1alpha1 "github.com/atomix/k8s-controller/pkg/apis/k8s/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"

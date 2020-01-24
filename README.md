@@ -1,10 +1,10 @@
 # Atomix Kubernetes Controller
 
-[![Build Status](https://travis-ci.org/atomix/atomix-k8s-controller.svg?branch=master)](https://travis-ci.org/atomix/atomix-k8s-controller)
-[![Integration Test Status](https://img.shields.io/travis/atomix/atomix-k8s-controller?label=Atomix%20Tests&logo=Atomix)](https://travis-ci.org/onosproject/onos-test)
-[![Go Report Card](https://goreportcard.com/badge/github.com/atomix/atomix-k8s-controller)](https://goreportcard.com/report/github.com/atomix/atomix-k8s-controller)
+[![Build Status](https://travis-ci.org/atomix/k8s-controller.svg?branch=master)](https://travis-ci.org/atomix/k8s-controller)
+[![Integration Test Status](https://img.shields.io/travis/atomix/k8s-controller?label=Atomix%20Tests&logo=Atomix)](https://travis-ci.org/onosproject/onos-test)
+[![Go Report Card](https://goreportcard.com/badge/github.com/atomix/k8s-controller)](https://goreportcard.com/report/github.com/atomix/k8s-controller)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://github.com/gojp/goreportcard/blob/master/LICENSE)
-[![GoDoc](https://godoc.org/github.com/atomix/atomix-k8s-controller?status.svg)](https://godoc.org/github.com/atomix/atomix-k8s-controller)
+[![GoDoc](https://godoc.org/github.com/atomix/k8s-controller?status.svg)](https://godoc.org/github.com/atomix/k8s-controller)
 
 This project provides an [Atomix] controller for [Kubernetes]. The controller
 implements the Atomix controller API and uses [custom Kubernetes resources][custom-resources]
@@ -19,12 +19,12 @@ To deploy the controller, first build the image using the make file:
 > make build
 ```
 
-The build script will build an `atomix/atomix-k8s-controller` image with the `latest`
+The build script will build an `atomix/k8s-controller` image with the `latest`
 tag. Once the image has been built, the controller can be deployed to k8s using the
 following command:
 
 ```bash
-> kubectl create -f https://raw.githubusercontent.com/atomix/atomix-k8s-controller/master/deploy/atomix-controller.yaml
+> kubectl create -f https://raw.githubusercontent.com/atomix/k8s-controller/master/deploy/atomix-controller.yaml
 customresourcedefinition.apiextensions.k8s.io/partitionsets.k8s.atomix.io created
 customresourcedefinition.apiextensions.k8s.io/partitions.k8s.atomix.io created
 clusterrole.rbac.authorization.k8s.io/atomix-controller created
@@ -167,7 +167,7 @@ distributed primitives programmatically using any [Atomix client][atomix-go-clie
 
 ```go
 import (
-	atomixclient "github.com/atomix/atomix-go-client/pkg/client"
+	atomixclient "github.com/atomix/go-client/pkg/client"
 )
 
 client, err := atomixclient.New("atomix-controller.kube-system.svc.cluster.local:5679")
@@ -313,5 +313,5 @@ even connecting to the Atomix controller.
 [Atomix]: https://atomix.io
 [Kubernetes]: https://kubernetes.io
 [custom-resources]: https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/
-[atomix-go-client]:https://github.com/atomix/atomix-go-client
+[atomix-go-client]:https://github.com/atomix/go-client
 [Raft]: https://raft.github.io/

@@ -15,8 +15,8 @@
 package k8s
 
 import (
-	api "github.com/atomix/atomix-api/proto/atomix/controller"
-	"github.com/atomix/atomix-k8s-controller/pkg/apis/k8s/v1alpha1"
+	api "github.com/atomix/api/proto/atomix/controller"
+	"github.com/atomix/k8s-controller/pkg/apis/k8s/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"

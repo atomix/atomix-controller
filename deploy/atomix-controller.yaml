@@ -114,7 +114,7 @@ spec:
       containers:
         - name: atomix-controller
           # Replace this with the built image name
-          image: atomix/atomix-k8s-controller:latest
+          image: atomix/k8s-controller:latest
           ports:
             - containerPort: 60000
               name: metrics

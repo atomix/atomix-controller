@@ -1,7 +1,7 @@
-module github.com/atomix/atomix-k8s-controller
+module github.com/atomix/k8s-controller
 
 require (
-	github.com/atomix/atomix-api v0.0.0-20191219205733-d87d186a4fba
+	github.com/atomix/api v0.0.0-20200123231207-4e5fb1cbaf40
 	github.com/evanphx/json-patch v4.0.0+incompatible // indirect
 	github.com/ghodss/yaml v1.0.0
 	github.com/go-logr/logr v0.1.0 // indirect

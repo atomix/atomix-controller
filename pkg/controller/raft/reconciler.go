@@ -17,8 +17,8 @@ package raft
 import (
 	"context"
 	"fmt"
-	"github.com/atomix/atomix-k8s-controller/pkg/apis/k8s/v1alpha1"
-	k8sutil "github.com/atomix/atomix-k8s-controller/pkg/controller/util/k8s"
+	"github.com/atomix/k8s-controller/pkg/apis/k8s/v1alpha1"
+	k8sutil "github.com/atomix/k8s-controller/pkg/controller/util/k8s"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/api/policy/v1beta1"
@@ -37,7 +37,7 @@ var log = logf.Log.WithName("controller_raft")
 
 var _ reconcile.Reconciler = &Reconciler{}
 
-const defaultImage = "atomix/atomix-raft-node:latest"
+const defaultImage = "atomix/raft-replica:latest"
 
 const (
 	defaultHeartbeatPeriod = 1000
