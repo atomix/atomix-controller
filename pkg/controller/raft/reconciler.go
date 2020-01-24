@@ -17,8 +17,8 @@ package raft
 import (
 	"context"
 	"fmt"
-	"github.com/atomix/k8s-controller/pkg/apis/k8s/v1alpha1"
-	k8sutil "github.com/atomix/k8s-controller/pkg/controller/util/k8s"
+	"github.com/atomix/kubernetes-controller/pkg/apis/k8s/v1alpha1"
+	k8sutil "github.com/atomix/kubernetes-controller/pkg/controller/util/k8s"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/api/policy/v1beta1"

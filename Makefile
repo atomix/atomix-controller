@@ -9,19 +9,19 @@ all: image
 
 build: # @HELP build the source code
 build:
-	go build -o build/controller/_output/bin/k8s-controller ./cmd/controller
+	go build -o build/controller/_output/bin/kubernetes-controller ./cmd/controller
 
-image: # @HELP build k8s-controller Docker image
-	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o build/controller/_output/bin/k8s-controller ./cmd/controller
-	docker build . -f build/controller/Dockerfile -t atomix/k8s-controller:${ATOMIX_K8S_CONTROLLER_VERSION}
+image: # @HELP build kubernetes-controller Docker image
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o build/controller/_output/bin/kubernetes-controller ./cmd/controller
+	docker build . -f build/controller/Dockerfile -t atomix/kubernetes-controller:${ATOMIX_K8S_CONTROLLER_VERSION}
 
-push: # @HELP push k8s-controller Docker image
-	docker push atomix/k8s-controller:${ATOMIX_K8S_CONTROLLER_VERSION}
+push: # @HELP push kubernetes-controller Docker image
+	docker push atomix/kubernetes-controller:${ATOMIX_K8S_CONTROLLER_VERSION}
 
 test: # @HELP run the unit tests and source code validation
 test: deps license_check linters
-	go test github.com/atomix/k8s-controller/cmd/...
-	go test github.com/atomix/k8s-controller/pkg/...
+	go test github.com/atomix/kubernetes-controller/cmd/...
+	go test github.com/atomix/kubernetes-controller/pkg/...
 
 deps: # @HELP ensure that the required dependencies are in place
 	go build -v ./...

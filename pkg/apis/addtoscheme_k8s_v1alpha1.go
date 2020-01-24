@@ -15,7 +15,7 @@
 package apis
 
 import (
-	"github.com/atomix/k8s-controller/pkg/apis/k8s/v1alpha1"
+	"github.com/atomix/kubernetes-controller/pkg/apis/k8s/v1alpha1"
 )
 
 func init() {

@@ -19,8 +19,8 @@ limitations under the License.
 package v1alpha1
 
 import (
-	v1alpha1 "github.com/atomix/k8s-controller/pkg/apis/k8s/v1alpha1"
-	"github.com/atomix/k8s-controller/pkg/client/clientset/versioned/scheme"
+	v1alpha1 "github.com/atomix/kubernetes-controller/pkg/apis/k8s/v1alpha1"
+	"github.com/atomix/kubernetes-controller/pkg/client/clientset/versioned/scheme"
 	serializer "k8s.io/apimachinery/pkg/runtime/serializer"
 	rest "k8s.io/client-go/rest"
 )

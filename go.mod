@@ -1,4 +1,4 @@
-module github.com/atomix/k8s-controller
+module github.com/atomix/kubernetes-controller
 
 require (
 	github.com/atomix/api v0.0.0-20200123231207-4e5fb1cbaf40
