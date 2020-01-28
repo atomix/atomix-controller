@@ -5,13 +5,13 @@ export GO111MODULE=on
 
 ATOMIX_K8S_CONTROLLER_VERSION := latest
 
-all: image
+all: images
 
 build: # @HELP build the source code
 build:
 	go build -o build/controller/_output/bin/kubernetes-controller ./cmd/controller
 
-image: # @HELP build kubernetes-controller Docker image
+images: # @HELP build kubernetes-controller Docker image
 	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o build/controller/_output/bin/kubernetes-controller ./cmd/controller
 	docker build . -f build/controller/Dockerfile -t atomix/kubernetes-controller:${ATOMIX_K8S_CONTROLLER_VERSION}
 
