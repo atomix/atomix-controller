@@ -31,7 +31,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
-	"sort"
 	"strconv"
 )
 
@@ -383,80 +382,4 @@ func (r *Reconciler) addProxyService(partition *v1alpha1.Partition) error {
 		return err
 	}
 	return r.client.Create(context.TODO(), service)
-}
-
-func (r *Reconciler) addEndpoints(partition *v1alpha1.Partition, service *corev1.Service) error {
-	log.Info("Creating endpoint", "Name", partition.Name, "Namespace", partition.Namespace)
-	endpoints := &corev1.Endpoints{}
-	err := r.client.Get(context.TODO(), k8sutil.GetPartitionPartitionGroupServiceNamespacedName(partition), endpoints)
-	if err != nil {
-		return nil
-	}
-
-	// If the partition's service is already a member of the subsets, return.
-	notReadyAddresses := 0
-	for _, subset := range endpoints.Subsets {
-		for _, address := range subset.NotReadyAddresses {
-			if address.Hostname == service.Name {
-				return nil
-			}
-			notReadyAddresses++
-		}
-		for _, address := range subset.Addresses {
-			if address.Hostname == service.Name {
-				return nil
-			}
-		}
-	}
-
-	// Append the partition service to the endpoint subsets.
-	endpoints.Subsets = append(endpoints.Subsets, corev1.EndpointSubset{
-		NotReadyAddresses: []corev1.EndpointAddress{
-			{
-				IP:       service.Spec.ClusterIP,
-				Hostname: service.Name,
-			},
-		},
-		Ports: k8sutil.NewPartitionSetEndpointPorts(),
-	})
-	notReadyAddresses++
-
-	// Load the parent partition group.
-	group := &v1alpha1.PartitionSet{}
-	err = r.client.Get(context.TODO(), k8sutil.GetPartitionPartitionGroupNamespacedName(partition), group)
-	if err != nil {
-		return err
-	}
-
-	// If all the partition services have been added to the endpoint subsets, sort the subsets.
-	if notReadyAddresses == group.Spec.Partitions {
-		log.Info("Updating endpoint addresses to ready", "Name", partition.Name, "Namespace", partition.Namespace)
-		addresses := make([]corev1.EndpointAddress, notReadyAddresses)
-		i := 0
-		for _, subset := range endpoints.Subsets {
-			for _, address := range subset.NotReadyAddresses {
-				addresses[i] = address
-				i++
-			}
-		}
-		sort.Slice(addresses, func(i, j int) bool {
-			iid, err := k8sutil.GetPartitionIDFromPartitionName(addresses[i].Hostname)
-			if err != nil {
-				return false
-			}
-			jid, err := k8sutil.GetPartitionIDFromPartitionName(addresses[j].Hostname)
-			if err != nil {
-				return false
-			}
-			return iid < jid
-		})
-
-		endpoints.Subsets = []corev1.EndpointSubset{
-			{
-				Addresses: addresses,
-				Ports:     k8sutil.NewPartitionSetEndpointPorts(),
-			},
-		}
-	}
-	return r.client.Update(context.TODO(), endpoints)
 }

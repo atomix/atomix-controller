@@ -207,19 +207,6 @@ func newConfigVolumeMount() corev1.VolumeMount {
 	}
 }
 
-// newVolumes returns the volumes for a pod
-func newVolumes(configName string, storageClass *string) []corev1.Volume {
-	if storageClass == nil {
-		return []corev1.Volume{
-			newConfigVolume(configName),
-			newDataVolume(),
-		}
-	}
-	return []corev1.Volume{
-		newConfigVolume(configName),
-	}
-}
-
 // newConfigVolume returns the configuration volume for a pod
 func newConfigVolume(name string) corev1.Volume {
 	return corev1.Volume{

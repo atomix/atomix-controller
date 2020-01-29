@@ -312,8 +312,8 @@ type election struct {
 
 // electionState stores the state of a single primary election
 type electionState struct {
-	term       int64
-	candidates []string
+	Term       int64
+	Candidates []string
 }
 
 // enter adds a candidate to the election and if necessary updates the term
@@ -348,8 +348,8 @@ func (e *election) enter(candidate string, ch chan term) error {
 	bytes, ok := cm.BinaryData[e.id.String()]
 	if !ok {
 		bytes, err = json.Marshal(electionState{
-			term:       0,
-			candidates: []string{},
+			Term:       0,
+			Candidates: []string{},
 		})
 		if err != nil {
 			return err
@@ -367,10 +367,10 @@ func (e *election) enter(candidate string, ch chan term) error {
 	// If the candidate is the first to be added, increment the term and
 	// produce an event with the candidate as the primary. Otherwise,
 	// simply enter the candidate to the list and update the ConfigMap.
-	size := len(election.candidates)
-	election.candidates = append(election.candidates)
+	size := len(election.Candidates)
+	election.Candidates = append(election.Candidates, candidate)
 	if size == 0 {
-		election.term = election.term + 1
+		election.Term = election.Term + 1
 	}
 
 	// Update the ConfigMap to store the election results
@@ -380,9 +380,9 @@ func (e *election) enter(candidate string, ch chan term) error {
 
 	// Produce the term change event
 	e.changeTerm(term{
-		term:       election.term,
-		primary:    election.candidates[0],
-		candidates: election.candidates,
+		term:       election.Term,
+		primary:    election.Candidates[0],
+		candidates: election.Candidates,
 	})
 	return nil
 }
@@ -420,22 +420,22 @@ func (e *election) leave(candidate string) error {
 
 	// Create a slice of candidates with the candidate removed
 	candidates := []string{}
-	for _, c := range election.candidates {
+	for _, c := range election.Candidates {
 		if c != candidate {
 			candidates = append(candidates, c)
 		}
 	}
 
 	// If the list of candidates has not changed, return
-	if len(candidates) == len(election.candidates) {
+	if len(candidates) == len(election.Candidates) {
 		return nil
 	}
 
 	// If the first element in the candidates list changed, bump the term
-	if len(candidates) > 0 && candidates[0] != election.candidates[0] {
-		election.term = election.term + 1
+	if len(candidates) > 0 && candidates[0] != election.Candidates[0] {
+		election.Term = election.Term + 1
 	}
-	election.candidates = candidates
+	election.Candidates = candidates
 
 	// Update the ConfigMap to store the election results
 	if err = e.controller.client.Update(context.TODO(), cm); err != nil {
@@ -444,9 +444,9 @@ func (e *election) leave(candidate string) error {
 
 	// Produce the term change event
 	e.changeTerm(term{
-		term:       election.term,
-		primary:    election.candidates[0],
-		candidates: election.candidates,
+		term:       election.Term,
+		primary:    election.Candidates[0],
+		candidates: election.Candidates,
 	})
 	return nil
 }
