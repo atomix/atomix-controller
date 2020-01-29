@@ -15,3 +15,7 @@ issues:
     - Error return value of `.*Start` is not checked
     - Error return value of `.*Stop` is not checked
     - Error return value of `.*Write` is not checked
+
+run:
+  skip-dirs:
+    - pkg/client/clientset/*
