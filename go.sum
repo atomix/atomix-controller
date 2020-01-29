@@ -29,6 +29,7 @@ github.com/atomix/atomix-api v0.0.0-20191219195853-c37e51c03536 h1:9QLmT8YItpWyz
 github.com/atomix/atomix-api v0.0.0-20191219195853-c37e51c03536/go.mod h1:joWKUd0zIeYbAQ0vmYHGsnV03ZgRalhceHgnJ3EN0mI=
 github.com/atomix/atomix-api v0.0.0-20191219205733-d87d186a4fba h1:bk1yizJhis3QYkmC0oxtzDAC7kEuG7N3JbMIFShYo2I=
 github.com/atomix/atomix-api v0.0.0-20191219205733-d87d186a4fba/go.mod h1:joWKUd0zIeYbAQ0vmYHGsnV03ZgRalhceHgnJ3EN0mI=
+github.com/atomix/atomix-k8s-controller v0.0.0-20200129191113-507dc56aefc9 h1:pK/8L+lUVhq9PoTIfisTzLDnlgbJNMvqhfRyVZ1/Lf4=
 github.com/beorn7/perks v0.0.0-20180321164747-3a771d992973 h1:xJ4a3vCFaGF/jqvzLMYoU8P317H5OQ+Via4RmuPwCS0=
 github.com/beorn7/perks v0.0.0-20180321164747-3a771d992973/go.mod h1:Dwedo/Wpr24TaqPxmxbtue+5NUziq4I4S80YR8gNf3Q=
 github.com/beorn7/perks v1.0.0 h1:HWo1m869IqiPhD389kmkxeTalrjNbbJTC8LXupb+sl0=
