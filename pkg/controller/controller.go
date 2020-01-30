@@ -19,10 +19,14 @@ import (
 	"encoding/json"
 	"fmt"
 	api "github.com/atomix/api/proto/atomix/controller"
+	"github.com/atomix/kubernetes-controller/pkg/apis/cloud/v1beta1"
 	"github.com/atomix/kubernetes-controller/pkg/apis/k8s/v1alpha1"
-	k8sutil "github.com/atomix/kubernetes-controller/pkg/controller/util/k8s"
 	"github.com/atomix/kubernetes-controller/pkg/controller/v1alpha1/partition"
 	"github.com/atomix/kubernetes-controller/pkg/controller/v1alpha1/partitionset"
+	v1alpha1util "github.com/atomix/kubernetes-controller/pkg/controller/v1alpha1/util/k8s"
+	"github.com/atomix/kubernetes-controller/pkg/controller/v1beta1/cluster"
+	"github.com/atomix/kubernetes-controller/pkg/controller/v1beta1/database"
+	v1beta1util "github.com/atomix/kubernetes-controller/pkg/controller/v1beta1/util/k8s"
 	"google.golang.org/grpc"
 	"io"
 	"k8s.io/api/core/v1"
@@ -54,6 +58,12 @@ func AddController(mgr manager.Manager) error {
 	if err = partitionset.Add(mgr); err != nil {
 		return err
 	}
+	if err = database.Add(mgr); err != nil {
+		return err
+	}
+	if err = cluster.Add(mgr); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -70,8 +80,6 @@ func newController(client client.Client, scheme *runtime.Scheme, config *rest.Co
 
 // Controller an implementation of the Atomix controller API
 type Controller struct {
-	api.ControllerServiceServer
-
 	client    client.Client
 	scheme    *runtime.Scheme
 	config    *rest.Config
@@ -79,14 +87,57 @@ type Controller struct {
 	elections map[electionID]*election
 }
 
+// GetDatabases get a list of databases managed by the controller
+func (c *Controller) GetDatabases(ctx context.Context, request *api.GetDatabasesRequest) (*api.GetDatabasesResponse, error) {
+	databases := &v1beta1.DatabaseList{}
+
+	opts := &client.ListOptions{
+		Namespace: v1beta1util.GetDatabaseNamespace(request.ID),
+	}
+
+	if err := c.client.List(ctx, opts, databases); err != nil {
+		return nil, err
+	}
+
+	pbdatabases := make([]*api.Database, 0, len(databases.Items))
+	for _, database := range databases.Items {
+		pbdatabase := v1beta1util.NewDatabaseProto(&database)
+
+		options := &client.ListOptions{
+			Namespace:     v1beta1util.GetDatabaseNamespace(request.ID),
+			LabelSelector: labels.SelectorFromSet(v1beta1util.GetPartitionLabelsForDatabase(&database)),
+		}
+		partitions := &v1beta1.PartitionList{}
+		err := c.client.List(context.TODO(), options, partitions)
+		if err != nil {
+			return nil, err
+		}
+
+		pbpartitions := make([]*api.Partition, 0, len(partitions.Items))
+		for _, partition := range partitions.Items {
+			pbpartition, err := v1beta1util.NewPartitionProto(&partition)
+			if err != nil {
+				return nil, err
+			}
+			pbpartitions = append(pbpartitions, pbpartition)
+		}
+		pbdatabase.Partitions = pbpartitions
+		pbdatabases = append(pbdatabases, pbdatabase)
+	}
+
+	return &api.GetDatabasesResponse{
+		Databases: pbdatabases,
+	}, nil
+}
+
 // CreatePartitionGroup creates a partition group via the k8s API
 func (c *Controller) CreatePartitionGroup(ctx context.Context, r *api.CreatePartitionGroupRequest) (*api.CreatePartitionGroupResponse, error) {
 	group := &v1alpha1.PartitionSet{}
-	name := k8sutil.GetPartitionSetNamespacedName(r.ID)
+	name := v1alpha1util.GetPartitionSetNamespacedName(r.ID)
 
 	err := c.client.Get(ctx, name, group)
 	if err != nil && k8serrors.IsNotFound(err) {
-		group, err = k8sutil.NewPartitionSetFromProto(r.ID, r.Spec)
+		group, err = v1alpha1util.NewPartitionSetFromProto(r.ID, r.Spec)
 		if err != nil {
 			return nil, err
 		}
@@ -100,7 +151,7 @@ func (c *Controller) CreatePartitionGroup(ctx context.Context, r *api.CreatePart
 // DeletePartitionGroup deletes a partition group via the k8s API
 func (c *Controller) DeletePartitionGroup(ctx context.Context, r *api.DeletePartitionGroupRequest) (*api.DeletePartitionGroupResponse, error) {
 	group := &v1alpha1.PartitionSet{}
-	name := k8sutil.GetPartitionSetNamespacedName(r.ID)
+	name := v1alpha1util.GetPartitionSetNamespacedName(r.ID)
 
 	if err := c.client.Get(ctx, name, group); err != nil {
 		return nil, err
@@ -125,7 +176,7 @@ func (c *Controller) getPartitionGroups(ctx context.Context, request *api.GetPar
 	groups := &v1alpha1.PartitionSetList{}
 
 	opts := &client.ListOptions{
-		Namespace: k8sutil.GetPartitionSetNamespace(request.ID),
+		Namespace: v1alpha1util.GetPartitionSetNamespace(request.ID),
 	}
 
 	if err := c.client.List(ctx, opts, groups); err != nil {
@@ -134,14 +185,14 @@ func (c *Controller) getPartitionGroups(ctx context.Context, request *api.GetPar
 
 	pbgroups := make([]*api.PartitionGroup, 0, len(groups.Items))
 	for _, group := range groups.Items {
-		pbgroup, err := k8sutil.NewPartitionGroupProtoFromSet(&group)
+		pbgroup, err := v1alpha1util.NewPartitionGroupProtoFromSet(&group)
 		if err != nil {
 			return nil, err
 		}
 
 		options := &client.ListOptions{
-			Namespace:     k8sutil.GetPartitionSetNamespace(request.ID),
-			LabelSelector: labels.SelectorFromSet(k8sutil.GetPartitionLabelsForPartitionSet(&group)),
+			Namespace:     v1alpha1util.GetPartitionSetNamespace(request.ID),
+			LabelSelector: labels.SelectorFromSet(v1alpha1util.GetPartitionLabelsForPartitionSet(&group)),
 		}
 		partitions := &v1alpha1.PartitionList{}
 		err = c.client.List(context.TODO(), options, partitions)
@@ -151,7 +202,7 @@ func (c *Controller) getPartitionGroups(ctx context.Context, request *api.GetPar
 
 		pbpartitions := make([]*api.Partition, 0, len(partitions.Items))
 		for _, partition := range partitions.Items {
-			pbpartition, err := k8sutil.NewPartitionProto(&partition)
+			pbpartition, err := v1alpha1util.NewPartitionProto(&partition)
 			if err != nil {
 				return nil, err
 			}
@@ -170,7 +221,7 @@ func (c *Controller) getPartitionGroups(ctx context.Context, request *api.GetPar
 // getPartitionGroup gets a single partition group for the given request
 func (c *Controller) getPartitionGroup(ctx context.Context, request *api.GetPartitionGroupsRequest) (*api.GetPartitionGroupsResponse, error) {
 	group := &v1alpha1.PartitionSet{}
-	name := k8sutil.GetPartitionSetNamespacedName(request.ID)
+	name := v1alpha1util.GetPartitionSetNamespacedName(request.ID)
 	err := c.client.Get(context.TODO(), name, group)
 	if err != nil {
 		if k8serrors.IsNotFound(err) {
@@ -181,14 +232,14 @@ func (c *Controller) getPartitionGroup(ctx context.Context, request *api.GetPart
 		return nil, err
 	}
 
-	proto, err := k8sutil.NewPartitionGroupProtoFromSet(group)
+	proto, err := v1alpha1util.NewPartitionGroupProtoFromSet(group)
 	if err != nil {
 		return nil, err
 	}
 
 	options := &client.ListOptions{
-		Namespace:     k8sutil.GetPartitionSetNamespace(request.ID),
-		LabelSelector: labels.SelectorFromSet(k8sutil.GetPartitionLabelsForPartitionSet(group)),
+		Namespace:     v1alpha1util.GetPartitionSetNamespace(request.ID),
+		LabelSelector: labels.SelectorFromSet(v1alpha1util.GetPartitionLabelsForPartitionSet(group)),
 	}
 	partitions := &v1alpha1.PartitionList{}
 	err = c.client.List(context.TODO(), options, partitions)
@@ -198,7 +249,7 @@ func (c *Controller) getPartitionGroup(ctx context.Context, request *api.GetPart
 
 	partitionProtos := make([]*api.Partition, 0, len(partitions.Items))
 	for _, partition := range partitions.Items {
-		partitionProto, err := k8sutil.NewPartitionProto(&partition)
+		partitionProto, err := v1alpha1util.NewPartitionProto(&partition)
 		if err != nil {
 			return nil, err
 		}
@@ -323,8 +374,8 @@ func (e *election) enter(candidate string, ch chan term) error {
 	// Initialize the ConfigMap and create a namespaced name
 	cm := &v1.ConfigMap{}
 	name := types.NamespacedName{
-		Namespace: k8sutil.GetControllerNamespace(),
-		Name:      k8sutil.GetControllerName() + "-elections",
+		Namespace: v1alpha1util.GetControllerNamespace(),
+		Name:      v1alpha1util.GetControllerName() + "-elections",
 	}
 
 	// Ensure the elections ConfigMap has been created in k8s
@@ -394,8 +445,8 @@ func (e *election) leave(candidate string) error {
 	// Initialize the ConfigMap and create a namespaced name
 	cm := &v1.ConfigMap{}
 	name := types.NamespacedName{
-		Namespace: k8sutil.GetControllerNamespace(),
-		Name:      k8sutil.GetControllerName() + "-elections",
+		Namespace: v1alpha1util.GetControllerNamespace(),
+		Name:      v1alpha1util.GetControllerName() + "-elections",
 	}
 
 	// Read the elections ConfigMap and return if it does not exist

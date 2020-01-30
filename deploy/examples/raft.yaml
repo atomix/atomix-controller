@@ -1,12 +1,24 @@
-apiVersion: k8s.atomix.io/v1alpha1
-kind: PartitionSet
+apiVersion: cloud.atomix.io/v1beta1
+kind: Database
 metadata:
   name: raft
 spec:
-  partitions: 3
+  clusters: 3
+  partitions: 30
   template:
     spec:
-      size: 3
-      raft:
-        electionTimeoutMillis: 5000
-        heartbeatPeriodMillis: 1000
+      backend:
+        image: atomix/raft-replica:latest
+        replicas: 3
+        volumeMounts:
+          - name: fast-disk
+            path: /var/lib/atomix
+      volumeClaimTemplates:
+        - metadata:
+            name: www
+          spec:
+            accessModes: [ "ReadWriteOnce" ]
+            storageClassName: "fast-disk"
+            resources:
+              requests:
+                storage: 1Gi

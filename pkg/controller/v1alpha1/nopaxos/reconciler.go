@@ -18,7 +18,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/atomix/kubernetes-controller/pkg/apis/k8s/v1alpha1"
-	k8sutil "github.com/atomix/kubernetes-controller/pkg/controller/util/k8s"
+	k8sutil "github.com/atomix/kubernetes-controller/pkg/controller/v1alpha1/util/k8s"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/api/policy/v1beta1"

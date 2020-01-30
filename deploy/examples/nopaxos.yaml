@@ -1,15 +1,14 @@
-apiVersion: k8s.atomix.io/v1alpha1
-kind: PartitionSet
+apiVersion: cloud.atomix.io/v1beta1
+kind: Database
 metadata:
   name: nopaxos
 spec:
-  partitions: 3
+  clusters: 3
+  partitions: 30
   template:
     spec:
-      size: 3
-      nopaxos:
-        protocol:
-          leaderTimeoutMillis: 5000
-          pingPeriodMillis: 1000
-        sequencer:
-          imagePullPolicy: IfNotPresent
+      proxy:
+        image: atomix/nopaxos-proxy:latest
+      backend:
+        image: atomix/nopaxos-replica:latest
+        replicas: 3

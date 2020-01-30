@@ -15,6 +15,7 @@
 package v1beta1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -28,12 +29,21 @@ type ClusterSpec struct {
 
 	// Backend is the cluster backend
 	Backend *Backend `json:"backend,omitempty"`
+
+	// VolumeClaimTemplates is a list of templates for persistent volume claims
+	VolumeClaimTemplates []corev1.PersistentVolumeClaim `json:"volumeClaimTemplates,omitempty"`
 }
 
 // ClusterStatus defines the observed state of Cluster
 type ClusterStatus struct {
-	// ReadyReplicas is the number of replicas in the partition that have been marked ready
-	ReadyReplicas int32 `json:"readyReplicas,omitempty"`
+	// ReadyPartitions is the number of partitions that are ready in the cluster
+	ReadyPartitions int32 `json:"readyPartitions,omitempty"`
+
+	// Proxy is the proxy status
+	Proxy *ProxyStatus `json:"proxy,omitempty"`
+
+	// Backend is the backend status
+	Backend BackendStatus `json:"backend,omitempty"`
 }
 
 // +genclient

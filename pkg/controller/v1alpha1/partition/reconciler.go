@@ -17,8 +17,8 @@ package partition
 import (
 	"context"
 	"github.com/atomix/kubernetes-controller/pkg/apis/k8s/v1alpha1"
-	"github.com/atomix/kubernetes-controller/pkg/controller/nopaxos"
-	"github.com/atomix/kubernetes-controller/pkg/controller/raft"
+	"github.com/atomix/kubernetes-controller/pkg/controller/v1alpha1/nopaxos"
+	"github.com/atomix/kubernetes-controller/pkg/controller/v1alpha1/raft"
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"

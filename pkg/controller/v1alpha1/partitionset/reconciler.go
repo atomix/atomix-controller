@@ -17,7 +17,7 @@ package partitionset
 import (
 	"context"
 	"github.com/atomix/kubernetes-controller/pkg/apis/k8s/v1alpha1"
-	k8sutil "github.com/atomix/kubernetes-controller/pkg/controller/util/k8s"
+	k8sutil "github.com/atomix/kubernetes-controller/pkg/controller/v1alpha1/util/k8s"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"

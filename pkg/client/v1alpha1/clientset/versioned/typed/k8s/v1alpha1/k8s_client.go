@@ -20,7 +20,7 @@ package v1alpha1
 
 import (
 	v1alpha1 "github.com/atomix/kubernetes-controller/pkg/apis/k8s/v1alpha1"
-	"github.com/atomix/kubernetes-controller/pkg/client/clientset/versioned/scheme"
+	"github.com/atomix/kubernetes-controller/pkg/client/v1alpha1/clientset/versioned/scheme"
 	serializer "k8s.io/apimachinery/pkg/runtime/serializer"
 	rest "k8s.io/client-go/rest"
 )

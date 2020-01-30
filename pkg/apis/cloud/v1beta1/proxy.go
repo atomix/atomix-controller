@@ -24,6 +24,24 @@ type Proxy struct {
 	// ImagePullPolicy is the pull policy to apply
 	ImagePullPolicy corev1.PullPolicy `json:"pullPolicy,omitempty"`
 
+	// Env is a set of environment variables to pass to proxy node
+	Env []corev1.EnvVar `json:"env,omitempty"`
+
+	// Resources is the resources to allocate for the proxy node
+	Resources corev1.ResourceRequirements `json:"resources,omitempty"`
+
 	// Protocol is the proxy protocol configuration
 	Protocol *Protocol `json:"protocol,omitempty"`
+
+	// Volumes is a list of volumes to attach to the backend pods
+	Volumes []corev1.Volume `json:"volumes,omitempty"`
+
+	// VolumeMounts is a list of volumes to mount to the proxy pods
+	VolumeMounts []corev1.VolumeMount `json:"volumeMounts,omitempty"`
+}
+
+// ProxyStatus is the cluster proxy status
+type ProxyStatus struct {
+	// Ready indicates whether the proxy is ready
+	Ready bool `json:"ready,omitempty"`
 }

@@ -27,6 +27,24 @@ type Backend struct {
 	// ImagePullPolicy is the pull policy to apply
 	ImagePullPolicy corev1.PullPolicy `json:"pullPolicy,omitempty"`
 
+	// Env is a set of environment variables to pass to backend nodes
+	Env []corev1.EnvVar `json:"env,omitempty"`
+
+	// Resources is the resources to allocate for the backend nodes
+	Resources corev1.ResourceRequirements `json:"resources,omitempty"`
+
 	// Protocol is the backend protocol configuration
 	Protocol *Protocol `json:"protocol,omitempty"`
+
+	// Volumes is a list of volumes to attach to the backend pods
+	Volumes []corev1.Volume `json:"volumes,omitempty"`
+
+	// VolumeMounts is a list of volumes to mount to the proxy pods
+	VolumeMounts []corev1.VolumeMount `json:"volumeMounts,omitempty"`
+}
+
+// BackendStatus is the cluster backend status
+type BackendStatus struct {
+	// ReadyReplicas is the number of replicas in the cluster that have been marked ready
+	ReadyReplicas int32 `json:"readyReplicas,omitempty"`
 }
