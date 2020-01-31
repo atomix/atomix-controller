@@ -66,9 +66,16 @@ func NewCluster(database *v1beta1.Database, cluster int) *v1beta1.Cluster {
 		meta.Labels[key] = value
 	}
 	meta.Annotations = newClusterAnnotations(database, cluster)
+
+	spec := database.Spec.Template.Spec
+	partitions := make([]int64, 0, database.Spec.Partitions)
+	for partition := (int(database.Spec.Partitions) * (cluster - 1)) + 1; partition <= int(database.Spec.Partitions)*cluster; partition++ {
+		partitions = append(partitions, int64(partition))
+	}
+	spec.Partitions = partitions
 	return &v1beta1.Cluster{
 		ObjectMeta: meta,
-		Spec:       database.Spec.Template.Spec,
+		Spec:       spec,
 	}
 }
 

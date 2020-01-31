@@ -54,8 +54,8 @@ func Add(mgr manager.Manager) error {
 		return err
 	}
 
-	// Watch for changes to secondary resource Partitions and requeue the owner Database
-	err = c.Watch(&source.Kind{Type: &v1beta1.Partition{}}, &handler.EnqueueRequestForOwner{
+	// Watch for changes to secondary resource Clusters and requeue the owner Database
+	err = c.Watch(&source.Kind{Type: &v1beta1.Cluster{}}, &handler.EnqueueRequestForOwner{
 		IsController: true,
 		OwnerType:    &v1beta1.Database{},
 	})
