@@ -116,7 +116,7 @@ func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, err
 }
 
 func (r *Reconciler) reconcileStatus(database *v1beta1.Database) error {
-	readyClusters := 0
+	readyPartitions := 0
 	for i := 1; i <= int(database.Spec.Clusters); i++ {
 		cluster := &v1beta1.Cluster{}
 		err := r.client.Get(context.TODO(), k8sutil.GetClusterNamespacedName(database, i), cluster)
@@ -126,15 +126,12 @@ func (r *Reconciler) reconcileStatus(database *v1beta1.Database) error {
 			}
 			return err
 		}
-
-		if cluster.Status.Backend.ReadyReplicas == cluster.Spec.Backend.Replicas && cluster.Status.Proxy.Ready {
-			readyClusters++
-		}
+		readyPartitions += int(cluster.Status.ReadyPartitions)
 	}
 
-	if int(database.Status.ReadyClusters) != readyClusters {
+	if int(database.Status.ReadyPartitions) != readyPartitions {
 		log.Info("Updating database status", "Name", database.Name, "Namespace", database.Namespace)
-		database.Status.ReadyClusters = int32(readyClusters)
+		database.Status.ReadyPartitions = int32(readyPartitions)
 		return r.client.Status().Update(context.TODO(), database)
 	}
 	return nil
