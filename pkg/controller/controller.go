@@ -16,25 +16,14 @@ package controller
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 	api "github.com/atomix/api/proto/atomix/controller"
 	"github.com/atomix/kubernetes-controller/pkg/apis/cloud/v1beta1"
-	"github.com/atomix/kubernetes-controller/pkg/apis/k8s/v1alpha1"
-	"github.com/atomix/kubernetes-controller/pkg/controller/v1alpha1/partition"
-	"github.com/atomix/kubernetes-controller/pkg/controller/v1alpha1/partitionset"
-	v1alpha1util "github.com/atomix/kubernetes-controller/pkg/controller/v1alpha1/util/k8s"
 	"github.com/atomix/kubernetes-controller/pkg/controller/v1beta1/cluster"
 	"github.com/atomix/kubernetes-controller/pkg/controller/v1beta1/database"
 	v1beta1util "github.com/atomix/kubernetes-controller/pkg/controller/v1beta1/util/k8s"
 	"google.golang.org/grpc"
-	"io"
-	"k8s.io/api/core/v1"
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
 	"net"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -52,12 +41,6 @@ func AddController(mgr manager.Manager) error {
 		return err
 	}
 
-	if err = partition.Add(mgr); err != nil {
-		return err
-	}
-	if err = partitionset.Add(mgr); err != nil {
-		return err
-	}
 	if err = database.Add(mgr); err != nil {
 		return err
 	}
@@ -70,21 +53,20 @@ func AddController(mgr manager.Manager) error {
 // newController creates a new controller server
 func newController(client client.Client, scheme *runtime.Scheme, config *rest.Config, opts ...grpc.ServerOption) *Controller {
 	return &Controller{
-		client:    client,
-		scheme:    scheme,
-		config:    config,
-		opts:      opts,
-		elections: make(map[electionID]*election),
+		client: client,
+		scheme: scheme,
+		config: config,
+		opts:   opts,
 	}
 }
 
 // Controller an implementation of the Atomix controller API
 type Controller struct {
-	client    client.Client
-	scheme    *runtime.Scheme
-	config    *rest.Config
-	opts      []grpc.ServerOption
-	elections map[electionID]*election
+	api.ControllerServiceServer
+	client client.Client
+	scheme *runtime.Scheme
+	config *rest.Config
+	opts   []grpc.ServerOption
 }
 
 // GetDatabases get a list of databases managed by the controller
@@ -130,176 +112,6 @@ func (c *Controller) GetDatabases(ctx context.Context, request *api.GetDatabases
 	}, nil
 }
 
-// CreatePartitionGroup creates a partition group via the k8s API
-func (c *Controller) CreatePartitionGroup(ctx context.Context, r *api.CreatePartitionGroupRequest) (*api.CreatePartitionGroupResponse, error) {
-	group := &v1alpha1.PartitionSet{}
-	name := v1alpha1util.GetPartitionSetNamespacedName(r.ID)
-
-	err := c.client.Get(ctx, name, group)
-	if err != nil && k8serrors.IsNotFound(err) {
-		group, err = v1alpha1util.NewPartitionSetFromProto(r.ID, r.Spec)
-		if err != nil {
-			return nil, err
-		}
-		if err = c.client.Create(context.TODO(), group); err != nil {
-			return nil, err
-		}
-	}
-	return &api.CreatePartitionGroupResponse{}, nil
-}
-
-// DeletePartitionGroup deletes a partition group via the k8s API
-func (c *Controller) DeletePartitionGroup(ctx context.Context, r *api.DeletePartitionGroupRequest) (*api.DeletePartitionGroupResponse, error) {
-	group := &v1alpha1.PartitionSet{}
-	name := v1alpha1util.GetPartitionSetNamespacedName(r.ID)
-
-	if err := c.client.Get(ctx, name, group); err != nil {
-		return nil, err
-	}
-
-	if err := c.client.Delete(ctx, group); err != nil {
-		return nil, err
-	}
-	return &api.DeletePartitionGroupResponse{}, nil
-}
-
-// GetPartitionGroups returns a list of partition groups read from the k8s API
-func (c *Controller) GetPartitionGroups(ctx context.Context, request *api.GetPartitionGroupsRequest) (*api.GetPartitionGroupsResponse, error) {
-	if request.ID.Name != "" {
-		return c.getPartitionGroup(ctx, request)
-	}
-	return c.getPartitionGroups(ctx, request)
-}
-
-// getPartitionGroups gets all partition groups for the given request
-func (c *Controller) getPartitionGroups(ctx context.Context, request *api.GetPartitionGroupsRequest) (*api.GetPartitionGroupsResponse, error) {
-	groups := &v1alpha1.PartitionSetList{}
-
-	opts := &client.ListOptions{
-		Namespace: v1alpha1util.GetPartitionSetNamespace(request.ID),
-	}
-
-	if err := c.client.List(ctx, opts, groups); err != nil {
-		return nil, err
-	}
-
-	pbgroups := make([]*api.PartitionGroup, 0, len(groups.Items))
-	for _, group := range groups.Items {
-		pbgroup, err := v1alpha1util.NewPartitionGroupProtoFromSet(&group)
-		if err != nil {
-			return nil, err
-		}
-
-		options := &client.ListOptions{
-			Namespace:     v1alpha1util.GetPartitionSetNamespace(request.ID),
-			LabelSelector: labels.SelectorFromSet(v1alpha1util.GetPartitionLabelsForPartitionSet(&group)),
-		}
-		partitions := &v1alpha1.PartitionList{}
-		err = c.client.List(context.TODO(), options, partitions)
-		if err != nil {
-			return nil, err
-		}
-
-		pbpartitions := make([]*api.Partition, 0, len(partitions.Items))
-		for _, partition := range partitions.Items {
-			pbpartition, err := v1alpha1util.NewPartitionProto(&partition)
-			if err != nil {
-				return nil, err
-			}
-			pbpartitions = append(pbpartitions, pbpartition)
-		}
-		pbgroup.Partitions = pbpartitions
-
-		pbgroups = append(pbgroups, pbgroup)
-	}
-
-	return &api.GetPartitionGroupsResponse{
-		Groups: pbgroups,
-	}, nil
-}
-
-// getPartitionGroup gets a single partition group for the given request
-func (c *Controller) getPartitionGroup(ctx context.Context, request *api.GetPartitionGroupsRequest) (*api.GetPartitionGroupsResponse, error) {
-	group := &v1alpha1.PartitionSet{}
-	name := v1alpha1util.GetPartitionSetNamespacedName(request.ID)
-	err := c.client.Get(context.TODO(), name, group)
-	if err != nil {
-		if k8serrors.IsNotFound(err) {
-			return &api.GetPartitionGroupsResponse{
-				Groups: []*api.PartitionGroup{},
-			}, nil
-		}
-		return nil, err
-	}
-
-	proto, err := v1alpha1util.NewPartitionGroupProtoFromSet(group)
-	if err != nil {
-		return nil, err
-	}
-
-	options := &client.ListOptions{
-		Namespace:     v1alpha1util.GetPartitionSetNamespace(request.ID),
-		LabelSelector: labels.SelectorFromSet(v1alpha1util.GetPartitionLabelsForPartitionSet(group)),
-	}
-	partitions := &v1alpha1.PartitionList{}
-	err = c.client.List(context.TODO(), options, partitions)
-	if err != nil {
-		return nil, err
-	}
-
-	partitionProtos := make([]*api.Partition, 0, len(partitions.Items))
-	for _, partition := range partitions.Items {
-		partitionProto, err := v1alpha1util.NewPartitionProto(&partition)
-		if err != nil {
-			return nil, err
-		}
-		partitionProtos = append(partitionProtos, partitionProto)
-	}
-	proto.Partitions = partitionProtos
-
-	return &api.GetPartitionGroupsResponse{
-		Groups: []*api.PartitionGroup{proto},
-	}, nil
-}
-
-// EnterElection enters a partition node into a leader election
-func (c *Controller) EnterElection(r *api.PartitionElectionRequest, s api.ControllerService_EnterElectionServer) error {
-	id := electionID{
-		namespace: r.PartitionID.Group.Namespace,
-		name:      r.PartitionID.Group.Name,
-		partition: int(r.PartitionID.Partition),
-	}
-
-	election, ok := c.elections[id]
-	if !ok {
-		election = newElection(id, c)
-		c.elections[id] = election
-	}
-
-	ch := make(chan term)
-	err := election.enter(r.Member, ch)
-	if err != nil {
-		return err
-	}
-
-	for {
-		term := <-ch
-		response := &api.PartitionElectionResponse{
-			Term: &api.PrimaryTerm{
-				Term:       term.term,
-				Primary:    term.primary,
-				Candidates: term.candidates,
-			},
-		}
-		if err := s.Send(response); err != nil {
-			if err == io.EOF {
-				return election.leave(r.Member)
-			}
-			return err
-		}
-	}
-}
-
 // Start starts the controller server
 func (c *Controller) Start(stop <-chan struct{}) error {
 	errs := make(chan error)
@@ -325,185 +137,5 @@ func (c *Controller) Start(stop <-chan struct{}) error {
 		log.Info("Stopping controller server")
 		s.Stop()
 		return nil
-	}
-}
-
-// electionID is an identifier for the election for a single partition
-type electionID struct {
-	namespace string
-	name      string
-	partition int
-}
-
-func (e electionID) String() string {
-	return fmt.Sprintf("%s-%s-%d", e.namespace, e.name, e.partition)
-}
-
-// term provides primary and term information for a partition primary election
-type term struct {
-	primary    string
-	term       int64
-	candidates []string
-}
-
-// newElection returns a new primary election controller for a single partition
-func newElection(id electionID, controller *Controller) *election {
-	return &election{
-		id:         id,
-		controller: controller,
-	}
-}
-
-// election manages the primary election for a single partition
-type election struct {
-	id         electionID
-	controller *Controller
-	candidates map[string]chan term
-}
-
-// electionState stores the state of a single primary election
-type electionState struct {
-	Term       int64
-	Candidates []string
-}
-
-// enter adds a candidate to the election and if necessary updates the term
-func (e *election) enter(candidate string, ch chan term) error {
-	e.candidates[candidate] = ch
-
-	// Initialize the ConfigMap and create a namespaced name
-	cm := &v1.ConfigMap{}
-	name := types.NamespacedName{
-		Namespace: v1alpha1util.GetControllerNamespace(),
-		Name:      v1alpha1util.GetControllerName() + "-elections",
-	}
-
-	// Ensure the elections ConfigMap has been created in k8s
-	err := e.controller.client.Get(context.TODO(), name, cm)
-	if err != nil && k8serrors.IsNotFound(err) {
-		cm = &v1.ConfigMap{
-			ObjectMeta: metav1.ObjectMeta{
-				Namespace: name.Namespace,
-				Name:      name.Name,
-			},
-			BinaryData: make(map[string][]byte),
-		}
-		if err = e.controller.client.Create(context.TODO(), cm); err != nil {
-			return err
-		}
-	} else if err != nil {
-		return err
-	}
-
-	// Ensure the elections ConfigMap has been initialized with this election
-	bytes, ok := cm.BinaryData[e.id.String()]
-	if !ok {
-		bytes, err = json.Marshal(electionState{
-			Term:       0,
-			Candidates: []string{},
-		})
-		if err != nil {
-			return err
-		}
-		cm.BinaryData[e.id.String()] = bytes
-	}
-
-	// Parse the existing state of this election from the ConfigMap
-	election := &electionState{}
-	if err = json.Unmarshal(bytes, election); err != nil {
-		return err
-	}
-
-	// Append the candidate to the candidates list and produce a term change.
-	// If the candidate is the first to be added, increment the term and
-	// produce an event with the candidate as the primary. Otherwise,
-	// simply enter the candidate to the list and update the ConfigMap.
-	size := len(election.Candidates)
-	election.Candidates = append(election.Candidates, candidate)
-	if size == 0 {
-		election.Term = election.Term + 1
-	}
-
-	// Update the ConfigMap to store the election results
-	if err = e.controller.client.Update(context.TODO(), cm); err != nil {
-		return err
-	}
-
-	// Produce the term change event
-	e.changeTerm(term{
-		term:       election.Term,
-		primary:    election.Candidates[0],
-		candidates: election.Candidates,
-	})
-	return nil
-}
-
-// leave removes a candidate from the election and if necessary updates the term
-func (e *election) leave(candidate string) error {
-	delete(e.candidates, candidate)
-
-	// Initialize the ConfigMap and create a namespaced name
-	cm := &v1.ConfigMap{}
-	name := types.NamespacedName{
-		Namespace: v1alpha1util.GetControllerNamespace(),
-		Name:      v1alpha1util.GetControllerName() + "-elections",
-	}
-
-	// Read the elections ConfigMap and return if it does not exist
-	err := e.controller.client.Get(context.TODO(), name, cm)
-	if err != nil && k8serrors.IsNotFound(err) {
-		return nil
-	} else if err != nil {
-		return err
-	}
-
-	// Get the election state from the elections ConfigMap and return if it doesn't exist
-	bytes, ok := cm.BinaryData[e.id.String()]
-	if !ok {
-		return nil
-	}
-
-	// Parse the existing state of this election from the ConfigMap
-	election := &electionState{}
-	if err = json.Unmarshal(bytes, election); err != nil {
-		return err
-	}
-
-	// Create a slice of candidates with the candidate removed
-	candidates := []string{}
-	for _, c := range election.Candidates {
-		if c != candidate {
-			candidates = append(candidates, c)
-		}
-	}
-
-	// If the list of candidates has not changed, return
-	if len(candidates) == len(election.Candidates) {
-		return nil
-	}
-
-	// If the first element in the candidates list changed, bump the term
-	if len(candidates) > 0 && candidates[0] != election.Candidates[0] {
-		election.Term = election.Term + 1
-	}
-	election.Candidates = candidates
-
-	// Update the ConfigMap to store the election results
-	if err = e.controller.client.Update(context.TODO(), cm); err != nil {
-		return err
-	}
-
-	// Produce the term change event
-	e.changeTerm(term{
-		term:       election.Term,
-		primary:    election.Candidates[0],
-		candidates: election.Candidates,
-	})
-	return nil
-}
-
-func (e *election) changeTerm(t term) {
-	for _, candidate := range e.candidates {
-		candidate <- t
 	}
 }
