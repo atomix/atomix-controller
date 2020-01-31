@@ -28,7 +28,7 @@ type ClusterSpec struct {
 	Proxy *Proxy `json:"proxy,omitempty"`
 
 	// Backend is the cluster backend
-	Backend *Backend `json:"backend,omitempty"`
+	Backend Backend `json:"backend,omitempty"`
 
 	// VolumeClaimTemplates is a list of templates for persistent volume claims
 	VolumeClaimTemplates []corev1.PersistentVolumeClaim `json:"volumeClaimTemplates,omitempty"`

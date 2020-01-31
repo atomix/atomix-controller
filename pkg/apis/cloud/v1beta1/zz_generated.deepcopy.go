@@ -158,11 +158,7 @@ func (in *ClusterSpec) DeepCopyInto(out *ClusterSpec) {
 		*out = new(Proxy)
 		(*in).DeepCopyInto(*out)
 	}
-	if in.Backend != nil {
-		in, out := &in.Backend, &out.Backend
-		*out = new(Backend)
-		(*in).DeepCopyInto(*out)
-	}
+	in.Backend.DeepCopyInto(&out.Backend)
 	if in.VolumeClaimTemplates != nil {
 		in, out := &in.VolumeClaimTemplates, &out.VolumeClaimTemplates
 		*out = make([]v1.PersistentVolumeClaim, len(*in))
