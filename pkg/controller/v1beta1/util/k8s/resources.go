@@ -54,6 +54,7 @@ const (
 	configPath         = "/etc/atomix"
 	clusterConfigFile  = "cluster.json"
 	protocolConfigFile = "protocol.json"
+	dataPath           = "/var/lib/atomix"
 )
 
 const (
@@ -192,7 +193,7 @@ func newContainer(image string, pullPolicy corev1.PullPolicy, env []corev1.EnvVa
 func newDataVolumeMount() corev1.VolumeMount {
 	return corev1.VolumeMount{
 		Name:      dataVolume,
-		MountPath: "/var/lib/atomix",
+		MountPath: dataPath,
 	}
 }
 

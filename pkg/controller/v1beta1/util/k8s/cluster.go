@@ -375,7 +375,7 @@ func NewClusterHeadlessService(cluster *v1beta1.Cluster) *corev1.Service {
 func NewBackendStatefulSet(cluster *v1beta1.Cluster, image string, pullPolicy corev1.PullPolicy, probePort int32) (*appsv1.StatefulSet, error) {
 	var affinity *corev1.Affinity
 
-	group, err := GetDatabaseFromClusterAnnotations(cluster)
+	database, err := GetDatabaseFromClusterAnnotations(cluster)
 	if err != nil {
 		return nil, err
 	}
@@ -385,8 +385,20 @@ func NewBackendStatefulSet(cluster *v1beta1.Cluster, image string, pullPolicy co
 		return nil, err
 	}
 
-	if group != "" && id != 0 {
-		affinity = newAffinity(group, id)
+	if database != "" && id != 0 {
+		affinity = newAffinity(database, id)
+	}
+
+	volumeClaims := []corev1.PersistentVolumeClaim{}
+	volumes := []corev1.Volume{
+		newConfigVolume(GetClusterConfigMapName(cluster)),
+	}
+	if cluster.Spec.Backend.VolumeClaim != nil {
+		volumeClaim := *cluster.Spec.Backend.VolumeClaim
+		volumeClaim.Name = dataVolume
+		volumeClaims = append(volumeClaims, volumeClaim)
+	} else {
+		volumes = append(volumes, newDataVolume())
 	}
 
 	return &appsv1.StatefulSet{
@@ -404,7 +416,8 @@ func NewBackendStatefulSet(cluster *v1beta1.Cluster, image string, pullPolicy co
 			UpdateStrategy: appsv1.StatefulSetUpdateStrategy{
 				Type: appsv1.RollingUpdateStatefulSetStrategyType,
 			},
-			PodManagementPolicy: appsv1.ParallelPodManagement,
+			PodManagementPolicy:  appsv1.ParallelPodManagement,
+			VolumeClaimTemplates: volumeClaims,
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: cluster.Labels,
@@ -417,10 +430,7 @@ func NewBackendStatefulSet(cluster *v1beta1.Cluster, image string, pullPolicy co
 							newConfigVolumeMount(),
 						}, probePort),
 					},
-					Volumes: []corev1.Volume{
-						newConfigVolume(GetClusterConfigMapName(cluster)),
-						newDataVolume(),
-					},
+					Volumes: volumes,
 				},
 			},
 		},

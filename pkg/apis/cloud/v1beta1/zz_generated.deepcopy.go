@@ -41,19 +41,10 @@ func (in *Backend) DeepCopyInto(out *Backend) {
 		*out = new(Protocol)
 		(*in).DeepCopyInto(*out)
 	}
-	if in.Volumes != nil {
-		in, out := &in.Volumes, &out.Volumes
-		*out = make([]v1.Volume, len(*in))
-		for i := range *in {
-			(*in)[i].DeepCopyInto(&(*out)[i])
-		}
-	}
-	if in.VolumeMounts != nil {
-		in, out := &in.VolumeMounts, &out.VolumeMounts
-		*out = make([]v1.VolumeMount, len(*in))
-		for i := range *in {
-			(*in)[i].DeepCopyInto(&(*out)[i])
-		}
+	if in.VolumeClaim != nil {
+		in, out := &in.VolumeClaim, &out.VolumeClaim
+		*out = new(v1.PersistentVolumeClaim)
+		(*in).DeepCopyInto(*out)
 	}
 	return
 }
@@ -154,13 +145,6 @@ func (in *ClusterSpec) DeepCopyInto(out *ClusterSpec) {
 		(*in).DeepCopyInto(*out)
 	}
 	in.Backend.DeepCopyInto(&out.Backend)
-	if in.VolumeClaimTemplates != nil {
-		in, out := &in.VolumeClaimTemplates, &out.VolumeClaimTemplates
-		*out = make([]v1.PersistentVolumeClaim, len(*in))
-		for i := range *in {
-			(*in)[i].DeepCopyInto(&(*out)[i])
-		}
-	}
 	return
 }
 
@@ -435,20 +419,6 @@ func (in *Proxy) DeepCopyInto(out *Proxy) {
 		in, out := &in.Protocol, &out.Protocol
 		*out = new(Protocol)
 		(*in).DeepCopyInto(*out)
-	}
-	if in.Volumes != nil {
-		in, out := &in.Volumes, &out.Volumes
-		*out = make([]v1.Volume, len(*in))
-		for i := range *in {
-			(*in)[i].DeepCopyInto(&(*out)[i])
-		}
-	}
-	if in.VolumeMounts != nil {
-		in, out := &in.VolumeMounts, &out.VolumeMounts
-		*out = make([]v1.VolumeMount, len(*in))
-		for i := range *in {
-			(*in)[i].DeepCopyInto(&(*out)[i])
-		}
 	}
 	return
 }

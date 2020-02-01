@@ -32,12 +32,6 @@ type Proxy struct {
 
 	// Protocol is the proxy protocol configuration
 	Protocol *Protocol `json:"protocol,omitempty"`
-
-	// Volumes is a list of volumes to attach to the backend pods
-	Volumes []corev1.Volume `json:"volumes,omitempty"`
-
-	// VolumeMounts is a list of volumes to mount to the proxy pods
-	VolumeMounts []corev1.VolumeMount `json:"volumeMounts,omitempty"`
 }
 
 // ProxyStatus is the cluster proxy status
