@@ -20,7 +20,7 @@ import (
 
 // PartitionSpec is the k8s configuration for a single partition
 type PartitionSpec struct {
-	PartitionID int64  `json:"partitionId,omitempty"`
+	PartitionID int32  `json:"partitionId,omitempty"`
 	Host        string `json:"host,omitempty"`
 	Port        int32  `json:"port,omitempty"`
 }

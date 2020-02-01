@@ -21,8 +21,8 @@ import (
 
 // ClusterSpec is the k8s configuration for a single partition
 type ClusterSpec struct {
-	// Partitions is the set of partitions in the cluster
-	Partitions []int64 `json:"partitions,omitempty"`
+	// Partitions is the number of partitions in the cluster
+	Partitions int32 `json:"partitions,omitempty"`
 
 	// Proxy is an optional proxy configuration
 	Proxy *Proxy `json:"proxy,omitempty"`

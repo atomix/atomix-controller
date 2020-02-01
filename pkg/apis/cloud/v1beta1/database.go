@@ -23,9 +23,6 @@ type DatabaseSpec struct {
 	// Clusters is the number of clusters in the database
 	Clusters int32 `json:"clusters,omitempty"`
 
-	// Partitions is the number of partitions in the database
-	Partitions int32 `json:"partitions,omitempty"`
-
 	// Template is the PartitionTemplateSpec to use to configure the partitions
 	Template ClusterTemplateSpec `json:"template,omitempty"`
 }

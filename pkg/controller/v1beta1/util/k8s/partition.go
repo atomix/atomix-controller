@@ -22,12 +22,12 @@ import (
 )
 
 // GetPartitionName returns the partition name for the given cluster
-func GetPartitionName(cluster *v1beta1.Cluster, partition int64) string {
+func GetPartitionName(cluster *v1beta1.Cluster, partition int32) string {
 	return fmt.Sprintf("%s-%d", cluster.Name, partition)
 }
 
 // GetPartitionNamespacedName returns the NamespacedName for the given partition
-func GetPartitionNamespacedName(cluster *v1beta1.Cluster, partition int64) types.NamespacedName {
+func GetPartitionNamespacedName(cluster *v1beta1.Cluster, partition int32) types.NamespacedName {
 	return types.NamespacedName{
 		Name:      GetPartitionName(cluster, partition),
 		Namespace: cluster.Namespace,
@@ -54,14 +54,14 @@ func GetPartitionLabelsForCluster(cluster *v1beta1.Cluster) map[string]string {
 }
 
 // newPartitionLabels returns a new labels map containing the partition metadata
-func newPartitionLabels(cluster *v1beta1.Cluster, partition int64) map[string]string {
+func newPartitionLabels(cluster *v1beta1.Cluster, partition int32) map[string]string {
 	labels := GetPartitionLabelsForCluster(cluster)
 	labels[partitionKey] = fmt.Sprint(partition)
 	return labels
 }
 
 // NewPartition returns the configuration for the given partition
-func NewPartition(cluster *v1beta1.Cluster, partition int64) *v1beta1.Partition {
+func NewPartition(cluster *v1beta1.Cluster, partition int32) *v1beta1.Partition {
 	return &v1beta1.Partition{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      GetPartitionName(cluster, partition),

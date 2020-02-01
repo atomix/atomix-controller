@@ -133,15 +133,19 @@ func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, err
 }
 
 func (r *Reconciler) reconcilePartitions(cluster *v1beta1.Cluster) error {
-	for _, partition := range cluster.Spec.Partitions {
-		if err := r.reconcilePartition(cluster, partition); err != nil {
+	clusterID, err := k8s.GetClusterIDFromClusterAnnotations(cluster)
+	if err != nil {
+		return err
+	}
+	for partitionID := (cluster.Spec.Partitions * (clusterID - 1)) + 1; partitionID <= cluster.Spec.Partitions*clusterID; partitionID++ {
+		if err := r.reconcilePartition(cluster, partitionID); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (r *Reconciler) reconcilePartition(cluster *v1beta1.Cluster, partitionID int64) error {
+func (r *Reconciler) reconcilePartition(cluster *v1beta1.Cluster, partitionID int32) error {
 	partition := &v1beta1.Partition{}
 	err := r.client.Get(context.TODO(), k8s.GetPartitionNamespacedName(cluster, partitionID), partition)
 	if err != nil {
@@ -480,12 +484,16 @@ func (r *Reconciler) reconcileStatus(cluster *v1beta1.Cluster) error {
 	}
 
 	// If the backend replicas status is ready and the proxy is ready, update partition statuses
-	if int(cluster.Status.ReadyPartitions) < len(cluster.Spec.Partitions) &&
+	if cluster.Status.ReadyPartitions < cluster.Spec.Partitions &&
 		cluster.Status.Backend.ReadyReplicas == cluster.Spec.Backend.Replicas &&
 		(cluster.Spec.Proxy == nil || cluster.Status.Proxy.Ready) {
-		for _, id := range cluster.Spec.Partitions {
+		clusterID, err := k8s.GetClusterIDFromClusterAnnotations(cluster)
+		if err != nil {
+			return err
+		}
+		for partitionID := (cluster.Spec.Partitions * (clusterID - 1)) + 1; partitionID <= cluster.Spec.Partitions*clusterID; partitionID++ {
 			partition := &v1beta1.Partition{}
-			err := r.client.Get(context.TODO(), k8s.GetPartitionNamespacedName(cluster, id), partition)
+			err := r.client.Get(context.TODO(), k8s.GetPartitionNamespacedName(cluster, partitionID), partition)
 			if err != nil && !errors.IsNotFound(err) {
 				return err
 			}
@@ -500,7 +508,7 @@ func (r *Reconciler) reconcileStatus(cluster *v1beta1.Cluster) error {
 		}
 
 		// If we've made it this far, all partitions are ready. Update the cluster status
-		cluster.Status.ReadyPartitions = int32(len(cluster.Spec.Partitions))
+		cluster.Status.ReadyPartitions = cluster.Spec.Partitions
 		log.Info("Updating cluster status", "Name", cluster.Name, "Namespace", cluster.Namespace)
 		return r.client.Status().Update(context.TODO(), cluster)
 	}

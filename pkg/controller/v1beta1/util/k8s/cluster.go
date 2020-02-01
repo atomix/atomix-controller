@@ -66,18 +66,9 @@ func NewCluster(database *v1beta1.Database, cluster int) *v1beta1.Cluster {
 		meta.Labels[key] = value
 	}
 	meta.Annotations = newClusterAnnotations(database, cluster)
-
-	spec := database.Spec.Template.Spec
-	partitions := make([]int64, 0, database.Spec.Partitions)
-	for partition := 1; partition <= int(database.Spec.Partitions); partition++ {
-		if partition%int(database.Spec.Clusters) == cluster-1 {
-			partitions = append(partitions, int64(partition))
-		}
-	}
-	spec.Partitions = partitions
 	return &v1beta1.Cluster{
 		ObjectMeta: meta,
-		Spec:       spec,
+		Spec:       database.Spec.Template.Spec,
 	}
 }
 
@@ -116,17 +107,17 @@ func newClusterLabels(database *v1beta1.Database, cluster int) map[string]string
 }
 
 // newClusterAnnotations returns annotations for the given cluster
-func newClusterAnnotations(group *v1beta1.Database, cluster int) map[string]string {
+func newClusterAnnotations(database *v1beta1.Database, cluster int) map[string]string {
 	return map[string]string{
 		controllerAnnotation: GetQualifiedControllerName(),
 		typeAnnotation:       clusterType,
-		databaseAnnotation:   group.Name,
+		databaseAnnotation:   database.Name,
 		clusterAnnotation:    fmt.Sprint(cluster),
 	}
 }
 
-// getClusterDatabaseFromAnnotation returns the cluster group name from the given cluster annotations
-func getClusterDatabaseFromAnnotation(cluster *v1beta1.Cluster) (string, error) {
+// GetDatabaseFromClusterAnnotations returns the database name from the given cluster annotations
+func GetDatabaseFromClusterAnnotations(cluster *v1beta1.Cluster) (string, error) {
 	database, ok := cluster.Annotations[databaseAnnotation]
 	if !ok {
 		return "", errors.New("cluster missing database annotation")
@@ -134,18 +125,18 @@ func getClusterDatabaseFromAnnotation(cluster *v1beta1.Cluster) (string, error) 
 	return database, nil
 }
 
-// getClusterIDFromAnnotation returns the cluster ID from the given cluster annotations
-func getClusterIDFromAnnotation(cluster *v1beta1.Cluster) (int, error) {
+// GetClusterIDFromClusterAnnotations returns the cluster ID from the given cluster annotations
+func GetClusterIDFromClusterAnnotations(cluster *v1beta1.Cluster) (int32, error) {
 	idstr, ok := cluster.Annotations[clusterAnnotation]
 	if !ok {
-		return 0, errors.New("cluster missing cluster ID annotation")
+		return 1, nil
 	}
 
 	id, err := strconv.ParseInt(idstr, 0, 32)
 	if err != nil {
 		return 0, err
 	}
-	return int(id), nil
+	return int32(id), nil
 }
 
 // GetClusterIDFromClusterName returns the cluster ID from the given cluster name
@@ -226,12 +217,12 @@ func NewClusterConfigMap(cluster *v1beta1.Cluster, config interface{}) (*corev1.
 
 // newNodeConfigString creates a node configuration string for the given cluster
 func newNodeConfigString(cluster *v1beta1.Cluster) (string, error) {
-	clusterID, err := getClusterIDFromAnnotation(cluster)
+	clusterID, err := GetClusterIDFromClusterAnnotations(cluster)
 	if err != nil {
 		return "", err
 	}
 
-	clusterDatabase, err := getClusterDatabaseFromAnnotation(cluster)
+	clusterDatabase, err := GetDatabaseFromClusterAnnotations(cluster)
 	if err != nil {
 		return "", err
 	}
@@ -246,10 +237,10 @@ func newNodeConfigString(cluster *v1beta1.Cluster) (string, error) {
 		}
 	}
 
-	partitions := make([]*api.PartitionId, len(cluster.Spec.Partitions))
-	for i := 0; i < len(cluster.Spec.Partitions); i++ {
-		partitions[i] = &api.PartitionId{
-			Partition: int32(cluster.Spec.Partitions[i]),
+	partitions := make([]*api.PartitionId, 0, cluster.Spec.Partitions)
+	for partitionID := (cluster.Spec.Partitions * (clusterID - 1)) + 1; partitionID <= cluster.Spec.Partitions*clusterID; partitionID++ {
+		partition := &api.PartitionId{
+			Partition: partitionID,
 			Group: &api.PartitionGroupId{
 				Name:      clusterDatabase,
 				Namespace: cluster.Namespace,
@@ -262,6 +253,7 @@ func newNodeConfigString(cluster *v1beta1.Cluster) (string, error) {
 				},
 			},
 		}
+		partitions = append(partitions, partition)
 	}
 
 	config := &api.ClusterConfig{
@@ -298,7 +290,7 @@ func NewClusterDisruptionBudget(cluster *v1beta1.Cluster) *policyv1beta1.PodDisr
 
 // GetClusterClusterGroupServiceName returns the cluster group service name for a cluster
 func GetClusterClusterGroupServiceName(cluster *v1beta1.Cluster) string {
-	group, err := getClusterDatabaseFromAnnotation(cluster)
+	group, err := GetDatabaseFromClusterAnnotations(cluster)
 	if err != nil {
 		return cluster.Name[:strings.LastIndex(cluster.Name, "-")]
 	}
@@ -315,7 +307,7 @@ func GetClusterClusterGroupServiceNamespacedName(cluster *v1beta1.Cluster) types
 
 // GetClusterClusterGroupName returns the cluster group name for a cluster
 func GetClusterClusterGroupName(cluster *v1beta1.Cluster) string {
-	group, err := getClusterDatabaseFromAnnotation(cluster)
+	group, err := GetDatabaseFromClusterAnnotations(cluster)
 	if err != nil {
 		return cluster.Name[:strings.LastIndex(cluster.Name, "-")]
 	}
@@ -383,12 +375,12 @@ func NewClusterHeadlessService(cluster *v1beta1.Cluster) *corev1.Service {
 func NewBackendStatefulSet(cluster *v1beta1.Cluster, image string, pullPolicy corev1.PullPolicy, probePort int32) (*appsv1.StatefulSet, error) {
 	var affinity *corev1.Affinity
 
-	group, err := getClusterDatabaseFromAnnotation(cluster)
+	group, err := GetDatabaseFromClusterAnnotations(cluster)
 	if err != nil {
 		return nil, err
 	}
 
-	id, err := getClusterIDFromAnnotation(cluster)
+	id, err := GetClusterIDFromClusterAnnotations(cluster)
 	if err != nil {
 		return nil, err
 	}

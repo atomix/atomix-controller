@@ -86,7 +86,7 @@ func GetQualifiedControllerName() string {
 }
 
 // newAffinity returns a new affinity policy for the given partition
-func newAffinity(group string, partition int) *corev1.Affinity {
+func newAffinity(group string, partition int32) *corev1.Affinity {
 	return &corev1.Affinity{
 		PodAntiAffinity: &corev1.PodAntiAffinity{
 			PreferredDuringSchedulingIgnoredDuringExecution: []corev1.WeightedPodAffinityTerm{

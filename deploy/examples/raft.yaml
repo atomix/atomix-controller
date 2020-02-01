@@ -4,9 +4,9 @@ metadata:
   name: raft
 spec:
   clusters: 3
-  partitions: 30
   template:
     spec:
+      partitions: 10
       backend:
         image: atomix/raft-replica:latest
         replicas: 3

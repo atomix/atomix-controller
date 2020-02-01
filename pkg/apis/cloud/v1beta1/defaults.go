@@ -19,13 +19,13 @@ func SetDatabaseDefaults(database *Database) {
 	if database.Spec.Clusters == 0 {
 		database.Spec.Clusters = 1
 	}
-	if database.Spec.Partitions == 0 {
-		database.Spec.Partitions = 1
-	}
 }
 
 // SetClusterDefaults sets the default values for the given Cluster
 func SetClusterDefaults(cluster *Cluster) {
+	if cluster.Spec.Partitions == 0 {
+		cluster.Spec.Partitions = 1
+	}
 	if cluster.Spec.Backend.Replicas == 0 {
 		cluster.Spec.Backend.Replicas = 1
 	}
