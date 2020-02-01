@@ -99,7 +99,7 @@ func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, err
 
 	v1beta1.SetDatabaseDefaults(database)
 
-	for i := 1; i <= int(database.Spec.Partitions); i++ {
+	for i := 1; i <= int(database.Spec.Clusters); i++ {
 		if err = r.reconcileCluster(database, i); err != nil {
 			return reconcile.Result{}, err
 		}
