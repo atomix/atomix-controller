@@ -18,6 +18,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
+	"strings"
+
 	api "github.com/atomix/api/proto/atomix/controller"
 	"github.com/atomix/kubernetes-controller/pkg/apis/cloud/v1beta1"
 	"github.com/gogo/protobuf/jsonpb"
@@ -27,8 +30,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"strconv"
-	"strings"
 )
 
 const (
@@ -241,10 +242,6 @@ func newNodeConfigString(cluster *v1beta1.Cluster) (string, error) {
 	for partitionID := (cluster.Spec.Partitions * (clusterID - 1)) + 1; partitionID <= cluster.Spec.Partitions*clusterID; partitionID++ {
 		partition := &api.PartitionId{
 			Partition: partitionID,
-			Group: &api.PartitionGroupId{
-				Name:      clusterDatabase,
-				Namespace: cluster.Namespace,
-			},
 			Cluster: &api.ClusterId{
 				ID: int32(clusterID),
 				DatabaseID: &api.DatabaseId{
