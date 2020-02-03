@@ -81,6 +81,37 @@ func (c *Controller) GetDatabases(ctx context.Context, request *api.GetDatabases
 		return nil, err
 	}
 
+	if request.ID != nil && request.ID.Name != "" {
+		for _, database := range databases.Items {
+			if database.Name == request.ID.Name {
+				pbdatabase := v1beta1util.NewDatabaseProto(&database)
+				options := &client.ListOptions{
+					Namespace:     v1beta1util.GetDatabaseNamespace(request.ID),
+					LabelSelector: labels.SelectorFromSet(v1beta1util.GetPartitionLabelsForDatabase(&database)),
+				}
+				partitions := &v1beta1.PartitionList{}
+				err := c.client.List(context.TODO(), options, partitions)
+				if err != nil {
+					return nil, err
+				}
+
+				pbpartitions := make([]*api.Partition, 0, len(partitions.Items))
+				for _, partition := range partitions.Items {
+					pbpartition, err := v1beta1util.NewPartitionProto(&partition)
+					if err != nil {
+						return nil, err
+					}
+					pbpartitions = append(pbpartitions, pbpartition)
+				}
+				pbdatabase.Partitions = pbpartitions
+				return &api.GetDatabasesResponse{
+					Databases: []*api.Database{pbdatabase},
+				}, nil
+			}
+		}
+		return &api.GetDatabasesResponse{}, nil
+	}
+
 	pbdatabases := make([]*api.Database, 0, len(databases.Items))
 	for _, database := range databases.Items {
 		pbdatabase := v1beta1util.NewDatabaseProto(&database)
