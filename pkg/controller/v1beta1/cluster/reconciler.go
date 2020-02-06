@@ -443,7 +443,7 @@ func (r *Reconciler) reconcileStatus(cluster *v1beta1.Cluster) error {
 
 	// Update the backend replicas status
 	if set.Status.ReadyReplicas != cluster.Status.Backend.ReadyReplicas {
-		log.Info("Updating cluster status", "Name", cluster.Name, "Namespace", cluster.Namespace)
+		log.Info("Updating Backend status", "Name", cluster.Name, "Namespace", cluster.Namespace, "ReadyReplicas", set.Status.ReadyReplicas)
 		cluster.Status.Backend.ReadyReplicas = set.Status.ReadyReplicas
 		err = r.client.Status().Update(context.TODO(), cluster)
 		if err != nil {
@@ -474,7 +474,7 @@ func (r *Reconciler) reconcileStatus(cluster *v1beta1.Cluster) error {
 			return nil
 		} else if deployment.Status.ReadyReplicas > 0 != cluster.Status.Proxy.Ready {
 			cluster.Status.Proxy.Ready = deployment.Status.ReadyReplicas > 0
-			log.Info("Updating cluster status", "Name", cluster.Name, "Namespace", cluster.Namespace)
+			log.Info("Updating Proxy status", "Name", cluster.Name, "Namespace", cluster.Namespace, "Ready", cluster.Status.Proxy.Ready)
 			err = r.client.Status().Update(context.TODO(), cluster)
 			if err != nil {
 				return err
@@ -499,7 +499,7 @@ func (r *Reconciler) reconcileStatus(cluster *v1beta1.Cluster) error {
 			}
 			if !partition.Status.Ready {
 				partition.Status.Ready = true
-				log.Info("Updating partition status", "Name", partition.Name, "Namespace", partition.Namespace)
+				log.Info("Updating Partition status", "Name", partition.Name, "Namespace", partition.Namespace, "Ready", partition.Status.Ready)
 				err = r.client.Status().Update(context.TODO(), partition)
 				if err != nil {
 					return err
@@ -509,7 +509,7 @@ func (r *Reconciler) reconcileStatus(cluster *v1beta1.Cluster) error {
 
 		// If we've made it this far, all partitions are ready. Update the cluster status
 		cluster.Status.ReadyPartitions = cluster.Spec.Partitions
-		log.Info("Updating cluster status", "Name", cluster.Name, "Namespace", cluster.Namespace)
+		log.Info("Updating Cluster status", "Name", cluster.Name, "Namespace", cluster.Namespace, "ReadyPartitions", cluster.Status.ReadyPartitions)
 		return r.client.Status().Update(context.TODO(), cluster)
 	}
 	return nil

@@ -126,11 +126,13 @@ func (r *Reconciler) reconcileStatus(database *v1beta1.Database) error {
 			}
 			return err
 		}
-		readyClusters++
+		if cluster.Status.ReadyPartitions == cluster.Spec.Partitions {
+			readyClusters++
+		}
 	}
 
 	if int(database.Status.ReadyClusters) != readyClusters {
-		log.Info("Updating database status", "Name", database.Name, "Namespace", database.Namespace)
+		log.Info("Updating Database status", "Name", database.Name, "Namespace", database.Namespace, "ReadyClusters", readyClusters)
 		database.Status.ReadyClusters = int32(readyClusters)
 		return r.client.Status().Update(context.TODO(), database)
 	}
