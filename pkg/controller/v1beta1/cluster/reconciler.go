@@ -394,7 +394,13 @@ func (r *Reconciler) addBackendStatefulSet(cluster *v1beta1.Cluster) error {
 	if pullPolicy == "" {
 		pullPolicy = corev1.PullIfNotPresent
 	}
-	set, err := k8s.NewBackendStatefulSet(cluster, image, pullPolicy, 5679)
+	var probePort int32
+	if cluster.Spec.Proxy != nil {
+		probePort = 5679
+	} else {
+		probePort = 5678
+	}
+	set, err := k8s.NewBackendStatefulSet(cluster, image, pullPolicy, probePort)
 	if err != nil {
 		return err
 	}
