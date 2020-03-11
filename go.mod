@@ -1,5 +1,7 @@
 module github.com/atomix/kubernetes-controller
 
+go 1.13
+
 require (
 	github.com/atomix/api v0.0.0-20200202100958-13b24edbe32d
 	github.com/evanphx/json-patch v4.0.0+incompatible // indirect
@@ -29,7 +31,6 @@ require (
 	go.uber.org/zap v1.9.1 // indirect
 	golang.org/x/net v0.0.0-20190311183353-d8887717615a
 	golang.org/x/time v0.0.0-20181108054448-85acf8d2951c // indirect
-	google.golang.org/appengine v1.4.0 // indirect
 	google.golang.org/genproto v0.0.0-20190530194941-fb225487d101 // indirect
 	google.golang.org/grpc v1.21.0
 	gopkg.in/inf.v0 v0.9.1 // indirect
