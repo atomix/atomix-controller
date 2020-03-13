@@ -16,7 +16,6 @@ package main
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"os"
 	"runtime"
@@ -40,7 +39,10 @@ func printVersion() {
 }
 
 func main() {
-	flag.Parse()
+	var namespace string
+	if len(os.Args) > 1 {
+		namespace = os.Args[1]
+	}
 
 	// The logger instantiated here can be changed to any logger
 	// implementing the logr.Logger interface. This logger will
@@ -71,7 +73,7 @@ func main() {
 	}()
 
 	// Create a new Cmd to provide shared dependencies and start components
-	mgr, err := manager.New(cfg, manager.Options{})
+	mgr, err := manager.New(cfg, manager.Options{Namespace: namespace})
 	if err != nil {
 		log.Error(err, "")
 		os.Exit(1)
