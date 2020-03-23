@@ -398,6 +398,63 @@ func NewBackendStatefulSet(cluster *v1beta1.Cluster, image string, pullPolicy co
 		volumes = append(volumes, newDataVolume())
 	}
 
+	apiContainerPort := corev1.ContainerPort{
+		Name:          "api",
+		ContainerPort: 5678,
+	}
+	protocolContainerPort := corev1.ContainerPort{
+		Name:          "protocol",
+		ContainerPort: 5679,
+	}
+	livenessProbe := &corev1.Probe{
+		Handler: corev1.Handler{
+			TCPSocket: &corev1.TCPSocketAction{
+				Port: intstr.IntOrString{Type: intstr.Int, IntVal: probePort},
+			},
+		},
+		InitialDelaySeconds: 60,
+		TimeoutSeconds:      10,
+	}
+	var readinessProb *corev1.Probe
+
+	switch image {
+	case "redis:latest":
+		readinessProb = &corev1.Probe{
+			Handler: corev1.Handler{
+				Exec: &corev1.ExecAction{
+					Command: []string{"redis-cli"},
+				},
+			},
+			InitialDelaySeconds: 5,
+			TimeoutSeconds:      10,
+			FailureThreshold:    12,
+		}
+	default:
+		readinessProb = &corev1.Probe{
+			Handler: corev1.Handler{
+				Exec: &corev1.ExecAction{
+					Command: []string{"stat", "/tmp/atomix-ready"},
+				},
+			},
+			InitialDelaySeconds: 5,
+			TimeoutSeconds:      10,
+			FailureThreshold:    12,
+		}
+
+	}
+
+	containerBuilder := NewContainer()
+	container := containerBuilder.SetImage(image).
+		SetName("atomix").
+		SetPullPolicy(pullPolicy).
+		SetArgs(cluster.Spec.Proxy.Args...).
+		SetEnv(cluster.Spec.Proxy.Env).
+		SetPorts([]corev1.ContainerPort{apiContainerPort, protocolContainerPort}).
+		SetReadinessProbe(readinessProb).
+		SetLivenessProbe(livenessProbe).
+		SetVolumeMounts([]corev1.VolumeMount{newDataVolumeMount(), newConfigVolumeMount()}).
+		Build()
+
 	return &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      GetClusterStatefulSetName(cluster),
@@ -422,10 +479,7 @@ func NewBackendStatefulSet(cluster *v1beta1.Cluster, image string, pullPolicy co
 				Spec: corev1.PodSpec{
 					Affinity: affinity,
 					Containers: []corev1.Container{
-						newContainer(image, pullPolicy, cluster.Spec.Backend.Env, cluster.Spec.Backend.Resources, []corev1.VolumeMount{
-							newDataVolumeMount(),
-							newConfigVolumeMount(),
-						}, probePort),
+						newContainer(container),
 					},
 					Volumes: volumes,
 				},

@@ -17,6 +17,8 @@ package cluster
 import (
 	"context"
 	"fmt"
+	"strconv"
+
 	"github.com/atomix/kubernetes-controller/pkg/apis/cloud/v1beta1"
 	"github.com/atomix/kubernetes-controller/pkg/controller/v1beta1/util/k8s"
 	appsv1 "k8s.io/api/apps/v1"
@@ -35,7 +37,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 	"sigs.k8s.io/controller-runtime/pkg/source"
-	"strconv"
 )
 
 var log = logf.Log.WithName("controller_cluster")
@@ -391,15 +392,11 @@ func (r *Reconciler) addBackendStatefulSet(cluster *v1beta1.Cluster) error {
 	log.Info("Creating backend replicas", "Name", cluster.Name, "Namespace", cluster.Namespace)
 	image := cluster.Spec.Backend.Image
 	pullPolicy := cluster.Spec.Backend.ImagePullPolicy
+	probePort := cluster.Spec.Backend.ProbePort
 	if pullPolicy == "" {
 		pullPolicy = corev1.PullIfNotPresent
 	}
-	var probePort int32
-	if cluster.Spec.Proxy != nil {
-		probePort = 5679
-	} else {
-		probePort = 5678
-	}
+
 	set, err := k8s.NewBackendStatefulSet(cluster, image, pullPolicy, probePort)
 	if err != nil {
 		return err

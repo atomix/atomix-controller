@@ -32,6 +32,9 @@ type Proxy struct {
 
 	// Protocol is the proxy protocol configuration
 	Protocol *Protocol `json:"protocol,omitempty"`
+
+	// Args proxy container args
+	Args []string `json:"args,omitempty"`
 }
 
 // ProxyStatus is the cluster proxy status

@@ -16,6 +16,9 @@ package k8s
 
 import (
 	"fmt"
+
+	"k8s.io/apimachinery/pkg/util/intstr"
+
 	"github.com/atomix/kubernetes-controller/pkg/apis/cloud/v1beta1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -101,6 +104,46 @@ func NewProxyService(cluster *v1beta1.Cluster) *corev1.Service {
 // NewProxyDeployment returns a new Deployment for a partition proxy
 func NewProxyDeployment(image string, pullPolicy corev1.PullPolicy, cluster *v1beta1.Cluster) (*appsv1.Deployment, error) {
 	var one int32 = 1
+	containerBuilder := NewContainer()
+	apiContainerPort := corev1.ContainerPort{
+		Name:          "api",
+		ContainerPort: 5678,
+	}
+	protocolContainerPort := corev1.ContainerPort{
+		Name:          "protocol",
+		ContainerPort: 5679,
+	}
+	livenessProbe := &corev1.Probe{
+		Handler: corev1.Handler{
+			TCPSocket: &corev1.TCPSocketAction{
+				Port: intstr.IntOrString{Type: intstr.Int, IntVal: 5678},
+			},
+		},
+		InitialDelaySeconds: 60,
+		TimeoutSeconds:      10,
+	}
+
+	readinessProb := &corev1.Probe{
+		Handler: corev1.Handler{
+			Exec: &corev1.ExecAction{
+				Command: []string{"stat", "/tmp/atomix-ready"},
+			},
+		},
+		InitialDelaySeconds: 5,
+		TimeoutSeconds:      10,
+		FailureThreshold:    12,
+	}
+	container := containerBuilder.SetImage(image).
+		SetName("atomix").
+		SetPullPolicy(pullPolicy).
+		SetArgs(cluster.Spec.Proxy.Args...).
+		SetEnv(cluster.Spec.Proxy.Env).
+		SetPorts([]corev1.ContainerPort{apiContainerPort, protocolContainerPort}).
+		SetReadinessProbe(readinessProb).
+		SetLivenessProbe(livenessProbe).
+		SetVolumeMounts([]corev1.VolumeMount{newConfigVolumeMount()}).
+		Build()
+
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      GetProxyDeploymentName(cluster),
@@ -118,7 +161,7 @@ func NewProxyDeployment(image string, pullPolicy corev1.PullPolicy, cluster *v1b
 				},
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
-						newContainer(image, pullPolicy, cluster.Spec.Proxy.Env, cluster.Spec.Proxy.Resources, []corev1.VolumeMount{newConfigVolumeMount()}, 5678),
+						newContainer(container),
 					},
 					Volumes: []corev1.Volume{
 						newConfigVolume(GetProxyConfigMapName(cluster)),

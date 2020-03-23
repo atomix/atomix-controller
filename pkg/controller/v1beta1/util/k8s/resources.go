@@ -16,10 +16,10 @@ package k8s
 
 import (
 	"fmt"
+	"os"
+
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/intstr"
-	"os"
 )
 
 const (
@@ -135,8 +135,8 @@ func newAffinity(group string, partition int32) *corev1.Affinity {
 }
 
 // newContainer returns a container for a node
-func newContainer(image string, pullPolicy corev1.PullPolicy, env []corev1.EnvVar, resources corev1.ResourceRequirements, volumeMounts []corev1.VolumeMount, probePort int32) corev1.Container {
-	env = append(env, corev1.EnvVar{
+func newContainer(container Container) corev1.Container {
+	container.env = append(container.env, corev1.EnvVar{
 		Name: "NODE_ID",
 		ValueFrom: &corev1.EnvVarSource{
 			FieldRef: &corev1.ObjectFieldSelector{
@@ -144,48 +144,17 @@ func newContainer(image string, pullPolicy corev1.PullPolicy, env []corev1.EnvVa
 			},
 		},
 	})
-	args := []string{
-		"$(NODE_ID)",
-		fmt.Sprintf("%s/%s", configPath, clusterConfigFile),
-		fmt.Sprintf("%s/%s", configPath, protocolConfigFile),
-	}
 	return corev1.Container{
-		Name:            "atomix",
-		Image:           image,
-		ImagePullPolicy: pullPolicy,
-		Env:             env,
-		Resources:       resources,
-		Ports: []corev1.ContainerPort{
-			{
-				Name:          "api",
-				ContainerPort: 5678,
-			},
-			{
-				Name:          "protocol",
-				ContainerPort: 5679,
-			},
-		},
-		Args: args,
-		ReadinessProbe: &corev1.Probe{
-			Handler: corev1.Handler{
-				Exec: &corev1.ExecAction{
-					Command: []string{"stat", "/tmp/atomix-ready"},
-				},
-			},
-			InitialDelaySeconds: 5,
-			TimeoutSeconds:      10,
-			FailureThreshold:    12,
-		},
-		LivenessProbe: &corev1.Probe{
-			Handler: corev1.Handler{
-				TCPSocket: &corev1.TCPSocketAction{
-					Port: intstr.IntOrString{Type: intstr.Int, IntVal: probePort},
-				},
-			},
-			InitialDelaySeconds: 60,
-			TimeoutSeconds:      10,
-		},
-		VolumeMounts: volumeMounts,
+		Name:            container.Name(),
+		Image:           container.Image(),
+		ImagePullPolicy: container.PullPolicy(),
+		Env:             container.Env(),
+		Resources:       container.Resources(),
+		Ports:           container.Ports(),
+		Args:            container.Args(),
+		ReadinessProbe:  container.ReadinessProbe(),
+		LivenessProbe:   container.LivenessProbe(),
+		VolumeMounts:    container.VolumeMounts(),
 	}
 }
 
