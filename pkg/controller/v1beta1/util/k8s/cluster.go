@@ -369,7 +369,7 @@ func NewClusterHeadlessService(cluster *v1beta1.Cluster) *corev1.Service {
 }
 
 // NewBackendStatefulSet returns a new StatefulSet for a cluster group
-func NewBackendStatefulSet(cluster *v1beta1.Cluster, image string, pullPolicy corev1.PullPolicy, probePort int32) (*appsv1.StatefulSet, error) {
+func NewBackendStatefulSet(cluster *v1beta1.Cluster) (*appsv1.StatefulSet, error) {
 	var affinity *corev1.Affinity
 
 	database, err := GetDatabaseFromClusterAnnotations(cluster)
@@ -398,6 +398,24 @@ func NewBackendStatefulSet(cluster *v1beta1.Cluster, image string, pullPolicy co
 		volumes = append(volumes, newDataVolume())
 	}
 
+	image := cluster.Spec.Backend.Image
+	pullPolicy := cluster.Spec.Backend.ImagePullPolicy
+	livenessProbe := cluster.Spec.Backend.LivenessProbe
+	readinessProbe := cluster.Spec.Backend.ReadinessProbe
+
+	if livenessProbe == nil {
+		livenessProbe = getDefaultLivenessProbe(cluster)
+
+	}
+
+	if readinessProbe == nil {
+		readinessProbe = getDefaultReadinessProbe()
+	}
+
+	if pullPolicy == "" {
+		pullPolicy = corev1.PullIfNotPresent
+	}
+
 	apiContainerPort := corev1.ContainerPort{
 		Name:          "api",
 		ContainerPort: 5678,
@@ -405,42 +423,6 @@ func NewBackendStatefulSet(cluster *v1beta1.Cluster, image string, pullPolicy co
 	protocolContainerPort := corev1.ContainerPort{
 		Name:          "protocol",
 		ContainerPort: 5679,
-	}
-	livenessProbe := &corev1.Probe{
-		Handler: corev1.Handler{
-			TCPSocket: &corev1.TCPSocketAction{
-				Port: intstr.IntOrString{Type: intstr.Int, IntVal: probePort},
-			},
-		},
-		InitialDelaySeconds: 60,
-		TimeoutSeconds:      10,
-	}
-	var readinessProb *corev1.Probe
-
-	switch image {
-	case "redis:latest":
-		readinessProb = &corev1.Probe{
-			Handler: corev1.Handler{
-				Exec: &corev1.ExecAction{
-					Command: []string{"redis-cli"},
-				},
-			},
-			InitialDelaySeconds: 5,
-			TimeoutSeconds:      10,
-			FailureThreshold:    12,
-		}
-	default:
-		readinessProb = &corev1.Probe{
-			Handler: corev1.Handler{
-				Exec: &corev1.ExecAction{
-					Command: []string{"stat", "/tmp/atomix-ready"},
-				},
-			},
-			InitialDelaySeconds: 5,
-			TimeoutSeconds:      10,
-			FailureThreshold:    12,
-		}
-
 	}
 
 	containerBuilder := NewContainer()
@@ -450,7 +432,7 @@ func NewBackendStatefulSet(cluster *v1beta1.Cluster, image string, pullPolicy co
 		SetArgs(cluster.Spec.Proxy.Args...).
 		SetEnv(cluster.Spec.Proxy.Env).
 		SetPorts([]corev1.ContainerPort{apiContainerPort, protocolContainerPort}).
-		SetReadinessProbe(readinessProb).
+		SetReadinessProbe(readinessProbe).
 		SetLivenessProbe(livenessProbe).
 		SetVolumeMounts([]corev1.VolumeMount{newDataVolumeMount(), newConfigVolumeMount()}).
 		Build()

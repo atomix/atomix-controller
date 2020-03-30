@@ -266,12 +266,7 @@ func (r *Reconciler) addProxyConfigMap(cluster *v1beta1.Cluster) error {
 
 func (r *Reconciler) addProxyDeployment(cluster *v1beta1.Cluster) error {
 	log.Info("Creating proxy Deployment", "Name", cluster.Name, "Namespace", cluster.Namespace)
-	image := cluster.Spec.Proxy.Image
-	pullPolicy := cluster.Spec.Proxy.ImagePullPolicy
-	if pullPolicy == "" {
-		pullPolicy = corev1.PullIfNotPresent
-	}
-	dep, err := k8s.NewProxyDeployment(image, pullPolicy, cluster)
+	dep, err := k8s.NewProxyDeployment(cluster)
 	if err != nil {
 		return err
 	}
@@ -390,14 +385,7 @@ func (r *Reconciler) addBackendConfigMap(cluster *v1beta1.Cluster) error {
 
 func (r *Reconciler) addBackendStatefulSet(cluster *v1beta1.Cluster) error {
 	log.Info("Creating backend replicas", "Name", cluster.Name, "Namespace", cluster.Namespace)
-	image := cluster.Spec.Backend.Image
-	pullPolicy := cluster.Spec.Backend.ImagePullPolicy
-	probePort := cluster.Spec.Backend.ProbePort
-	if pullPolicy == "" {
-		pullPolicy = corev1.PullIfNotPresent
-	}
-
-	set, err := k8s.NewBackendStatefulSet(cluster, image, pullPolicy, probePort)
+	set, err := k8s.NewBackendStatefulSet(cluster)
 	if err != nil {
 		return err
 	}

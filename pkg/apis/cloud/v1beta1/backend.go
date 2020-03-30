@@ -39,8 +39,11 @@ type Backend struct {
 	// VolumeClaim is an optional persistent volume claim to use for persistence
 	VolumeClaim *corev1.PersistentVolumeClaim `json:"volumeClaim,omitempty"`
 
-	// ProbePort probe port
-	ProbePort int32 `json:"probeport,omitempty"`
+	// LivenessProbe backend livenessProbe configuration
+	LivenessProbe *corev1.Probe `json:"livenessProbe,omitempty"`
+
+	// ReadinessProbe backend readinessProbe configuration
+	ReadinessProbe *corev1.Probe `json:"readinessProbe,omitempty"`
 
 	// Args backend container args
 	Args []string `json:"args,omitempty"`

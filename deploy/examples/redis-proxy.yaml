@@ -1,0 +1,28 @@
+apiVersion: cloud.atomix.io/v1beta1
+kind: Database
+metadata:
+  name: redis-proxy
+spec:
+  clusters: 1
+  template:
+    spec:
+      partitions: 1
+      proxy:
+        image: atomix/redis-proxy:latest       
+      backend:
+        image: redis:latest
+        replicas: 1
+        livenessProbe:
+          tcpSocket:
+            port: 6379
+            initialDelaySeconds: 15
+            periodSeconds: 20
+        readinessProbe:
+          exec:
+            command:
+              - redis-cli
+            initialDelaySeconds: 5
+            periodSeconds: 5
+
+
+
