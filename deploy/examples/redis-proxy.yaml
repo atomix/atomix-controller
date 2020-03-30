@@ -8,7 +8,12 @@ spec:
     spec:
       partitions: 1
       proxy:
-        image: atomix/redis-proxy:latest       
+        image: atomix/redis-proxy:latest
+        livenessProbe:
+          tcpSocket:
+            port: 5678
+            initialDelaySeconds: 15
+            periodSeconds: 20
       backend:
         image: redis:latest
         replicas: 1
