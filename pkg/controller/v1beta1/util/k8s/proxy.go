@@ -129,26 +129,6 @@ func NewProxyDeployment(cluster *v1beta1.Cluster) (*appsv1.Deployment, error) {
 		ContainerPort: 5679,
 	}
 
-	/*livenessProbe := &corev1.Probe{
-		Handler: corev1.Handler{
-			TCPSocket: &corev1.TCPSocketAction{
-				Port: intstr.IntOrString{Type: intstr.Int, IntVal: 5678},
-			},
-		},
-		InitialDelaySeconds: 60,
-		TimeoutSeconds:      10,
-	}
-
-	readinessProb := &corev1.Probe{
-		Handler: corev1.Handler{
-			Exec: &corev1.ExecAction{
-				Command: []string{"stat", "/tmp/atomix-ready"},
-			},
-		},
-		InitialDelaySeconds: 5,
-		TimeoutSeconds:      10,
-		FailureThreshold:    12,
-	}*/
 	container := containerBuilder.SetImage(image).
 		SetName("atomix").
 		SetPullPolicy(pullPolicy).
