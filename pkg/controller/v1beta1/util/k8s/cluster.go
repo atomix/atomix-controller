@@ -429,8 +429,8 @@ func NewBackendStatefulSet(cluster *v1beta1.Cluster) (*appsv1.StatefulSet, error
 	container := containerBuilder.SetImage(image).
 		SetName("atomix").
 		SetPullPolicy(pullPolicy).
-		SetArgs(cluster.Spec.Proxy.Args...).
-		SetEnv(cluster.Spec.Proxy.Env).
+		SetArgs(cluster.Spec.Backend.Args...).
+		SetEnv(cluster.Spec.Backend.Env).
 		SetPorts([]corev1.ContainerPort{apiContainerPort, protocolContainerPort}).
 		SetReadinessProbe(readinessProbe).
 		SetLivenessProbe(livenessProbe).
