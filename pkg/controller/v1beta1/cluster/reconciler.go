@@ -155,6 +155,9 @@ func (r *Reconciler) reconcilePartition(cluster *v1beta1.Cluster, partitionID in
 
 		log.Info("Creating Partition", "Name", cluster.Name, "Namespace", cluster.Namespace)
 		partition = k8s.NewPartition(cluster, partitionID)
+		if err := controllerutil.SetControllerReference(cluster, partition, r.scheme); err != nil {
+			return err
+		}
 		return r.client.Create(context.TODO(), partition)
 	}
 	return nil
