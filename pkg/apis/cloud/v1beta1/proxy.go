@@ -14,7 +14,10 @@
 
 package v1beta1
 
-import corev1 "k8s.io/api/core/v1"
+import (
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+)
 
 // Proxy is a proxy configuration
 type Proxy struct {
@@ -41,6 +44,9 @@ type Proxy struct {
 
 	// Args proxy container args
 	Args []string `json:"args,omitempty"`
+
+	// Metadata backend metadata
+	Metadata metav1.ObjectMeta `json:"metadata,omitempty"`
 }
 
 // ProxyStatus is the cluster proxy status

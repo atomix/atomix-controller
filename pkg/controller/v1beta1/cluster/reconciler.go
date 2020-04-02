@@ -17,6 +17,8 @@ package cluster
 import (
 	"context"
 	"fmt"
+	"strconv"
+
 	"github.com/atomix/kubernetes-controller/pkg/apis/cloud/v1beta1"
 	"github.com/atomix/kubernetes-controller/pkg/controller/v1beta1/util/k8s"
 	appsv1 "k8s.io/api/apps/v1"
@@ -35,7 +37,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 	"sigs.k8s.io/controller-runtime/pkg/source"
-	"strconv"
 )
 
 var log = logf.Log.WithName("controller_cluster")
@@ -111,23 +112,25 @@ func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, err
 		return reconcile.Result{}, err
 	}
 
-	// Reconcile the backend
-	err = r.reconcileBackend(cluster)
-	if err != nil {
-		return reconcile.Result{}, err
-	}
-
-	// Reconcile the proxy if configured
-	if cluster.Spec.Proxy != nil {
-		err = r.reconcileProxy(cluster)
+	if cluster.Spec.Backend.Metadata.Name == "" {
+		// Reconcile the backend
+		err = r.reconcileBackend(cluster)
 		if err != nil {
 			return reconcile.Result{}, err
 		}
-	}
 
-	// Reconcile the cluster status
-	if err := r.reconcileStatus(cluster); err != nil {
-		return reconcile.Result{}, err
+		// Reconcile the proxy if configured
+		if cluster.Spec.Proxy != nil {
+			err = r.reconcileProxy(cluster)
+			if err != nil {
+				return reconcile.Result{}, err
+			}
+		}
+
+		// Reconcile the cluster status
+		if err := r.reconcileStatus(cluster); err != nil {
+			return reconcile.Result{}, err
+		}
 	}
 	return reconcile.Result{}, nil
 }
