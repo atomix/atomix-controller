@@ -32,6 +32,15 @@ type Proxy struct {
 
 	// Protocol is the proxy protocol configuration
 	Protocol *Protocol `json:"protocol,omitempty"`
+
+	// LivenessProbe backend livenessProbe configuration
+	LivenessProbe *corev1.Probe `json:"livenessProbe,omitempty"`
+
+	// ReadinessProbe backend readinessProbe configuration
+	ReadinessProbe *corev1.Probe `json:"readinessProbe,omitempty"`
+
+	// Args proxy container args
+	Args []string `json:"args,omitempty"`
 }
 
 // ProxyStatus is the cluster proxy status
