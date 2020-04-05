@@ -20,6 +20,7 @@ import (
 	"github.com/atomix/kubernetes-controller/pkg/apis/cloud/v1beta1"
 	"github.com/atomix/kubernetes-controller/pkg/controller/v1beta1/cluster"
 	"github.com/atomix/kubernetes-controller/pkg/controller/v1beta1/database"
+	"github.com/atomix/kubernetes-controller/pkg/controller/v1beta1/protocol"
 	v1beta1util "github.com/atomix/kubernetes-controller/pkg/controller/v1beta1/util/k8s"
 	"google.golang.org/grpc"
 	"k8s.io/apimachinery/pkg/labels"
@@ -41,6 +42,9 @@ func AddController(mgr manager.Manager) error {
 		return err
 	}
 
+	if err = protocol.Add(mgr); err != nil {
+		return err
+	}
 	if err = database.Add(mgr); err != nil {
 		return err
 	}

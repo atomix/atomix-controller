@@ -17,6 +17,7 @@ package database
 import (
 	"context"
 	"github.com/atomix/kubernetes-controller/pkg/apis/cloud/v1beta1"
+	"github.com/atomix/kubernetes-controller/pkg/controller/v1beta1/protocol"
 	k8sutil "github.com/atomix/kubernetes-controller/pkg/controller/v1beta1/util/k8s"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -99,6 +100,10 @@ func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, err
 
 	v1beta1.SetDatabaseDefaults(database)
 
+	if err := r.reconcileProtocol(database); err != nil {
+		return reconcile.Result{}, err
+	}
+
 	for i := 1; i <= int(database.Spec.Clusters); i++ {
 		if err = r.reconcileCluster(database, i); err != nil {
 			return reconcile.Result{}, err
@@ -113,6 +118,11 @@ func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, err
 	}
 
 	return reconcile.Result{}, nil
+}
+
+func (r *Reconciler) reconcileProtocol(database *v1beta1.Database) error {
+	_, err := protocol.GetProtocol(r.client, database.Spec.Template.Spec.Protocol.GroupVersionKind())
+	return err
 }
 
 func (r *Reconciler) reconcileStatus(database *v1beta1.Database) error {
