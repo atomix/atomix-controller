@@ -49,7 +49,7 @@ func Add(mgr manager.Manager) error {
 	}
 
 	// Watch for changes to resource ExampleProtocol and enqueue Clusters that reference it
-	err = c.Watch(&source.Kind{Type: &cloudv1beta1.Cluster{}}, &handler.EnqueueRequestsFromMapFunc{
+	err = c.Watch(&source.Kind{Type: &protocolv1beta1.ExampleProtocol{}}, &handler.EnqueueRequestsFromMapFunc{
 		ToRequests: &clusterMapper{
 			client: r.client,
 		},
