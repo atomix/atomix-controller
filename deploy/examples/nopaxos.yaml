@@ -1,11 +1,11 @@
-apiVersion: protocol.cloud.atomix.io/v1beta1
-kind: NOPaxosProtocol
+apiVersion: storage.cloud.atomix.io/v1beta2
+kind: NOPaxosStorage
 metadata:
   name: nopaxos
 spec:
   replicas: 3
 ---
-apiVersion: cloud.atomix.io/v1beta1
+apiVersion: cloud.atomix.io/v1beta2
 kind: Database
 metadata:
   name: nopaxos
@@ -14,8 +14,8 @@ spec:
   template:
     spec:
       partitions: 10
-      protocol:
-        group: protocol.cloud.atomix.io
-        version: v1beta1
-        kind: RaftProtocol
-        name: raft
+      storage:
+        group: storage.cloud.atomix.io
+        version: v1beta2
+        kind: RaftStorage
+        name: nopaxos

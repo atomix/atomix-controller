@@ -1,11 +1,11 @@
-apiVersion: protocol.cloud.atomix.io/v1beta1
-kind: RaftProtocol
+apiVersion: storage.cloud.atomix.io/v1beta2
+kind: RaftStorage
 metadata:
   name: raft
 spec:
   replicas: 3
 ---
-apiVersion: cloud.atomix.io/v1beta1
+apiVersion: cloud.atomix.io/v1beta2
 kind: Database
 metadata:
   name: raft
@@ -14,8 +14,8 @@ spec:
   template:
     spec:
       partitions: 10
-      protocol:
+      storage:
         group: protocol.cloud.atomix.io
-        version: v1beta1
-        kind: RaftProtocol
+        version: v1beta2
+        kind: RaftController
         name: raft

@@ -17,10 +17,10 @@ package controller
 import (
 	"context"
 	api "github.com/atomix/api/proto/atomix/controller"
-	"github.com/atomix/kubernetes-controller/pkg/apis/cloud/v1beta1"
-	"github.com/atomix/kubernetes-controller/pkg/controller/v1beta1/cluster"
-	"github.com/atomix/kubernetes-controller/pkg/controller/v1beta1/database"
-	v1beta1util "github.com/atomix/kubernetes-controller/pkg/controller/v1beta1/util/k8s"
+	"github.com/atomix/kubernetes-controller/pkg/apis/cloud/v1beta2"
+	"github.com/atomix/kubernetes-controller/pkg/controller/v1beta2/cluster"
+	"github.com/atomix/kubernetes-controller/pkg/controller/v1beta2/database"
+	v1beta1util "github.com/atomix/kubernetes-controller/pkg/controller/v1beta2/util/k8s"
 	"google.golang.org/grpc"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -71,13 +71,13 @@ type Controller struct {
 
 // GetDatabases get a list of databases managed by the controller
 func (c *Controller) GetDatabases(ctx context.Context, request *api.GetDatabasesRequest) (*api.GetDatabasesResponse, error) {
-	databases := &v1beta1.DatabaseList{}
+	databases := &v1beta2.DatabaseList{}
 
 	opts := &client.ListOptions{
 		Namespace: v1beta1util.GetDatabaseNamespace(request.ID),
 	}
 
-	if err := c.client.List(ctx, opts, databases); err != nil {
+	if err := c.client.List(ctx, databases, opts); err != nil {
 		return nil, err
 	}
 
@@ -89,8 +89,8 @@ func (c *Controller) GetDatabases(ctx context.Context, request *api.GetDatabases
 					Namespace:     v1beta1util.GetDatabaseNamespace(request.ID),
 					LabelSelector: labels.SelectorFromSet(v1beta1util.GetPartitionLabelsForDatabase(&database)),
 				}
-				partitions := &v1beta1.PartitionList{}
-				err := c.client.List(context.TODO(), options, partitions)
+				partitions := &v1beta2.PartitionList{}
+				err := c.client.List(context.TODO(), partitions, options)
 				if err != nil {
 					return nil, err
 				}
@@ -120,8 +120,8 @@ func (c *Controller) GetDatabases(ctx context.Context, request *api.GetDatabases
 			Namespace:     v1beta1util.GetDatabaseNamespace(request.ID),
 			LabelSelector: labels.SelectorFromSet(v1beta1util.GetPartitionLabelsForDatabase(&database)),
 		}
-		partitions := &v1beta1.PartitionList{}
-		err := c.client.List(context.TODO(), options, partitions)
+		partitions := &v1beta2.PartitionList{}
+		err := c.client.List(context.TODO(), partitions, options)
 		if err != nil {
 			return nil, err
 		}
