@@ -15,7 +15,7 @@ spec:
     spec:
       partitions: 10
       storage:
-        group: protocol.cloud.atomix.io
+        group: storage.cloud.atomix.io
         version: v1beta2
-        kind: RaftController
+        kind: RaftStorage
         name: raft
