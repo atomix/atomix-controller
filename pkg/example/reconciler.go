@@ -48,15 +48,16 @@ func Add(mgr manager.Manager) error {
 		return err
 	}
 
-	// Watch for changes to primary resource ExampleProtocol
-	err = c.Watch(&source.Kind{Type: &protocolv1beta1.ExampleProtocol{}}, &handler.EnqueueRequestForObject{})
-	if err != nil {
-		return err
-	}
+	// Watch for changes to resource ExampleProtocol and enqueue Clusters that reference it
+	err = c.Watch(&source.Kind{Type: &cloudv1beta1.Cluster{}}, &handler.EnqueueRequestsFromMapFunc{
+		ToRequests: &clusterMapper{
+			client: r.client,
+		},
+	})
 
 	// Watch for changes to referencing resource Clusters
 	err = c.Watch(&source.Kind{Type: &cloudv1beta1.Cluster{}}, &handler.EnqueueRequestsFromMapFunc{
-		ToRequests: &protocolMapper{
+		ToRequests: &protocolFilter{
 			client: r.client,
 		},
 	})
@@ -81,55 +82,89 @@ type Reconciler struct {
 // and what is in the Cluster.Spec
 func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, error) {
 	logger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
-	logger.Info("Reconciling ExampleProtocol")
+	logger.Info("Reconciling Cluster")
 
-	// Fetch the ExampleProtocol instance
-	protocol := &protocolv1beta1.ExampleProtocol{}
-	err := r.client.Get(context.TODO(), request.NamespacedName, protocol)
+	// Fetch the Cluster instance
+	cluster := &cloudv1beta1.Cluster{}
+	err := r.client.Get(context.TODO(), request.NamespacedName, cluster)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			// Request object not found, could have been deleted after reconcile request.
-			// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
-			// Return and don't requeue
 			return reconcile.Result{}, nil
 		}
-		// Error reading the object - requeue the request.
 		return reconcile.Result{Requeue: true}, err
 	}
 
-	// Do some stuff
+	// Fetch the ExampleProtocol instance referenced by the Cluster
+	protocol := &protocolv1beta1.ExampleProtocol{}
+	err = r.client.Get(context.TODO(), request.NamespacedName, cluster)
+	if err != nil {
+		// If the ExampleProtocol instance is not found we cannot reconcile the Cluster.
+		// Wait for something else to happen.
+		if errors.IsNotFound(err) {
+			return reconcile.Result{}, nil
+		}
+		return reconcile.Result{Requeue: true}, err
+	}
+
+	// The Cluster and ExampleProtocol are both available. Deploy the hell out of it!
+	// ......
 	return reconcile.Result{}, nil
 }
 
-// protocolMapper is a request mapper that triggers the reconciler for the protocol when
-// referenced by a watched Cluster
-type protocolMapper struct {
+// clusterMapper is a request mapper that triggers the reconciler for referencing Clusters
+// when an ExampleProtocol is changed
+type clusterMapper struct {
 	client client.Client
 }
 
-func (m *protocolMapper) Map(object handler.MapObject) []reconcile.Request {
+func (m *clusterMapper) Map(object handler.MapObject) []reconcile.Request {
+	protocol := object.Object.(*protocolv1beta1.ExampleProtocol)
+
+	// Find all clusters that reference the changed protocol
+	clusters := &cloudv1beta1.ClusterList{}
+	err := m.client.List(context.TODO(), &client.ListOptions{}, clusters)
+	if err != nil {
+		return []reconcile.Request{}
+	}
+
+	// Iterate through clusters and requeue any that reference the protocol
+	requests := []reconcile.Request{}
+	for _, cluster := range clusters.Items {
+		if cluster.Spec.Protocol.GroupVersionKind().Group == protocolv1beta1.SchemeGroupVersion.Group &&
+			cluster.Spec.Protocol.GroupVersionKind().Version == protocolv1beta1.SchemeGroupVersion.Version &&
+			cluster.Spec.Protocol.GroupVersionKind().Kind == protocolv1beta1.ExampleProtocolName &&
+			cluster.Spec.Protocol.Name == protocol.Name {
+			requests = append(requests, reconcile.Request{
+				NamespacedName: types.NamespacedName{
+					Namespace: cluster.GetNamespace(),
+					Name:      cluster.GetName(),
+				},
+			})
+		}
+	}
+	return requests
+}
+
+// protocolFilter is a request mapper that triggers the reconciler for the protocol when
+// referenced by a watched Cluster
+type protocolFilter struct {
+	client client.Client
+}
+
+func (m *protocolFilter) Map(object handler.MapObject) []reconcile.Request {
 	cluster := object.Object.(*cloudv1beta1.Cluster)
 
-	// If the Cluster uses this controller's protocol, ensure this controller is set as an owner of the Cluster.
+	// If the Cluster uses this controller's protocol, enqueue the request
 	if cluster.Spec.Protocol.GroupVersionKind().Group == protocolv1beta1.SchemeGroupVersion.Group &&
 		cluster.Spec.Protocol.GroupVersionKind().Version == protocolv1beta1.SchemeGroupVersion.Version &&
 		cluster.Spec.Protocol.GroupVersionKind().Kind == protocolv1beta1.ExampleProtocolName {
-		protocol := &protocolv1beta1.ExampleProtocol{}
-		namespace := cluster.Spec.Protocol.Namespace
-		if namespace == "" {
-			namespace = cluster.Namespace
-		}
-		name := types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Spec.Protocol.Name}
-		err := m.client.Get(context.TODO(), name, protocol)
-		if err == nil {
-			return []reconcile.Request{
-				{
-					NamespacedName: types.NamespacedName{
-						Namespace: protocol.Namespace,
-						Name:      protocol.Name,
-					},
+		return []reconcile.Request{
+			{
+				NamespacedName: types.NamespacedName{
+					Namespace: cluster.GetNamespace(),
+					Name:      cluster.GetName(),
 				},
-			}
+			},
 		}
 	}
 	return []reconcile.Request{}
