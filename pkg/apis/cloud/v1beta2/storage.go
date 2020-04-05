@@ -52,9 +52,9 @@ type StorageControllerList struct {
 
 // StorageReference is a reference to a storage configuration
 type StorageReference struct {
-	metav1.TypeMeta `json:",inline"`
-	Namespace       string `json:"namespace,omitempty"`
-	Name            string `json:"name,omitempty"`
+	metav1.GroupVersionKind `json:",inline"`
+	Namespace               string `json:"namespace,omitempty"`
+	Name                    string `json:"name,omitempty"`
 }
 
 func init() {
