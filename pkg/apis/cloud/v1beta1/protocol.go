@@ -52,8 +52,9 @@ type ProtocolList struct {
 
 // ProtocolReference is a reference to a protocol configuration
 type ProtocolReference struct {
-	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata,omitempty"`
+	metav1.TypeMeta `json:",inline"`
+	Namespace       string `json:"namespace,omitempty"`
+	Name            string `json:"name,omitempty"`
 }
 
 func init() {
