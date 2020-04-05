@@ -19,8 +19,8 @@ limitations under the License.
 package v1beta1
 
 import (
-	v1beta1 "github.com/atomix/kubernetes-controller/pkg/apis/cloud/v1beta1"
 	"github.com/atomix/kubernetes-controller/pkg/client/v1beta1/clientset/versioned/scheme"
+	v1beta1 "github.com/atomix/kubernetes-controller/pkg/apis/cloud/v1beta1"
 	serializer "k8s.io/apimachinery/pkg/runtime/serializer"
 	rest "k8s.io/client-go/rest"
 )
@@ -30,6 +30,7 @@ type CloudV1beta1Interface interface {
 	ClustersGetter
 	DatabasesGetter
 	PartitionsGetter
+	ProtocolsGetter
 }
 
 // CloudV1beta1Client is used to interact with features provided by the cloud.atomix.io group.
@@ -47,6 +48,10 @@ func (c *CloudV1beta1Client) Databases(namespace string) DatabaseInterface {
 
 func (c *CloudV1beta1Client) Partitions(namespace string) PartitionInterface {
 	return newPartitions(c, namespace)
+}
+
+func (c *CloudV1beta1Client) Protocols(namespace string) ProtocolInterface {
+	return newProtocols(c, namespace)
 }
 
 // NewForConfig creates a new CloudV1beta1Client for the given config.

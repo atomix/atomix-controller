@@ -17,13 +17,7 @@ package k8s
 import (
 	api "github.com/atomix/api/proto/atomix/controller"
 	"github.com/atomix/kubernetes-controller/pkg/apis/cloud/v1beta1"
-	"k8s.io/apimachinery/pkg/types"
 )
-
-// GetDatabaseName returns the Database name for the given database ID
-func GetDatabaseName(id *api.DatabaseId) string {
-	return id.Name
-}
 
 // GetDatabaseNamespace returns the Database namespace for the given database ID
 func GetDatabaseNamespace(id *api.DatabaseId) string {
@@ -31,27 +25,6 @@ func GetDatabaseNamespace(id *api.DatabaseId) string {
 		return id.Namespace
 	}
 	return defaultNamespace
-}
-
-// GetDatabaseNamespacedName returns the NamespacedName for the given database ID
-func GetDatabaseNamespacedName(id *api.DatabaseId) types.NamespacedName {
-	return types.NamespacedName{
-		Name:      GetDatabaseName(id),
-		Namespace: GetDatabaseNamespace(id),
-	}
-}
-
-// GetDatabaseServiceName returns the service name for a database
-func GetDatabaseServiceName(database *v1beta1.Database) string {
-	return database.Name
-}
-
-// GetDatabaseServiceNamespacedName returns the namespaced service name for a database
-func GetDatabaseServiceNamespacedName(database *v1beta1.Database) types.NamespacedName {
-	return types.NamespacedName{
-		Name:      GetDatabaseServiceName(database),
-		Namespace: database.Namespace,
-	}
 }
 
 // NewPartitionProto returns the partition proto message for the given Partition

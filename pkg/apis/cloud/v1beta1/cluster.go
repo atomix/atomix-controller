@@ -20,26 +20,17 @@ import (
 
 // ClusterSpec is the k8s configuration for a single partition
 type ClusterSpec struct {
+	// Protocol is the cluster protocol
+	Protocol ProtocolReference `json:"protocol,omitempty"`
+
 	// Partitions is the number of partitions in the cluster
 	Partitions int32 `json:"partitions,omitempty"`
-
-	// Proxy is an optional proxy configuration
-	Proxy *Proxy `json:"proxy,omitempty"`
-
-	// Backend is the cluster backend
-	Backend Backend `json:"backend,omitempty"`
 }
 
 // ClusterStatus defines the observed state of Cluster
 type ClusterStatus struct {
 	// ReadyPartitions is the number of partitions that are ready in the cluster
 	ReadyPartitions int32 `json:"readyPartitions,omitempty"`
-
-	// Proxy is the proxy status
-	Proxy *ProxyStatus `json:"proxy,omitempty"`
-
-	// Backend is the backend status
-	Backend BackendStatus `json:"backend,omitempty"`
 }
 
 // +genclient

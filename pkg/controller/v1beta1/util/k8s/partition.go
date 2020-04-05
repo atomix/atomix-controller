@@ -70,8 +70,8 @@ func NewPartition(cluster *v1beta1.Cluster, partition int32) *v1beta1.Partition 
 		},
 		Spec: v1beta1.PartitionSpec{
 			PartitionID: partition,
-			Host:        GetClusterServiceName(cluster),
-			Port:        apiPort,
+			Host:        cluster.Name,
+			Port:        5678,
 		},
 	}
 }

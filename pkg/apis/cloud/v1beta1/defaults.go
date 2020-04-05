@@ -26,7 +26,4 @@ func SetClusterDefaults(cluster *Cluster) {
 	if cluster.Spec.Partitions == 0 {
 		cluster.Spec.Partitions = 1
 	}
-	if cluster.Spec.Backend.Replicas == 0 {
-		cluster.Spec.Backend.Replicas = 1
-	}
 }

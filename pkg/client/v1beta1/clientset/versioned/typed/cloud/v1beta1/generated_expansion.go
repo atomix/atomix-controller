@@ -23,3 +23,5 @@ type ClusterExpansion interface{}
 type DatabaseExpansion interface{}
 
 type PartitionExpansion interface{}
+
+type ProtocolExpansion interface{}
