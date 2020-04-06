@@ -31,7 +31,7 @@ const (
 const (
 	controllerAnnotation = "cloud.atomix.io/controller"
 	typeAnnotation       = "cloud.atomix.io/type"
-	databaseAnnotation   = "cloud.atomix.io/group"
+	databaseAnnotation   = "cloud.atomix.io/database"
 	clusterAnnotation    = "cloud.atomix.io/cluster"
 )
 
