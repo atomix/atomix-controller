@@ -30,8 +30,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
-// NewClusterReconciler creates a new cluster reconciler for the given controller manager and reconciler
-func NewClusterReconciler(mgr manager.Manager, reconciler reconcile.Reconciler, kind schema.GroupVersionKind) (reconcile.Reconciler, error) {
+// AddClusterReconciler adds a new cluster reconciler for the given controller manager and reconciler
+func AddClusterReconciler(mgr manager.Manager, reconciler reconcile.Reconciler, kind schema.GroupVersionKind) error {
 	r := &Reconciler{
 		client:     mgr.GetClient(),
 		scheme:     mgr.GetScheme(),
@@ -41,13 +41,13 @@ func NewClusterReconciler(mgr manager.Manager, reconciler reconcile.Reconciler, 
 
 	obj, err := r.scheme.New(kind)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	// Create a new controller
 	c, err := controller.New(mgr.GetScheme().Name(), mgr, controller.Options{Reconciler: r})
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	// Watch for changes to the storage resource and enqueue Clusters that reference it
@@ -66,9 +66,9 @@ func NewClusterReconciler(mgr manager.Manager, reconciler reconcile.Reconciler, 
 		},
 	})
 	if err != nil {
-		return nil, err
+		return err
 	}
-	return r, nil
+	return nil
 }
 
 var _ reconcile.Reconciler = &Reconciler{}
