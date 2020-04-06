@@ -10,9 +10,18 @@ spec:
     plural: raftstorages
     singular: raftstorage
   scope: Namespaced
-  version: v1beta2
-  subresources:
-    status: {}
+  versions:
+    - name: v1beta2
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          required:
+            - spec
+          properties:
+            spec:
+              type: object
 ---
 apiVersion: cloud.atomix.io/v1beta2
 kind: StorageController
