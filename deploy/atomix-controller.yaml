@@ -58,6 +58,8 @@ spec:
                               type: string
                             version:
                               type: string
+                            kind:
+                              type: string
                             namespace:
                               type: string
                             name:
@@ -105,6 +107,8 @@ spec:
                     group:
                       type: string
                     version:
+                      type: string
+                    kind:
                       type: string
                     namespace:
                       type: string
