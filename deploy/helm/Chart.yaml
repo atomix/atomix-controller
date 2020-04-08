@@ -1,0 +1,13 @@
+apiVersion: v2
+name: atomix-controller
+description: Atomix Controller
+kubeVersion: ">=1.17.0"
+type: application
+version: 0.2.0
+appVersion: v0.2.0-beta.1
+keywords:
+  - atomix
+home: https://atomix.io
+maintainers:
+  - name: kuujo
+    email: jordan@opennetworking.org
