@@ -3,7 +3,7 @@ export GO111MODULE=on
 
 .PHONY: build
 
-ATOMIX_K8S_CONTROLLER_VERSION := latest
+VERSION := latest
 
 all: images
 
@@ -13,10 +13,10 @@ build:
 
 images: # @HELP build kubernetes-controller Docker image
 	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o build/controller/_output/bin/kubernetes-controller ./cmd/controller
-	docker build . -f build/controller/Dockerfile -t atomix/kubernetes-controller:${ATOMIX_K8S_CONTROLLER_VERSION}
+	docker build . -f build/controller/Dockerfile -t atomix/kubernetes-controller:${VERSION}
 
 push: # @HELP push kubernetes-controller Docker image
-	docker push atomix/kubernetes-controller:${ATOMIX_K8S_CONTROLLER_VERSION}
+	docker push atomix/kubernetes-controller:${VERSION}
 
 test: # @HELP run the unit tests and source code validation
 test: deps license_check linters
