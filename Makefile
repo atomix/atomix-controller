@@ -3,7 +3,7 @@ export GO111MODULE=on
 
 .PHONY: build
 
-VERSION := latest
+VERSION := ${ATOMIX_CONTROLLER_VERSION}
 
 all: images
 
