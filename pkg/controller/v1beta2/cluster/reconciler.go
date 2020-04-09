@@ -18,7 +18,6 @@ import (
 	"context"
 	"github.com/atomix/kubernetes-controller/pkg/apis/cloud/v1beta2"
 	"github.com/atomix/kubernetes-controller/pkg/controller/v1beta2/util/k8s"
-	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
@@ -55,11 +54,6 @@ func Add(mgr manager.Manager) error {
 		return err
 	}
 
-	// Watch for changes to secondary resource StatefulSets for readiness checks
-	err = c.Watch(&source.Kind{Type: &appsv1.StatefulSet{}}, &handler.EnqueueRequestForOwner{
-		IsController: true,
-		OwnerType:    &v1beta2.Cluster{},
-	})
 	if err != nil {
 		return err
 	}
