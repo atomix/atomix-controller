@@ -3,7 +3,7 @@ name: atomix-controller
 description: Atomix Controller
 kubeVersion: ">=1.17.0"
 type: application
-version: 0.2.0
+version: 0.2.1
 appVersion: v0.2.0-beta.1
 keywords:
   - atomix

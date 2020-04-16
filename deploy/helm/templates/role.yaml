@@ -6,8 +6,26 @@ metadata:
   name: {{ .Release.Name }}
 rules:
   - apiGroups:
+      - ""
+    resources:
+      - pods
+      - configmaps
+    verbs:
+      - '*'
+  - apiGroups:
+      - ""
+    resources:
+      - namespaces
+    verbs:
+      - get
+  - apiGroups:
+      - policy
+    resources:
+      - poddisruptionbudgets
+    verbs:
+      - '*'
+  - apiGroups:
       - cloud.atomix.io
-      - storage.cloud.atomix.io
     resources:
       - '*'
     verbs:
