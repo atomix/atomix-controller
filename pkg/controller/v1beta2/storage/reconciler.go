@@ -57,6 +57,9 @@ func AddClusterReconciler(mgr manager.Manager, reconciler reconcile.Reconciler, 
 			kind:   kind,
 		},
 	})
+	if err != nil {
+		return err
+	}
 
 	// Watch for changes to referencing resource Clusters
 	err = c.Watch(&source.Kind{Type: &v1beta2.Cluster{}}, &handler.EnqueueRequestsFromMapFunc{

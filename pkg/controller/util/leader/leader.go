@@ -23,7 +23,7 @@ import (
 	"k8s.io/client-go/rest"
 	"os"
 	crclient "sigs.k8s.io/controller-runtime/pkg/client"
-	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"time"
 )
 
