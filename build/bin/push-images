@@ -1,4 +1,4 @@
 #!/bin/bash
 echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USER" --password-stdin
 make images
-docker push atomix/kubernetes-controller:latest
+make push
