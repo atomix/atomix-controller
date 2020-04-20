@@ -155,6 +155,19 @@ spec:
           properties:
             spec:
               type: object
+              required:
+                - partitionId
+                - host
+                - port
+              properties:
+                partitionId:
+                  type: integer
+                  minimum: 1
+                  maximum: 1024
+                host:
+                  type: string
+                port:
+                  type: integer
             status:
               type: object
               properties:

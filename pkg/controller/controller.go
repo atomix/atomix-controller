@@ -95,6 +95,11 @@ func (c *Controller) GetDatabases(ctx context.Context, request *api.GetDatabases
 					return nil, err
 				}
 
+				numPartitions := int(database.Spec.Clusters * database.Spec.Template.Spec.Partitions)
+				if len(partitions.Items) != numPartitions {
+					continue
+				}
+
 				pbpartitions := make([]*api.Partition, 0, len(partitions.Items))
 				for _, partition := range partitions.Items {
 					pbpartition, err := v1beta1util.NewPartitionProto(&partition)
@@ -124,6 +129,11 @@ func (c *Controller) GetDatabases(ctx context.Context, request *api.GetDatabases
 		err := c.client.List(context.TODO(), partitions, options)
 		if err != nil {
 			return nil, err
+		}
+
+		numPartitions := int(database.Spec.Clusters * database.Spec.Template.Spec.Partitions)
+		if len(partitions.Items) != numPartitions {
+			continue
 		}
 
 		pbpartitions := make([]*api.Partition, 0, len(partitions.Items))
