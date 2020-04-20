@@ -28,7 +28,7 @@ type PartitionSpec struct {
 // PartitionStatus defines the observed state of Partition
 type PartitionStatus struct {
 	// Ready indicates whether the partition is ready
-	Ready bool
+	Ready bool `json:"ready,omitempty"`
 }
 
 // +genclient

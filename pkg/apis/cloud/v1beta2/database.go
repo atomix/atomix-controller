@@ -38,7 +38,7 @@ type ClusterTemplateSpec struct {
 // DatabaseStatus defines the observed state of Partition
 type DatabaseStatus struct {
 	// ReadyClusters is the number of clusters in the database that have been marked ready
-	ReadyClusters int32 `json:"readyPartitions,omitempty"`
+	ReadyClusters int32 `json:"readyClusters,omitempty"`
 }
 
 // +genclient
