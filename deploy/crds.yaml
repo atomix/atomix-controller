@@ -27,18 +27,16 @@ spec:
             spec:
               type: object
               required:
-                - template
+                - storageClass
               properties:
-                partition:
+                partitions:
                   type: integer
                   minimum: 1
                   maximim: 1024
                   default: 1
-                storage:
+                storageClass:
                   type: object
                   required:
-                    - group
-                    - version
                     - name
                   properties:
                     class:
@@ -81,6 +79,17 @@ spec:
         openAPIV3Schema:
           type: object
           properties:
+            spec:
+              type: object
+              required:
+                - partitionId
+                - serviceName
+              properties:
+                partitionId:
+                  type: integer
+                  min: 1
+                serviceName:
+                  type: string
             status:
               type: object
               properties:
