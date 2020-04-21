@@ -13,7 +13,7 @@ spec:
     shortNames:
       - db
   versions:
-    - name: v1beta2
+    - name: v1beta3
       served: true
       storage: true
       schema:
@@ -78,7 +78,7 @@ spec:
     plural: clusters
     singular: cluster
   versions:
-    - name: v1beta2
+    - name: v1beta3
       served: true
       storage: true
       schema:
@@ -90,14 +90,14 @@ spec:
             spec:
               type: object
               required:
-                - storage
+                - storageClass
               properties:
                 partitions:
                   type: integer
                   minimum: 1
                   maximum: 1024
                   default: 1
-                storage:
+                storageClass:
                   type: object
                   required:
                     - group
@@ -128,7 +128,7 @@ spec:
     plural: partitions
     singular: partition
   versions:
-    - name: v1beta2
+    - name: v1beta3
       served: true
       storage: true
       schema:
@@ -153,7 +153,7 @@ spec:
     plural: storagecontrollers
     singular: storagecontroller
   versions:
-    - name: v1beta2
+    - name: v1beta3
       served: true
       storage: true
       schema:

@@ -13,7 +13,7 @@ spec:
     shortNames:
       - db
   versions:
-    - name: v1beta2
+    - name: v1beta3
       served: true
       storage: true
       subresources:
@@ -29,79 +29,7 @@ spec:
               required:
                 - template
               properties:
-                clusters:
-                  type: integer
-                  minimum: 1
-                  maximim: 32
-                  default: 1
-                template:
-                  type: object
-                  required:
-                    - spec
-                  properties:
-                    spec:
-                      type: object
-                      required:
-                        - storage
-                      properties:
-                        partitions:
-                          type: integer
-                          minimum: 1
-                          maximum: 1024
-                          default: 1
-                        storage:
-                          type: object
-                          required:
-                            - group
-                            - version
-                            - name
-                          properties:
-                            group:
-                              type: string
-                            version:
-                              type: string
-                            kind:
-                              type: string
-                            namespace:
-                              type: string
-                            name:
-                              type: string
-            status:
-              type: object
-              properties:
-                readyClusters:
-                  type: integer
----
-apiVersion: apiextensions.k8s.io/v1
-kind: CustomResourceDefinition
-metadata:
-  name: clusters.cloud.atomix.io
-spec:
-  group: cloud.atomix.io
-  scope: Namespaced
-  names:
-    kind: Cluster
-    listKind: ClusterList
-    plural: clusters
-    singular: cluster
-  versions:
-    - name: v1beta2
-      served: true
-      storage: true
-      subresources:
-        status: {}
-      schema:
-        openAPIV3Schema:
-          type: object
-          required:
-            - spec
-          properties:
-            spec:
-              type: object
-              required:
-                - storage
-              properties:
-                partitions:
+                partition:
                   type: integer
                   minimum: 1
                   maximim: 1024
@@ -113,6 +41,8 @@ spec:
                     - version
                     - name
                   properties:
+                    class:
+                      type: string
                     group:
                       type: string
                     version:
@@ -142,7 +72,7 @@ spec:
     plural: partitions
     singular: partition
   versions:
-    - name: v1beta2
+    - name: v1beta3
       served: true
       storage: true
       subresources:
@@ -150,24 +80,7 @@ spec:
       schema:
         openAPIV3Schema:
           type: object
-          required:
-            - spec
           properties:
-            spec:
-              type: object
-              required:
-                - partitionId
-                - host
-                - port
-              properties:
-                partitionId:
-                  type: integer
-                  minimum: 1
-                  maximum: 1024
-                host:
-                  type: string
-                port:
-                  type: integer
             status:
               type: object
               properties:
@@ -187,7 +100,7 @@ spec:
     plural: storagecontrollers
     singular: storagecontroller
   versions:
-    - name: v1beta2
+    - name: v1beta3
       served: true
       storage: true
       schema:

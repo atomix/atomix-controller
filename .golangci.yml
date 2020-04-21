@@ -18,4 +18,4 @@ issues:
 
 run:
   skip-dirs:
-    - pkg/client/v1beta2/*
+    - pkg/client/v1beta3/*

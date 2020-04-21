@@ -12,11 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package apis
-
-import "github.com/atomix/kubernetes-controller/pkg/apis/cloud/v1beta3"
-
-func init() {
-	// register the types with the Scheme so the components can map objects to GroupVersionKinds and back
-	AddToSchemes = append(AddToSchemes, v1beta3.SchemeBuilder.AddToScheme)
-}
+// Package v1beta3 contains API Schema definitions for the cloud v1beta3 API group
+// +k8s:deepcopy-gen=package,register
+// +groupName=cloud.atomix.io
+package v1beta3

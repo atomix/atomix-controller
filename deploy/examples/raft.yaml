@@ -1,21 +1,18 @@
-apiVersion: storage.cloud.atomix.io/v1beta2
-kind: RaftStorage
+apiVersion: storage.cloud.atomix.io/v1beta3
+kind: RaftStorageClass
 metadata:
   name: raft
 spec:
   replicas: 3
 ---
-apiVersion: cloud.atomix.io/v1beta2
+apiVersion: cloud.atomix.io/v1beta3
 kind: Database
 metadata:
   name: raft
 spec:
-  clusters: 3
-  template:
-    spec:
-      partitions: 10
-      storage:
-        group: storage.cloud.atomix.io
-        version: v1beta2
-        kind: RaftStorage
-        name: raft
+  partitions: 10
+  storageClass:
+    group: storage.cloud.atomix.io
+    version: v1beta3
+    kind: RaftStorage
+    name: raft

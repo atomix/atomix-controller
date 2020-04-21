@@ -17,10 +17,9 @@ package controller
 import (
 	"context"
 	api "github.com/atomix/api/proto/atomix/controller"
-	"github.com/atomix/kubernetes-controller/pkg/apis/cloud/v1beta2"
-	"github.com/atomix/kubernetes-controller/pkg/controller/v1beta2/cluster"
-	"github.com/atomix/kubernetes-controller/pkg/controller/v1beta2/database"
-	v1beta1util "github.com/atomix/kubernetes-controller/pkg/controller/v1beta2/util/k8s"
+	"github.com/atomix/kubernetes-controller/pkg/apis/cloud/v1beta3"
+	"github.com/atomix/kubernetes-controller/pkg/controller/database"
+	"github.com/atomix/kubernetes-controller/pkg/controller/util/k8s"
 	"google.golang.org/grpc"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -42,9 +41,6 @@ func AddController(mgr manager.Manager) error {
 	}
 
 	if err = database.Add(mgr); err != nil {
-		return err
-	}
-	if err = cluster.Add(mgr); err != nil {
 		return err
 	}
 	return nil
@@ -71,10 +67,10 @@ type Controller struct {
 
 // GetDatabases get a list of databases managed by the controller
 func (c *Controller) GetDatabases(ctx context.Context, request *api.GetDatabasesRequest) (*api.GetDatabasesResponse, error) {
-	databases := &v1beta2.DatabaseList{}
+	databases := &v1beta3.DatabaseList{}
 
 	opts := &client.ListOptions{
-		Namespace: v1beta1util.GetDatabaseNamespace(request.ID),
+		Namespace: k8s.GetDatabaseNamespace(request.ID),
 	}
 
 	if err := c.client.List(ctx, databases, opts); err != nil {
@@ -84,25 +80,24 @@ func (c *Controller) GetDatabases(ctx context.Context, request *api.GetDatabases
 	if request.ID != nil && request.ID.Name != "" {
 		for _, database := range databases.Items {
 			if database.Name == request.ID.Name {
-				pbdatabase := v1beta1util.NewDatabaseProto(&database)
+				pbdatabase := k8s.NewDatabaseProto(&database)
 				options := &client.ListOptions{
-					Namespace:     v1beta1util.GetDatabaseNamespace(request.ID),
-					LabelSelector: labels.SelectorFromSet(v1beta1util.GetPartitionLabelsForDatabase(&database)),
+					Namespace:     k8s.GetDatabaseNamespace(request.ID),
+					LabelSelector: labels.SelectorFromSet(k8s.GetPartitionLabelsForDatabase(&database)),
 				}
-				partitions := &v1beta2.PartitionList{}
+				partitions := &v1beta3.PartitionList{}
 				err := c.client.List(context.TODO(), partitions, options)
 				if err != nil {
 					return nil, err
 				}
 
-				numPartitions := int(database.Spec.Clusters * database.Spec.Template.Spec.Partitions)
-				if len(partitions.Items) != numPartitions {
+				if len(partitions.Items) != int(database.Spec.Partitions) {
 					continue
 				}
 
 				pbpartitions := make([]*api.Partition, 0, len(partitions.Items))
 				for _, partition := range partitions.Items {
-					pbpartition, err := v1beta1util.NewPartitionProto(&partition)
+					pbpartition, err := k8s.NewPartitionProto(&partition)
 					if err != nil {
 						return nil, err
 					}
@@ -119,26 +114,25 @@ func (c *Controller) GetDatabases(ctx context.Context, request *api.GetDatabases
 
 	pbdatabases := make([]*api.Database, 0, len(databases.Items))
 	for _, database := range databases.Items {
-		pbdatabase := v1beta1util.NewDatabaseProto(&database)
+		pbdatabase := k8s.NewDatabaseProto(&database)
 
 		options := &client.ListOptions{
-			Namespace:     v1beta1util.GetDatabaseNamespace(request.ID),
-			LabelSelector: labels.SelectorFromSet(v1beta1util.GetPartitionLabelsForDatabase(&database)),
+			Namespace:     k8s.GetDatabaseNamespace(request.ID),
+			LabelSelector: labels.SelectorFromSet(k8s.GetPartitionLabelsForDatabase(&database)),
 		}
-		partitions := &v1beta2.PartitionList{}
+		partitions := &v1beta3.PartitionList{}
 		err := c.client.List(context.TODO(), partitions, options)
 		if err != nil {
 			return nil, err
 		}
 
-		numPartitions := int(database.Spec.Clusters * database.Spec.Template.Spec.Partitions)
-		if len(partitions.Items) != numPartitions {
+		if len(partitions.Items) != int(database.Spec.Partitions) {
 			continue
 		}
 
 		pbpartitions := make([]*api.Partition, 0, len(partitions.Items))
 		for _, partition := range partitions.Items {
-			pbpartition, err := v1beta1util.NewPartitionProto(&partition)
+			pbpartition, err := k8s.NewPartitionProto(&partition)
 			if err != nil {
 				return nil, err
 			}

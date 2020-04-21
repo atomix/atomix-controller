@@ -1,21 +1,18 @@
-apiVersion: storage.cloud.atomix.io/v1beta2
-kind: NOPaxosStorage
+apiVersion: storage.cloud.atomix.io/v1beta3
+kind: NOPaxosStorageClass
 metadata:
   name: nopaxos
 spec:
   replicas: 3
 ---
-apiVersion: cloud.atomix.io/v1beta2
+apiVersion: cloud.atomix.io/v1beta3
 kind: Database
 metadata:
   name: nopaxos
 spec:
-  clusters: 3
-  template:
-    spec:
-      partitions: 10
-      storage:
-        group: storage.cloud.atomix.io
-        version: v1beta2
-        kind: NOPaxosStorage
-        name: nopaxos
+  partitions: 10
+  storageClass:
+    group: storage.cloud.atomix.io
+    version: v1beta3
+    kind: NOPaxosStorage
+    name: nopaxos

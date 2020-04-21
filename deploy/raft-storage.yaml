@@ -11,7 +11,7 @@ spec:
     singular: raftstorage
   scope: Namespaced
   versions:
-    - name: v1beta2
+    - name: v1beta3
       served: true
       storage: true
       schema:
@@ -23,11 +23,11 @@ spec:
             spec:
               type: object
 ---
-apiVersion: cloud.atomix.io/v1beta2
+apiVersion: cloud.atomix.io/v1beta3
 kind: StorageController
 metadata:
   name: raft
 spec:
   group: storage.cloud.atomix.io
-  version: v1beta2
+  version: v1beta3
   kind: RaftStorage
