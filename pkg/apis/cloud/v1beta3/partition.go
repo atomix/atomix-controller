@@ -21,7 +21,7 @@ import (
 // PartitionSpec is the k8s configuration for a single partition
 type PartitionSpec struct {
 	// PartitionID is the partition identifier
-	PartitionID int32  `json:"partitionId,omitempty"`
+	PartitionID int32 `json:"partitionId,omitempty"`
 
 	// ServiceName is the partition service name
 	ServiceName string `json:"serviceName,omitempty"`
