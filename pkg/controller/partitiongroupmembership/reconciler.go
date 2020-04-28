@@ -34,11 +34,12 @@ var log = logf.Log.WithName("partition_group-membership_controller")
 
 // Add creates a new Database controller and adds it to the Manager. The Manager will set fields on the
 // controller and Start it when the Manager is Started.
-func Add(mgr manager.Manager) error {
+func Add(mgr manager.Manager, eventCh chan<- types.NamespacedName) error {
 	r := &Reconciler{
-		client: mgr.GetClient(),
-		scheme: mgr.GetScheme(),
-		config: mgr.GetConfig(),
+		client:  mgr.GetClient(),
+		scheme:  mgr.GetScheme(),
+		config:  mgr.GetConfig(),
+		eventCh: eventCh,
 	}
 
 	// Create a new controller
@@ -80,9 +81,10 @@ var _ reconcile.Reconciler = &Reconciler{}
 
 // Reconciler reconciles a PartitionGroup object
 type Reconciler struct {
-	client client.Client
-	scheme *runtime.Scheme
-	config *rest.Config
+	client  client.Client
+	scheme  *runtime.Scheme
+	config  *rest.Config
+	eventCh chan<- types.NamespacedName
 }
 
 func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, error) {
@@ -102,6 +104,15 @@ func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, err
 		// Error reading the object - requeue the request.
 		return reconcile.Result{}, err
 	}
+
+	defer func() {
+		go func() {
+			r.eventCh <- types.NamespacedName{
+				Namespace: partitionGroupMembership.Namespace,
+				Name:      partitionGroupMembership.Bind.Group,
+			}
+		}()
+	}()
 
 	member := &v1beta3.Member{}
 	memberName := types.NamespacedName{

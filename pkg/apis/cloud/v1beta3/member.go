@@ -29,6 +29,7 @@ type Member struct {
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 	Service           string             `json:"service,omitempty"`
 	Port              intstr.IntOrString `json:"port,omitempty"`
+	Scope             string             `json:"scope,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

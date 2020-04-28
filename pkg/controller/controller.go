@@ -31,25 +31,29 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/rest"
 	"net"
+	"reflect"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sync"
 )
 
-var log = logf.Log.WithName("controller_atomix")
-
-const numPartitions = 32
+var log = logf.Log.WithName("atomix_controller")
 
 // AddController adds the Atomix controller to the k8s controller manager
 func AddController(mgr manager.Manager) error {
-	c := newController(mgr.GetClient(), mgr.GetScheme(), mgr.GetConfig())
+	memberCh := make(chan types.NamespacedName)
+	membershipGroupCh := make(chan types.NamespacedName)
+	partitionGroupCh := make(chan types.NamespacedName)
+
+	c := newController(mgr.GetClient(), mgr.GetScheme(), mgr.GetConfig(), memberCh, membershipGroupCh, partitionGroupCh)
 	err := mgr.Add(c)
 	if err != nil {
 		return err
@@ -59,45 +63,85 @@ func AddController(mgr manager.Manager) error {
 		return err
 	}
 
-
-	if err = member.Add(mgr); err != nil {
+	if err = member.Add(mgr, memberCh); err != nil {
 		return err
 	}
 	if err = membershipgroup.Add(mgr); err != nil {
 		return err
 	}
-	if err = membership.Add(mgr); err != nil {
+	if err = membership.Add(mgr, membershipGroupCh); err != nil {
 		return err
 	}
 	if err = partitiongroup.Add(mgr); err != nil {
 		return err
 	}
-	if err = partitiongroupmembership.Add(mgr); err != nil {
+	if err = partitiongroupmembership.Add(mgr, partitionGroupCh); err != nil {
 		return err
 	}
 	return nil
 }
 
 // newController creates a new controller server
-func newController(client client.Client, scheme *runtime.Scheme, config *rest.Config, opts ...grpc.ServerOption) *Controller {
+func newController(
+	client client.Client,
+	scheme *runtime.Scheme,
+	config *rest.Config,
+	memberCh chan types.NamespacedName,
+	membershipGroupCh chan types.NamespacedName,
+	partitionGroupCh chan types.NamespacedName,
+	opts ...grpc.ServerOption) *Controller {
 	return &Controller{
-		client: client,
-		scheme: scheme,
-		config: config,
-		opts:   opts,
+		client:              client,
+		scheme:              scheme,
+		config:              config,
+		memberIn:            memberCh,
+		membersOut:          make(map[string]map[string]chan<- api.JoinClusterResponse),
+		membershipGroupIn:   membershipGroupCh,
+		membershipGroupsOut: make(map[string]map[string]chan<- api.JoinMembershipGroupResponse),
+		partitionGroupIn:    partitionGroupCh,
+		partitionGroupsOut:  make(map[string]map[string]chan<- api.JoinPartitionGroupResponse),
+		opts:                opts,
 	}
 }
 
 // Controller an implementation of the Atomix controller API
 type Controller struct {
-	client client.Client
-	scheme *runtime.Scheme
-	config *rest.Config
-	opts   []grpc.ServerOption
-	mu     sync.Mutex
+	client              client.Client
+	scheme              *runtime.Scheme
+	config              *rest.Config
+	opts                []grpc.ServerOption
+	memberIn            chan types.NamespacedName
+	membersOut          map[string]map[string]chan<- api.JoinClusterResponse
+	membershipGroupIn   chan types.NamespacedName
+	membershipGroupsOut map[string]map[string]chan<- api.JoinMembershipGroupResponse
+	partitionGroupIn    chan types.NamespacedName
+	partitionGroupsOut  map[string]map[string]chan<- api.JoinPartitionGroupResponse
+	mu                  sync.RWMutex
 }
 
 func (c *Controller) JoinCluster(request *api.JoinClusterRequest, stream api.ClusterService_JoinClusterServer) error {
+	ch := make(chan api.JoinClusterResponse)
+	c.mu.Lock()
+	membersOut, ok := c.membersOut[request.GroupID.String()]
+	if !ok {
+		membersOut = make(map[string]chan<- api.JoinClusterResponse)
+		c.membersOut[request.GroupID.String()] = membersOut
+	}
+	membersOut[request.Member.ID.String()] = ch
+	c.mu.Unlock()
+
+	defer func() {
+		c.mu.Lock()
+		membersOut, ok := c.membersOut[request.GroupID.String()]
+		if ok {
+			delete(membersOut, request.Member.ID.String())
+			if len(membersOut) == 0 {
+				delete(c.membersOut, request.GroupID.String())
+			}
+		}
+		c.mu.Unlock()
+	}()
+
 	// Get the pod joining the cluster
 	pod := &corev1.Pod{}
 	name := types.NamespacedName{
@@ -117,6 +161,7 @@ func (c *Controller) JoinCluster(request *api.JoinClusterRequest, stream api.Clu
 		},
 		Service: request.Member.Host,
 		Port:    intstr.FromInt(int(request.Member.Port)),
+		Scope:   request.GroupID.Name,
 	}
 
 	// Create the member
@@ -124,7 +169,22 @@ func (c *Controller) JoinCluster(request *api.JoinClusterRequest, stream api.Clu
 	if err != nil && !k8serrors.IsAlreadyExists(err) {
 		return err
 	}
-	// TODO: Handle membership events
+
+	go func() {
+		<-stream.Context().Done()
+		close(ch)
+	}()
+
+	var lastResponse *api.JoinClusterResponse
+	for response := range ch {
+		if lastResponse == nil || !reflect.DeepEqual(response, *lastResponse) {
+			err := stream.Send(&response)
+			if err != nil {
+				log.Error(err, "An error occurred in the membership response stream")
+			}
+			lastResponse = &response
+		}
+	}
 	return nil
 }
 
@@ -132,6 +192,28 @@ func (c *Controller) JoinPartitionGroup(request *api.JoinPartitionGroupRequest, 
 	if request.MemberID.Namespace != request.GroupID.Namespace {
 		return errors.New("cannot join group in another namespace")
 	}
+
+	ch := make(chan api.JoinPartitionGroupResponse)
+	c.mu.Lock()
+	partitionGroupsOut, ok := c.partitionGroupsOut[request.GroupID.String()]
+	if !ok {
+		partitionGroupsOut = make(map[string]chan<- api.JoinPartitionGroupResponse)
+		c.partitionGroupsOut[request.GroupID.String()] = partitionGroupsOut
+	}
+	partitionGroupsOut[request.MemberID.String()] = ch
+	c.mu.Unlock()
+
+	defer func() {
+		c.mu.Lock()
+		partitionGroupsOut, ok := c.partitionGroupsOut[request.GroupID.String()]
+		if ok {
+			delete(partitionGroupsOut, request.MemberID.String())
+			if len(partitionGroupsOut) == 0 {
+				delete(c.partitionGroupsOut, request.GroupID.String())
+			}
+		}
+		c.mu.Unlock()
+	}()
 
 	// Get the member joining the group
 	member := &v1beta3.Member{}
@@ -159,6 +241,10 @@ func (c *Controller) JoinPartitionGroup(request *api.JoinPartitionGroupRequest, 
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: request.GroupID.Namespace,
 				Name:      request.GroupID.Name,
+			},
+			Spec: v1beta3.PartitionGroupSpec{
+				Partitions:        int32(request.Partitions),
+				ReplicationFactor: int32(request.ReplicationFactor),
 			},
 		}
 		err = c.client.Create(stream.Context(), partitionGroup)
@@ -188,7 +274,22 @@ func (c *Controller) JoinPartitionGroup(request *api.JoinPartitionGroupRequest, 
 	if err != nil && !k8serrors.IsAlreadyExists(err) {
 		return err
 	}
-	// TODO: Handle partition group events
+
+	go func() {
+		<-stream.Context().Done()
+		close(ch)
+	}()
+
+	var lastResponse *api.JoinPartitionGroupResponse
+	for response := range ch {
+		if lastResponse == nil || !reflect.DeepEqual(response, *lastResponse) {
+			err := stream.Send(&response)
+			if err != nil {
+				log.Error(err, "An error occurred in the membership response stream")
+			}
+			lastResponse = &response
+		}
+	}
 	return nil
 }
 
@@ -196,6 +297,28 @@ func (c *Controller) JoinMembershipGroup(request *api.JoinMembershipGroupRequest
 	if request.MemberID.Namespace != request.GroupID.Namespace {
 		return errors.New("cannot join group in another namespace")
 	}
+
+	ch := make(chan api.JoinMembershipGroupResponse)
+	c.mu.Lock()
+	membershipGroupsOut, ok := c.membershipGroupsOut[request.GroupID.String()]
+	if !ok {
+		membershipGroupsOut = make(map[string]chan<- api.JoinMembershipGroupResponse)
+		c.membershipGroupsOut[request.GroupID.String()] = membershipGroupsOut
+	}
+	membershipGroupsOut[request.MemberID.String()] = ch
+	c.mu.Unlock()
+
+	defer func() {
+		c.mu.Lock()
+		membershipGroupsOut, ok := c.membershipGroupsOut[request.GroupID.String()]
+		if ok {
+			delete(membershipGroupsOut, request.MemberID.String())
+			if len(membershipGroupsOut) == 0 {
+				delete(c.membershipGroupsOut, request.GroupID.String())
+			}
+		}
+		c.mu.Unlock()
+	}()
 
 	// Get the member joining the group
 	member := &v1beta3.Member{}
@@ -252,7 +375,22 @@ func (c *Controller) JoinMembershipGroup(request *api.JoinMembershipGroupRequest
 	if err != nil && !k8serrors.IsAlreadyExists(err) {
 		return err
 	}
-	// TODO: Handle partition group events
+
+	go func() {
+		<-stream.Context().Done()
+		close(ch)
+	}()
+
+	var lastResponse *api.JoinMembershipGroupResponse
+	for response := range ch {
+		if lastResponse == nil {
+			err := stream.Send(&response)
+			if err != nil {
+				log.Error(err, "An error occurred in the membership response stream")
+			}
+			lastResponse = &response
+		}
+	}
 	return nil
 }
 
@@ -359,6 +497,10 @@ func (c *Controller) Start(stop <-chan struct{}) error {
 		}
 	}()
 
+	go c.processMembers(stop)
+	go c.processMembershipGroups(stop)
+	go c.processPartitionGroups(stop)
+
 	select {
 	case e := <-errs:
 		return e
@@ -366,6 +508,272 @@ func (c *Controller) Start(stop <-chan struct{}) error {
 		log.Info("Stopping controller server")
 		s.Stop()
 		return nil
+	}
+}
+
+func (c *Controller) processMembers(stop <-chan struct{}) {
+	go func() {
+		<-stop
+		close(c.memberIn)
+	}()
+	for name := range c.memberIn {
+		member := &v1beta3.Member{}
+		err := c.client.Get(context.TODO(), name, member)
+		if err != nil {
+			log.Error(err, "Failed to process member update", "Namespace", name.Namespace, "Name", name.Name)
+			continue
+		}
+
+		memberList := &v1beta3.MemberList{}
+		memberListFields := map[string]string{
+			"scope": member.Scope,
+		}
+		memberListOpts := &client.ListOptions{
+			Namespace:     member.Namespace,
+			FieldSelector: fields.SelectorFromSet(memberListFields),
+		}
+		err = c.client.List(context.TODO(), memberList, memberListOpts)
+		if err != nil {
+			log.Error(err, "Failed to process member update", "Namespace", name.Namespace, "Name", name.Name)
+			continue
+		}
+
+		members := make([]api.Member, len(memberList.Items))
+		for i, member := range memberList.Items {
+			members[i] = api.Member{
+				ID: api.MemberId{
+					Name:      member.Name,
+					Namespace: member.Namespace,
+				},
+				Host: member.Service,
+				Port: member.Port.IntVal,
+			}
+		}
+
+		response := api.JoinClusterResponse{
+			Membership: api.Membership{
+				Members: members,
+			},
+			GroupID: api.MembershipGroupId{
+				Namespace: member.Namespace,
+				Name:      member.Scope,
+			},
+		}
+
+		group, ok := c.membersOut[response.GroupID.String()]
+		if ok {
+			for _, ch := range group {
+				ch <- response
+			}
+		}
+	}
+}
+
+func (c *Controller) processMembershipGroups(stop <-chan struct{}) {
+	go func() {
+		<-stop
+		close(c.memberIn)
+	}()
+	for name := range c.membershipGroupIn {
+		membershipGroup := &v1beta3.MembershipGroup{}
+		err := c.client.Get(context.TODO(), name, membershipGroup)
+		if err != nil {
+			log.Error(err, "Failed to process membership group update", "Namespace", name.Namespace, "Name", name.Name)
+			continue
+		}
+
+		membershipList := &v1beta3.MembershipList{}
+		membershipListFields := map[string]string{
+			"bind.group": membershipGroup.Name,
+		}
+		membershipListOpts := &client.ListOptions{
+			Namespace:     membershipGroup.Namespace,
+			FieldSelector: fields.SelectorFromSet(membershipListFields),
+		}
+		err = c.client.List(context.TODO(), membershipList, membershipListOpts)
+		if err != nil {
+			log.Error(err, "Failed to process membership group update", "Namespace", name.Namespace, "Name", name.Name)
+			continue
+		}
+
+		members := make([]api.Member, 0)
+		for _, membership := range membershipList.Items {
+			member := &v1beta3.Member{}
+			memberName := types.NamespacedName{
+				Namespace: membership.Namespace,
+				Name:      membership.Bind.Member,
+			}
+			err := c.client.Get(context.TODO(), memberName, member)
+			if err != nil {
+				continue
+			}
+			members = append(members, api.Member{
+				ID: api.MemberId{
+					Name:      member.Name,
+					Namespace: member.Namespace,
+				},
+				Host: member.Service,
+				Port: member.Port.IntVal,
+			})
+		}
+
+		leadership := &v1beta3.Leadership{}
+		leadershipName := types.NamespacedName{
+			Namespace: membershipGroup.Namespace,
+			Name:      membershipGroup.Name,
+		}
+
+		var term api.TermID
+		var leader *api.MemberId
+		err = c.client.Get(context.TODO(), leadershipName, leadership)
+		if err != nil {
+			if !k8serrors.IsNotFound(err) {
+				log.Error(err, "Failed to process membership group update", "Namespace", name.Namespace, "Name", name.Name)
+				continue
+			}
+			term = api.TermID(leadership.Term)
+			leader = &api.MemberId{
+				Namespace: membershipGroup.Namespace,
+				Name:      leadership.Leader,
+			}
+		}
+
+		response := api.JoinMembershipGroupResponse{
+			Group: api.MembershipGroup{
+				ID: api.MembershipGroupId{
+					Namespace: membershipGroup.Namespace,
+					Name:      membershipGroup.Name,
+				},
+				Term:    term,
+				Leader:  leader,
+				Members: members,
+			},
+		}
+
+		group, ok := c.membershipGroupsOut[response.Group.ID.String()]
+		if ok {
+			for _, ch := range group {
+				ch <- response
+			}
+		}
+	}
+}
+
+func (c *Controller) processPartitionGroups(stop <-chan struct{}) {
+	go func() {
+		<-stop
+		close(c.memberIn)
+	}()
+	for name := range c.partitionGroupIn {
+		partitionGroup := &v1beta3.PartitionGroup{}
+		err := c.client.Get(context.TODO(), name, partitionGroup)
+		if err != nil {
+			log.Error(err, "Failed to process partition group update", "Namespace", name.Namespace, "Name", name.Name)
+			continue
+		}
+
+		partitions := int(partitionGroup.Spec.Partitions)
+		membershipGroups := make([]*api.MembershipGroup, 0)
+		skip := false
+		for partition := 1; partition <= partitions; partition++ {
+			membershipGroup := &v1beta3.MembershipGroup{}
+			membershipGroupName := types.NamespacedName{
+				Namespace: partitionGroup.Namespace,
+				Name:      fmt.Sprintf("%s-%d", partitionGroup.Name, partition),
+			}
+			err = c.client.Get(context.TODO(), membershipGroupName, membershipGroup)
+			if err != nil {
+				log.Error(err, "Failed to process partition group update", "Namespace", name.Namespace, "Name", name.Name)
+				skip = true
+				break
+			}
+
+			membershipList := &v1beta3.MembershipList{}
+			membershipListFields := map[string]string{
+				"bind.group": partitionGroup.Name,
+			}
+			membershipListOpts := &client.ListOptions{
+				Namespace:     partitionGroup.Namespace,
+				FieldSelector: fields.SelectorFromSet(membershipListFields),
+			}
+			err = c.client.List(context.TODO(), membershipList, membershipListOpts)
+			if err != nil {
+				log.Error(err, "Failed to process partition group update", "Namespace", name.Namespace, "Name", name.Name)
+				continue
+			}
+
+			members := make([]api.Member, 0)
+			for _, membership := range membershipList.Items {
+				member := &v1beta3.Member{}
+				memberName := types.NamespacedName{
+					Namespace: membership.Namespace,
+					Name:      membership.Bind.Member,
+				}
+				err := c.client.Get(context.TODO(), memberName, member)
+				if err != nil {
+					continue
+				}
+				members = append(members, api.Member{
+					ID: api.MemberId{
+						Name:      member.Name,
+						Namespace: member.Namespace,
+					},
+					Host: member.Service,
+					Port: member.Port.IntVal,
+				})
+			}
+
+			leadership := &v1beta3.Leadership{}
+			leadershipName := types.NamespacedName{
+				Namespace: partitionGroup.Namespace,
+				Name:      partitionGroup.Name,
+			}
+
+			var term api.TermID
+			var leader *api.MemberId
+			err = c.client.Get(context.TODO(), leadershipName, leadership)
+			if err != nil {
+				if !k8serrors.IsNotFound(err) {
+					log.Error(err, "Failed to process partition group update", "Namespace", name.Namespace, "Name", name.Name)
+					continue
+				}
+				term = api.TermID(leadership.Term)
+				leader = &api.MemberId{
+					Namespace: partitionGroup.Namespace,
+					Name:      leadership.Leader,
+				}
+			}
+
+			membershipGroups = append(membershipGroups, &api.MembershipGroup{
+				ID: api.MembershipGroupId{
+					Namespace: membershipGroup.Namespace,
+					Name:      membershipGroup.Name,
+				},
+				Term:    term,
+				Leader:  leader,
+				Members: members,
+			})
+		}
+
+		if skip {
+			continue
+		}
+
+		response := api.JoinPartitionGroupResponse{
+			Group: api.PartitionGroup{
+				ID: api.PartitionGroupId{
+					Namespace: partitionGroup.Namespace,
+					Name:      partitionGroup.Name,
+				},
+			},
+		}
+
+		group, ok := c.partitionGroupsOut[response.Group.ID.String()]
+		if ok {
+			for _, ch := range group {
+				ch <- response
+			}
+		}
 	}
 }
 
