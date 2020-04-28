@@ -16,21 +16,36 @@ package controller
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	api "github.com/atomix/api/proto/atomix/controller"
 	"github.com/atomix/kubernetes-controller/pkg/apis/cloud/v1beta3"
 	"github.com/atomix/kubernetes-controller/pkg/controller/database"
+	"github.com/atomix/kubernetes-controller/pkg/controller/member"
+	"github.com/atomix/kubernetes-controller/pkg/controller/membership"
+	"github.com/atomix/kubernetes-controller/pkg/controller/membershipgroup"
+	"github.com/atomix/kubernetes-controller/pkg/controller/partitiongroup"
+	"github.com/atomix/kubernetes-controller/pkg/controller/partitiongroupmembership"
 	"github.com/atomix/kubernetes-controller/pkg/controller/util/k8s"
 	"google.golang.org/grpc"
+	corev1 "k8s.io/api/core/v1"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/rest"
 	"net"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+	"sync"
 )
 
 var log = logf.Log.WithName("controller_atomix")
+
+const numPartitions = 32
 
 // AddController adds the Atomix controller to the k8s controller manager
 func AddController(mgr manager.Manager) error {
@@ -41,6 +56,23 @@ func AddController(mgr manager.Manager) error {
 	}
 
 	if err = database.Add(mgr); err != nil {
+		return err
+	}
+
+
+	if err = member.Add(mgr); err != nil {
+		return err
+	}
+	if err = membershipgroup.Add(mgr); err != nil {
+		return err
+	}
+	if err = membership.Add(mgr); err != nil {
+		return err
+	}
+	if err = partitiongroup.Add(mgr); err != nil {
+		return err
+	}
+	if err = partitiongroupmembership.Add(mgr); err != nil {
 		return err
 	}
 	return nil
@@ -58,11 +90,170 @@ func newController(client client.Client, scheme *runtime.Scheme, config *rest.Co
 
 // Controller an implementation of the Atomix controller API
 type Controller struct {
-	api.ControllerServiceServer
 	client client.Client
 	scheme *runtime.Scheme
 	config *rest.Config
 	opts   []grpc.ServerOption
+	mu     sync.Mutex
+}
+
+func (c *Controller) JoinCluster(request *api.JoinClusterRequest, stream api.ClusterService_JoinClusterServer) error {
+	// Get the pod joining the cluster
+	pod := &corev1.Pod{}
+	name := types.NamespacedName{
+		Namespace: request.Member.ID.Namespace,
+		Name:      request.Member.ID.Name,
+	}
+	err := c.client.Get(stream.Context(), name, pod)
+	if err != nil {
+		return err
+	}
+
+	// Create the member
+	member := &v1beta3.Member{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: request.Member.ID.Namespace,
+			Name:      request.Member.ID.Name,
+		},
+		Service: request.Member.Host,
+		Port:    intstr.FromInt(int(request.Member.Port)),
+	}
+
+	// Create the member
+	err = c.client.Create(stream.Context(), member)
+	if err != nil && !k8serrors.IsAlreadyExists(err) {
+		return err
+	}
+	// TODO: Handle membership events
+	return nil
+}
+
+func (c *Controller) JoinPartitionGroup(request *api.JoinPartitionGroupRequest, stream api.PartitionGroupService_JoinPartitionGroupServer) error {
+	if request.MemberID.Namespace != request.GroupID.Namespace {
+		return errors.New("cannot join group in another namespace")
+	}
+
+	// Get the member joining the group
+	member := &v1beta3.Member{}
+	memberName := types.NamespacedName{
+		Namespace: request.MemberID.Namespace,
+		Name:      request.MemberID.Name,
+	}
+	err := c.client.Get(stream.Context(), memberName, member)
+	if err != nil {
+		return err
+	}
+
+	// Create the partition group if necessary
+	partitionGroup := &v1beta3.PartitionGroup{}
+	partitionGroupName := types.NamespacedName{
+		Namespace: request.GroupID.Namespace,
+		Name:      request.GroupID.Name,
+	}
+	err = c.client.Get(stream.Context(), partitionGroupName, partitionGroup)
+	if err != nil {
+		if !k8serrors.IsNotFound(err) {
+			return err
+		}
+		partitionGroup = &v1beta3.PartitionGroup{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: request.GroupID.Namespace,
+				Name:      request.GroupID.Name,
+			},
+		}
+		err = c.client.Create(stream.Context(), partitionGroup)
+		if err != nil && !k8serrors.IsAlreadyExists(err) {
+			return err
+		}
+		err = c.client.Get(stream.Context(), partitionGroupName, partitionGroup)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Create the partition group membership
+	partitionGroupMembership := &v1beta3.PartitionGroupMembership{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: request.GroupID.Namespace,
+			Name:      fmt.Sprintf("%s-%s", request.MemberID.Name, request.GroupID.Name),
+		},
+		Bind: v1beta3.PartitionGroupMembershipBinding{
+			Member: request.MemberID.Name,
+			Group:  request.GroupID.Name,
+		},
+	}
+
+	// Create the partition group membership
+	err = c.client.Create(stream.Context(), partitionGroupMembership)
+	if err != nil && !k8serrors.IsAlreadyExists(err) {
+		return err
+	}
+	// TODO: Handle partition group events
+	return nil
+}
+
+func (c *Controller) JoinMembershipGroup(request *api.JoinMembershipGroupRequest, stream api.MembershipGroupService_JoinMembershipGroupServer) error {
+	if request.MemberID.Namespace != request.GroupID.Namespace {
+		return errors.New("cannot join group in another namespace")
+	}
+
+	// Get the member joining the group
+	member := &v1beta3.Member{}
+	memberName := types.NamespacedName{
+		Namespace: request.MemberID.Namespace,
+		Name:      request.MemberID.Name,
+	}
+	err := c.client.Get(stream.Context(), memberName, member)
+	if err != nil {
+		return err
+	}
+
+	// Create the group if necessary
+	membershipGroup := &v1beta3.MembershipGroup{}
+	membershipGroupName := types.NamespacedName{
+		Namespace: request.GroupID.Namespace,
+		Name:      request.GroupID.Name,
+	}
+	err = c.client.Get(stream.Context(), membershipGroupName, membershipGroup)
+	if err != nil {
+		if !k8serrors.IsNotFound(err) {
+			return err
+		}
+		membershipGroup = &v1beta3.MembershipGroup{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: request.GroupID.Namespace,
+				Name:      request.GroupID.Name,
+			},
+		}
+		err = c.client.Create(stream.Context(), membershipGroup)
+		if err != nil && !k8serrors.IsAlreadyExists(err) {
+			return err
+		}
+		err = c.client.Get(stream.Context(), membershipGroupName, membershipGroup)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Create the group membership
+	membership := &v1beta3.Membership{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: request.GroupID.Namespace,
+			Name:      fmt.Sprintf("%s-%s", request.MemberID.Name, request.GroupID.Name),
+		},
+		Bind: v1beta3.MembershipBinding{
+			Member: request.MemberID.Name,
+			Group:  request.GroupID.Name,
+		},
+	}
+
+	// Create the group membership
+	err = c.client.Create(stream.Context(), membership)
+	if err != nil && !k8serrors.IsAlreadyExists(err) {
+		return err
+	}
+	// TODO: Handle partition group events
+	return nil
 }
 
 // GetDatabases get a list of databases managed by the controller
@@ -160,6 +351,9 @@ func (c *Controller) Start(stop <-chan struct{}) error {
 	s := grpc.NewServer(c.opts...)
 	go func() {
 		api.RegisterControllerServiceServer(s, c)
+		api.RegisterClusterServiceServer(s, c)
+		api.RegisterPartitionGroupServiceServer(s, c)
+		api.RegisterMembershipGroupServiceServer(s, c)
 		if err := s.Serve(lis); err != nil {
 			errs <- err
 		}
@@ -174,3 +368,8 @@ func (c *Controller) Start(stop <-chan struct{}) error {
 		return nil
 	}
 }
+
+var _ api.ControllerServiceServer = &Controller{}
+var _ api.ClusterServiceServer = &Controller{}
+var _ api.PartitionGroupServiceServer = &Controller{}
+var _ api.MembershipGroupServiceServer = &Controller{}
