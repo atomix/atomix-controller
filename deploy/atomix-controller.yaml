@@ -143,15 +143,96 @@ spec:
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
-  name: storagecontrollers.cloud.atomix.io
+  name: members.cloud.atomix.io
 spec:
   group: cloud.atomix.io
-  scope: Cluster
+  scope: Namespaced
   names:
-    kind: StorageController
-    listKind: StorageControllerList
-    plural: storagecontrollers
-    singular: storagecontroller
+    kind: Member
+    listKind: MemberList
+    plural: members
+    singular: member
+  versions:
+    - name: v1beta3
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          required:
+            - service
+            - port
+            - scope
+          properties:
+            service:
+              type: string
+            scope:
+              type: string
+            port:
+              type: integer
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: membershipgroups.cloud.atomix.io
+spec:
+  group: cloud.atomix.io
+  scope: Namespaced
+  names:
+    kind: MembershipGroup
+    listKind: MembershipGroupList
+    plural: membershipgroups
+    singular: membershipgroup
+  versions:
+    - name: v1beta3
+      served: true
+      storage: true
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: memberships.cloud.atomix.io
+spec:
+  group: cloud.atomix.io
+  scope: Namespaced
+  names:
+    kind: Membership
+    listKind: MembershipList
+    plural: memberships
+    singular: membership
+  versions:
+    - name: v1beta3
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          required:
+            - bind
+          properties:
+            bind:
+              type: object
+              required:
+                - member
+                - group
+              properties:
+                member:
+                  type: string
+                group:
+                  type: string
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: partitiongroups.cloud.atomix.io
+spec:
+  group: cloud.atomix.io
+  scope: Namespaced
+  names:
+    kind: PartitionGroup
+    listKind: PartitionGroupList
+    plural: partitiongroups
+    singular: partitiongroup
   versions:
     - name: v1beta3
       served: true
@@ -164,6 +245,77 @@ spec:
           properties:
             spec:
               type: object
+              required:
+                - partitions
+              properties:
+                partitions:
+                  type: integer
+                replicationFactor:
+                  type: integer
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: partitiongroupmemberships.cloud.atomix.io
+spec:
+  group: cloud.atomix.io
+  scope: Namespaced
+  names:
+    kind: PartitionGroupMembership
+    listKind: PartitionGroupMembershipList
+    plural: partitiongroupmemberships
+    singular: partitiongroupmembership
+  versions:
+    - name: v1beta3
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          required:
+            - bind
+          properties:
+            bind:
+              type: object
+              required:
+                - member
+                - group
+              properties:
+                member:
+                  type: string
+                group:
+                  type: string
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: leaderships.cloud.atomix.io
+spec:
+  group: cloud.atomix.io
+  scope: Namespaced
+  names:
+    kind: Leadership
+    listKind: LeadershipList
+    plural: leaderships
+    singular: leadership
+  versions:
+    - name: v1beta3
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          required:
+            - group
+            - term
+            - leader
+          properties:
+            group:
+              type: string
+            term:
+              type: integer
+            leader:
+              type: string
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole

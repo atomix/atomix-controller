@@ -98,7 +98,7 @@ func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, err
 	pod := &corev1.Pod{}
 	podName := types.NamespacedName{
 		Namespace: member.Namespace,
-		Name:      member.Name,
+		Name:      member.Service,
 	}
 	err = r.client.Get(context.TODO(), podName, pod)
 	if err != nil {

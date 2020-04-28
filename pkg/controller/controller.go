@@ -38,10 +38,10 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/rest"
 	"net"
-	"reflect"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+	"sort"
 	"sync"
 )
 
@@ -59,10 +59,30 @@ func AddController(mgr manager.Manager) error {
 		return err
 	}
 
-	if err = database.Add(mgr); err != nil {
+	if err := mgr.GetFieldIndexer().IndexField(&v1beta3.Member{}, "scope", func(rawObj runtime.Object) []string {
+		member := rawObj.(*v1beta3.Member)
+		return []string{member.Scope}
+	}); err != nil {
 		return err
 	}
 
+	if err := mgr.GetFieldIndexer().IndexField(&v1beta3.Membership{}, "bind.group", func(rawObj runtime.Object) []string {
+		membership := rawObj.(*v1beta3.Membership)
+		return []string{membership.Bind.Group}
+	}); err != nil {
+		return err
+	}
+
+	if err := mgr.GetFieldIndexer().IndexField(&v1beta3.PartitionGroupMembership{}, "bind.group", func(rawObj runtime.Object) []string {
+		membership := rawObj.(*v1beta3.PartitionGroupMembership)
+		return []string{membership.Bind.Group}
+	}); err != nil {
+		return err
+	}
+
+	if err = database.Add(mgr); err != nil {
+		return err
+	}
 	if err = member.Add(mgr, memberCh); err != nil {
 		return err
 	}
@@ -120,6 +140,9 @@ type Controller struct {
 }
 
 func (c *Controller) JoinCluster(request *api.JoinClusterRequest, stream api.ClusterService_JoinClusterServer) error {
+	log.Info("Received JoinClusterRequest", "Request", request)
+	log.Info("Joining member to cluster", "Namespace", request.Member.ID.Namespace, "Name", request.Member.ID.Name)
+
 	ch := make(chan api.JoinClusterResponse)
 	c.mu.Lock()
 	membersOut, ok := c.membersOut[request.GroupID.String()]
@@ -146,10 +169,11 @@ func (c *Controller) JoinCluster(request *api.JoinClusterRequest, stream api.Clu
 	pod := &corev1.Pod{}
 	name := types.NamespacedName{
 		Namespace: request.Member.ID.Namespace,
-		Name:      request.Member.ID.Name,
+		Name:      request.Member.Host,
 	}
 	err := c.client.Get(stream.Context(), name, pod)
 	if err != nil {
+		log.Error(err, "Failed to join member to cluster", "Namespace", request.Member.ID.Namespace, "Name", request.Member.ID.Name)
 		return err
 	}
 
@@ -167,6 +191,7 @@ func (c *Controller) JoinCluster(request *api.JoinClusterRequest, stream api.Clu
 	// Create the member
 	err = c.client.Create(stream.Context(), member)
 	if err != nil && !k8serrors.IsAlreadyExists(err) {
+		log.Error(err, "Failed to join member to cluster", "Namespace", request.Member.ID.Namespace, "Name", request.Member.ID.Name)
 		return err
 	}
 
@@ -175,14 +200,17 @@ func (c *Controller) JoinCluster(request *api.JoinClusterRequest, stream api.Clu
 		close(ch)
 	}()
 
-	var lastResponse *api.JoinClusterResponse
+	hasResponse := false
+	var lastResponse api.JoinClusterResponse
 	for response := range ch {
-		if lastResponse == nil || !reflect.DeepEqual(response, *lastResponse) {
+		if !hasResponse || response.String() != lastResponse.String() {
+			log.Info("Sending JoinClusterResponse", "Response", response)
 			err := stream.Send(&response)
 			if err != nil {
 				log.Error(err, "An error occurred in the membership response stream")
 			}
-			lastResponse = &response
+			hasResponse = true
+			lastResponse = response
 		}
 	}
 	return nil
@@ -192,6 +220,9 @@ func (c *Controller) JoinPartitionGroup(request *api.JoinPartitionGroupRequest, 
 	if request.MemberID.Namespace != request.GroupID.Namespace {
 		return errors.New("cannot join group in another namespace")
 	}
+
+	log.Info("Received JoinPartitionGroupRequest", "Request", request)
+	log.Info("Joining Member to PartitionGroup", "Namespace", request.MemberID.Namespace, "Name", request.MemberID.Name)
 
 	ch := make(chan api.JoinPartitionGroupResponse)
 	c.mu.Lock()
@@ -280,14 +311,17 @@ func (c *Controller) JoinPartitionGroup(request *api.JoinPartitionGroupRequest, 
 		close(ch)
 	}()
 
-	var lastResponse *api.JoinPartitionGroupResponse
+	hasResponse := false
+	var lastResponse api.JoinPartitionGroupResponse
 	for response := range ch {
-		if lastResponse == nil || !reflect.DeepEqual(response, *lastResponse) {
+		if !hasResponse || response.String() != lastResponse.String() {
+			log.Info("Sending JoinPartitionGroupResponse", "Response", response)
 			err := stream.Send(&response)
 			if err != nil {
-				log.Error(err, "An error occurred in the membership response stream")
+				log.Error(err, "An error occurred in the partition group response stream")
 			}
-			lastResponse = &response
+			hasResponse = true
+			lastResponse = response
 		}
 	}
 	return nil
@@ -297,6 +331,9 @@ func (c *Controller) JoinMembershipGroup(request *api.JoinMembershipGroupRequest
 	if request.MemberID.Namespace != request.GroupID.Namespace {
 		return errors.New("cannot join group in another namespace")
 	}
+
+	log.Info("Received JoinMembershipGroupRequest", "Request", request)
+	log.Info("Joining Member to MembershipGroup", "Namespace", request.MemberID.Namespace, "Name", request.MemberID.Name)
 
 	ch := make(chan api.JoinMembershipGroupResponse)
 	c.mu.Lock()
@@ -381,14 +418,17 @@ func (c *Controller) JoinMembershipGroup(request *api.JoinMembershipGroupRequest
 		close(ch)
 	}()
 
-	var lastResponse *api.JoinMembershipGroupResponse
+	hasResponse := false
+	var lastResponse api.JoinMembershipGroupResponse
 	for response := range ch {
-		if lastResponse == nil {
+		if !hasResponse || response.String() != lastResponse.String() {
+			log.Info("Sending JoinMembershipGroupResponse", "Response", response)
 			err := stream.Send(&response)
 			if err != nil {
-				log.Error(err, "An error occurred in the membership response stream")
+				log.Error(err, "An error occurred in the membership group response stream")
 			}
-			lastResponse = &response
+			hasResponse = true
+			lastResponse = response
 		}
 	}
 	return nil
@@ -517,22 +557,15 @@ func (c *Controller) processMembers(stop <-chan struct{}) {
 		close(c.memberIn)
 	}()
 	for name := range c.memberIn {
-		member := &v1beta3.Member{}
-		err := c.client.Get(context.TODO(), name, member)
-		if err != nil {
-			log.Error(err, "Failed to process member update", "Namespace", name.Namespace, "Name", name.Name)
-			continue
-		}
-
 		memberList := &v1beta3.MemberList{}
 		memberListFields := map[string]string{
-			"scope": member.Scope,
+			"scope": name.Name,
 		}
 		memberListOpts := &client.ListOptions{
-			Namespace:     member.Namespace,
+			Namespace:     name.Namespace,
 			FieldSelector: fields.SelectorFromSet(memberListFields),
 		}
-		err = c.client.List(context.TODO(), memberList, memberListOpts)
+		err := c.client.List(context.TODO(), memberList, memberListOpts)
 		if err != nil {
 			log.Error(err, "Failed to process member update", "Namespace", name.Namespace, "Name", name.Name)
 			continue
@@ -549,14 +582,17 @@ func (c *Controller) processMembers(stop <-chan struct{}) {
 				Port: member.Port.IntVal,
 			}
 		}
+		sort.Slice(members, func(i, j int) bool {
+			return members[i].ID.Name < members[j].ID.Name
+		})
 
 		response := api.JoinClusterResponse{
 			Membership: api.Membership{
 				Members: members,
 			},
 			GroupID: api.MembershipGroupId{
-				Namespace: member.Namespace,
-				Name:      member.Scope,
+				Namespace: name.Namespace,
+				Name:      name.Name,
 			},
 		}
 
@@ -616,6 +652,9 @@ func (c *Controller) processMembershipGroups(stop <-chan struct{}) {
 				Port: member.Port.IntVal,
 			})
 		}
+		sort.Slice(members, func(i, j int) bool {
+			return members[i].ID.Name < members[j].ID.Name
+		})
 
 		leadership := &v1beta3.Leadership{}
 		leadershipName := types.NamespacedName{
@@ -673,7 +712,7 @@ func (c *Controller) processPartitionGroups(stop <-chan struct{}) {
 		}
 
 		partitions := int(partitionGroup.Spec.Partitions)
-		membershipGroups := make([]*api.MembershipGroup, 0)
+		membershipGroups := make([]api.MembershipGroup, 0)
 		skip := false
 		for partition := 1; partition <= partitions; partition++ {
 			membershipGroup := &v1beta3.MembershipGroup{}
@@ -722,6 +761,9 @@ func (c *Controller) processPartitionGroups(stop <-chan struct{}) {
 					Port: member.Port.IntVal,
 				})
 			}
+			sort.Slice(members, func(i, j int) bool {
+				return members[i].ID.Name < members[j].ID.Name
+			})
 
 			leadership := &v1beta3.Leadership{}
 			leadershipName := types.NamespacedName{
@@ -744,7 +786,7 @@ func (c *Controller) processPartitionGroups(stop <-chan struct{}) {
 				}
 			}
 
-			membershipGroups = append(membershipGroups, &api.MembershipGroup{
+			membershipGroups = append(membershipGroups, api.MembershipGroup{
 				ID: api.MembershipGroupId{
 					Namespace: membershipGroup.Namespace,
 					Name:      membershipGroup.Name,
@@ -759,12 +801,17 @@ func (c *Controller) processPartitionGroups(stop <-chan struct{}) {
 			continue
 		}
 
+		sort.Slice(membershipGroups, func(i, j int) bool {
+			return membershipGroups[i].ID.Name < membershipGroups[j].ID.Name
+		})
+
 		response := api.JoinPartitionGroupResponse{
 			Group: api.PartitionGroup{
 				ID: api.PartitionGroupId{
 					Namespace: partitionGroup.Namespace,
 					Name:      partitionGroup.Name,
 				},
+				Partitions: membershipGroups,
 			},
 		}
 
