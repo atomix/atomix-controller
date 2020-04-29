@@ -649,12 +649,14 @@ func (c *Controller) processMembers(stop <-chan struct{}) {
 			},
 		}
 
+		c.mu.RLock()
 		group, ok := c.membersOut[response.GroupID.String()]
 		if ok {
 			for _, ch := range group {
 				ch <- response
 			}
 		}
+		c.mu.RUnlock()
 	}
 }
 
@@ -747,12 +749,14 @@ func (c *Controller) processMembershipGroups(stop <-chan struct{}) {
 			},
 		}
 
+		c.mu.RLock()
 		group, ok := c.membershipGroupsOut[response.Group.ID.String()]
 		if ok {
 			for _, ch := range group {
 				ch <- response
 			}
 		}
+		c.mu.RUnlock()
 	}
 }
 
@@ -880,12 +884,14 @@ func (c *Controller) processPartitionGroups(stop <-chan struct{}) {
 			},
 		}
 
+		c.mu.RLock()
 		group, ok := c.partitionGroupsOut[response.Group.ID.String()]
 		if ok {
 			for _, ch := range group {
 				ch <- response
 			}
 		}
+		c.mu.RUnlock()
 	}
 }
 
