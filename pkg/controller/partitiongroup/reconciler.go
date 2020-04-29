@@ -38,11 +38,12 @@ var log = logf.Log.WithName("partition_group_controller")
 
 // Add creates a new Database controller and adds it to the Manager. The Manager will set fields on the
 // controller and Start it when the Manager is Started.
-func Add(mgr manager.Manager) error {
+func Add(mgr manager.Manager, eventCh chan<- types.NamespacedName) error {
 	r := &Reconciler{
-		client: mgr.GetClient(),
-		scheme: mgr.GetScheme(),
-		config: mgr.GetConfig(),
+		client:  mgr.GetClient(),
+		scheme:  mgr.GetScheme(),
+		config:  mgr.GetConfig(),
+		eventCh: eventCh,
 	}
 
 	// Create a new controller
@@ -57,10 +58,11 @@ func Add(mgr manager.Manager) error {
 		return err
 	}
 
-	// Watch for changes to secondary resource PartitionGroupMembership and requeue the owner PartitionGroup
-	err = c.Watch(&source.Kind{Type: &v1beta3.PartitionGroupMembership{}}, &handler.EnqueueRequestForOwner{
-		IsController: true,
-		OwnerType:    &v1beta3.PartitionGroup{},
+	// Watch for changes to secondary resource PartitionGroupMembership and requeue the PartitionGroup
+	err = c.Watch(&source.Kind{Type: &v1beta3.PartitionGroupMembership{}}, &handler.EnqueueRequestsFromMapFunc{
+		ToRequests: &partitionGroupMembershipMapper{
+			client: mgr.GetClient(),
+		},
 	})
 	if err != nil {
 		return err
@@ -73,9 +75,10 @@ var _ reconcile.Reconciler = &Reconciler{}
 
 // Reconciler reconciles a PartitionGroup object
 type Reconciler struct {
-	client client.Client
-	scheme *runtime.Scheme
-	config *rest.Config
+	client  client.Client
+	scheme  *runtime.Scheme
+	config  *rest.Config
+	eventCh chan<- types.NamespacedName
 }
 
 func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, error) {
@@ -95,6 +98,15 @@ func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, err
 		// Error reading the object - requeue the request.
 		return reconcile.Result{}, err
 	}
+
+	defer func() {
+		go func() {
+			r.eventCh <- types.NamespacedName{
+				Namespace: partitionGroup.Namespace,
+				Name:      partitionGroup.Name,
+			}
+		}()
+	}()
 
 	if err := r.reconcilePartitions(partitionGroup); err != nil {
 		return reconcile.Result{}, err
@@ -206,16 +218,7 @@ func (r *Reconciler) reconcileMemberships(partitionGroup *v1beta3.PartitionGroup
 				partitionGroupMembership := partitionGroupMemberships.Items[(i+k)%len(partitionGroupMemberships.Items)]
 				_, exists := memberships[partitionGroupMembership.Bind.Member]
 				if !exists {
-					member := &v1beta3.Member{}
-					memberName := types.NamespacedName{
-						Namespace: partitionGroupMembership.Namespace,
-						Name:      partitionGroupMembership.Bind.Member,
-					}
-					err := r.client.Get(context.TODO(), memberName, member)
-					if err != nil {
-						return err
-					}
-
+					log.Info("Creating Membership", "Namespace", partitionGroup.Namespace, "Group", partitionGroup.Name, "Member", partitionGroupMembership.Bind.Member)
 					membership := &v1beta3.Membership{
 						ObjectMeta: metav1.ObjectMeta{
 							Namespace: partitionGroup.Namespace,
@@ -250,5 +253,21 @@ func getMembershipGroupNamespacedName(partitionGroup *v1beta3.PartitionGroup, pa
 	return types.NamespacedName{
 		Namespace: partitionGroup.Namespace,
 		Name:      getMembershipGroupName(partitionGroup, partitionID),
+	}
+}
+
+type partitionGroupMembershipMapper struct {
+	client client.Client
+}
+
+func (m *partitionGroupMembershipMapper) Map(object handler.MapObject) []reconcile.Request {
+	partitionGroupMembership := object.Object.(*v1beta3.PartitionGroupMembership)
+	return []reconcile.Request{
+		{
+			NamespacedName: types.NamespacedName{
+				Namespace: partitionGroupMembership.Namespace,
+				Name:      partitionGroupMembership.Bind.Group,
+			},
+		},
 	}
 }

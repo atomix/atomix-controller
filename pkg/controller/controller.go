@@ -86,13 +86,13 @@ func AddController(mgr manager.Manager) error {
 	if err = member.Add(mgr, memberCh); err != nil {
 		return err
 	}
-	if err = membershipgroup.Add(mgr); err != nil {
+	if err = membershipgroup.Add(mgr, membershipGroupCh); err != nil {
 		return err
 	}
 	if err = membership.Add(mgr, membershipGroupCh); err != nil {
 		return err
 	}
-	if err = partitiongroup.Add(mgr); err != nil {
+	if err = partitiongroup.Add(mgr, partitionGroupCh); err != nil {
 		return err
 	}
 	if err = partitiongroupmembership.Add(mgr, partitionGroupCh); err != nil {
@@ -222,7 +222,7 @@ func (c *Controller) JoinPartitionGroup(request *api.JoinPartitionGroupRequest, 
 	}
 
 	log.Info("Received JoinPartitionGroupRequest", "Request", request)
-	log.Info("Joining Member to PartitionGroup", "Namespace", request.MemberID.Namespace, "Name", request.MemberID.Name)
+	log.Info("Joining Member to PartitionGroup", "Namespace", request.MemberID.Namespace, "Member", request.MemberID.Name, "PartitionGroup", request.GroupID.Name)
 
 	ch := make(chan api.JoinPartitionGroupResponse)
 	c.mu.Lock()
@@ -254,6 +254,7 @@ func (c *Controller) JoinPartitionGroup(request *api.JoinPartitionGroupRequest, 
 	}
 	err := c.client.Get(stream.Context(), memberName, member)
 	if err != nil {
+		log.Error(err, "Failed to join Member to PartitionGroup", "Namespace", request.MemberID.Namespace, "Member", request.MemberID.Name, "PartitionGroup", request.GroupID.Name)
 		return err
 	}
 
@@ -266,6 +267,7 @@ func (c *Controller) JoinPartitionGroup(request *api.JoinPartitionGroupRequest, 
 	err = c.client.Get(stream.Context(), partitionGroupName, partitionGroup)
 	if err != nil {
 		if !k8serrors.IsNotFound(err) {
+			log.Error(err, "Failed to join Member to PartitionGroup", "Namespace", request.MemberID.Namespace, "Member", request.MemberID.Name, "PartitionGroup", request.GroupID.Name)
 			return err
 		}
 		partitionGroup = &v1beta3.PartitionGroup{
@@ -280,10 +282,7 @@ func (c *Controller) JoinPartitionGroup(request *api.JoinPartitionGroupRequest, 
 		}
 		err = c.client.Create(stream.Context(), partitionGroup)
 		if err != nil && !k8serrors.IsAlreadyExists(err) {
-			return err
-		}
-		err = c.client.Get(stream.Context(), partitionGroupName, partitionGroup)
-		if err != nil {
+			log.Error(err, "Failed to join Member to PartitionGroup", "Namespace", request.MemberID.Namespace, "Member", request.MemberID.Name, "PartitionGroup", request.GroupID.Name)
 			return err
 		}
 	}
@@ -303,6 +302,7 @@ func (c *Controller) JoinPartitionGroup(request *api.JoinPartitionGroupRequest, 
 	// Create the partition group membership
 	err = c.client.Create(stream.Context(), partitionGroupMembership)
 	if err != nil && !k8serrors.IsAlreadyExists(err) {
+		log.Error(err, "Failed to join Member to PartitionGroup", "Namespace", request.MemberID.Namespace, "Member", request.MemberID.Name, "PartitionGroup", request.GroupID.Name)
 		return err
 	}
 
@@ -314,6 +314,18 @@ func (c *Controller) JoinPartitionGroup(request *api.JoinPartitionGroupRequest, 
 	hasResponse := false
 	var lastResponse api.JoinPartitionGroupResponse
 	for response := range ch {
+		// Wait until the member has been added to all partitions
+		if !hasResponse {
+			skip := false
+			for _, partition := range response.Group.Partitions {
+				if len(partition.Members) == 0 {
+					skip = true
+				}
+			}
+			if skip {
+				continue
+			}
+		}
 		if !hasResponse || response.String() != lastResponse.String() {
 			log.Info("Sending JoinPartitionGroupResponse", "Response", response)
 			err := stream.Send(&response)
@@ -365,6 +377,7 @@ func (c *Controller) JoinMembershipGroup(request *api.JoinMembershipGroupRequest
 	}
 	err := c.client.Get(stream.Context(), memberName, member)
 	if err != nil {
+		log.Error(err, "Failed to join Member to MembershipGroup", "Namespace", request.MemberID.Namespace, "Member", request.MemberID.Name, "MembershipGroup", request.GroupID.Name)
 		return err
 	}
 
@@ -377,6 +390,7 @@ func (c *Controller) JoinMembershipGroup(request *api.JoinMembershipGroupRequest
 	err = c.client.Get(stream.Context(), membershipGroupName, membershipGroup)
 	if err != nil {
 		if !k8serrors.IsNotFound(err) {
+			log.Error(err, "Failed to join Member to MembershipGroup", "Namespace", request.MemberID.Namespace, "Member", request.MemberID.Name, "MembershipGroup", request.GroupID.Name)
 			return err
 		}
 		membershipGroup = &v1beta3.MembershipGroup{
@@ -387,10 +401,7 @@ func (c *Controller) JoinMembershipGroup(request *api.JoinMembershipGroupRequest
 		}
 		err = c.client.Create(stream.Context(), membershipGroup)
 		if err != nil && !k8serrors.IsAlreadyExists(err) {
-			return err
-		}
-		err = c.client.Get(stream.Context(), membershipGroupName, membershipGroup)
-		if err != nil {
+			log.Error(err, "Failed to join Member to MembershipGroup", "Namespace", request.MemberID.Namespace, "Member", request.MemberID.Name, "MembershipGroup", request.GroupID.Name)
 			return err
 		}
 	}
@@ -410,6 +421,7 @@ func (c *Controller) JoinMembershipGroup(request *api.JoinMembershipGroupRequest
 	// Create the group membership
 	err = c.client.Create(stream.Context(), membership)
 	if err != nil && !k8serrors.IsAlreadyExists(err) {
+		log.Error(err, "Failed to join Member to MembershipGroup", "Namespace", request.MemberID.Namespace, "Member", request.MemberID.Name, "MembershipGroup", request.GroupID.Name)
 		return err
 	}
 
@@ -729,7 +741,7 @@ func (c *Controller) processPartitionGroups(stop <-chan struct{}) {
 
 			membershipList := &v1beta3.MembershipList{}
 			membershipListFields := map[string]string{
-				"bind.group": partitionGroup.Name,
+				"bind.group": fmt.Sprintf("%s-%d", name.Name, partition),
 			}
 			membershipListOpts := &client.ListOptions{
 				Namespace:     partitionGroup.Namespace,
@@ -738,7 +750,8 @@ func (c *Controller) processPartitionGroups(stop <-chan struct{}) {
 			err = c.client.List(context.TODO(), membershipList, membershipListOpts)
 			if err != nil {
 				log.Error(err, "Failed to process partition group update", "Namespace", name.Namespace, "Name", name.Name)
-				continue
+				skip = true
+				break
 			}
 
 			members := make([]api.Member, 0)
@@ -777,7 +790,8 @@ func (c *Controller) processPartitionGroups(stop <-chan struct{}) {
 			if err != nil {
 				if !k8serrors.IsNotFound(err) {
 					log.Error(err, "Failed to process partition group update", "Namespace", name.Namespace, "Name", name.Name)
-					continue
+					skip = true
+					break
 				}
 				term = api.TermID(leadership.Term)
 				leader = &api.MemberId{

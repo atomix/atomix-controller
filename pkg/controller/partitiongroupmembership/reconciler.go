@@ -30,7 +30,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
-var log = logf.Log.WithName("partition_group-membership_controller")
+var log = logf.Log.WithName("partition_group_membership_controller")
 
 // Add creates a new Database controller and adds it to the Manager. The Manager will set fields on the
 // controller and Start it when the Manager is Started.
@@ -89,7 +89,7 @@ type Reconciler struct {
 
 func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, error) {
 	logger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
-	logger.Info("Reconciling Membership")
+	logger.Info("Reconciling PartitionGroupMembership")
 
 	// Fetch the PartitionGroupMembership instance
 	partitionGroupMembership := &v1beta3.PartitionGroupMembership{}
