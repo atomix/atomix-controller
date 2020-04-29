@@ -86,39 +86,70 @@ func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, err
 		return reconcile.Result{}, err
 	}
 
-	defer func() {
-		go func() {
-			r.eventCh <- types.NamespacedName{
-				Namespace: member.Namespace,
-				Name:      member.Scope,
-			}
-		}()
+	go func() {
+		r.eventCh <- types.NamespacedName{
+			Namespace: member.Namespace,
+			Name:      member.Scope,
+		}
 	}()
 
-	pod := &corev1.Pod{}
-	podName := types.NamespacedName{
-		Namespace: member.Namespace,
-		Name:      member.Service,
-	}
-	err = r.client.Get(context.TODO(), podName, pod)
-	if err != nil {
-		if !errors.IsNotFound(err) {
+	if member.DeletionTimestamp == nil {
+		pod := &corev1.Pod{}
+		podName := types.NamespacedName{
+			Namespace: member.Namespace,
+			Name:      member.Service,
+		}
+		err = r.client.Get(context.TODO(), podName, pod)
+		if err != nil {
+			if !errors.IsNotFound(err) {
+				return reconcile.Result{}, err
+			}
+			err = r.client.Delete(context.TODO(), member)
 			return reconcile.Result{}, err
 		}
-		err = r.client.Delete(context.TODO(), member)
-		return reconcile.Result{}, err
-	}
 
-	if len(member.OwnerReferences) == 0 {
-		owner := metav1.OwnerReference{
-			APIVersion: "v1",
-			Kind:       "Pod",
-			Name:       pod.ObjectMeta.Name,
-			UID:        pod.ObjectMeta.UID,
+		if len(member.OwnerReferences) == 0 {
+			owner := metav1.OwnerReference{
+				APIVersion: "v1",
+				Kind:       "Pod",
+				Name:       pod.ObjectMeta.Name,
+				UID:        pod.ObjectMeta.UID,
+			}
+			member.ObjectMeta.OwnerReferences = []metav1.OwnerReference{owner}
+			err = r.client.Update(context.TODO(), member)
+			return reconcile.Result{}, err
 		}
-		member.ObjectMeta.OwnerReferences = []metav1.OwnerReference{owner}
-		err = r.client.Update(context.TODO(), member)
-		return reconcile.Result{}, err
+		addFinalizer := true
+		for _, finalizer := range member.Finalizers {
+			if finalizer == "member-controller" {
+				addFinalizer = false
+				break
+			}
+		}
+		if addFinalizer {
+			member.Finalizers = append(member.Finalizers, "member-controller")
+			err = r.client.Update(context.TODO(), member)
+			return reconcile.Result{}, err
+		}
+	} else {
+		finalize := false
+		for _, finalizer := range member.Finalizers {
+			if finalizer == "member-controller" {
+				finalize = true
+				break
+			}
+		}
+		if finalize {
+			finalizers := make([]string, 0, len(member.Finalizers)-1)
+			for _, finalizer := range member.Finalizers {
+				if finalizer != "member-controller" {
+					finalizers = append(finalizers, finalizer)
+				}
+			}
+			member.Finalizers = finalizers
+			err = r.client.Update(context.TODO(), member)
+			return reconcile.Result{}, err
+		}
 	}
 	return reconcile.Result{}, nil
 }

@@ -141,7 +141,7 @@ type Controller struct {
 
 func (c *Controller) JoinCluster(request *api.JoinClusterRequest, stream api.ClusterService_JoinClusterServer) error {
 	log.Info("Received JoinClusterRequest", "Request", request)
-	log.Info("Joining member to cluster", "Namespace", request.Member.ID.Namespace, "Name", request.Member.ID.Name)
+	log.Info("Joining Member to cluster", "Namespace", request.Member.ID.Namespace, "Name", request.Member.ID.Name)
 
 	ch := make(chan api.JoinClusterResponse)
 	c.mu.Lock()
@@ -173,7 +173,7 @@ func (c *Controller) JoinCluster(request *api.JoinClusterRequest, stream api.Clu
 	}
 	err := c.client.Get(stream.Context(), name, pod)
 	if err != nil {
-		log.Error(err, "Failed to join member to cluster", "Namespace", request.Member.ID.Namespace, "Name", request.Member.ID.Name)
+		log.Error(err, "Failed to join Member to cluster", "Namespace", request.Member.ID.Namespace, "Name", request.Member.ID.Name)
 		return err
 	}
 
@@ -191,12 +191,23 @@ func (c *Controller) JoinCluster(request *api.JoinClusterRequest, stream api.Clu
 	// Create the member
 	err = c.client.Create(stream.Context(), member)
 	if err != nil && !k8serrors.IsAlreadyExists(err) {
-		log.Error(err, "Failed to join member to cluster", "Namespace", request.Member.ID.Namespace, "Name", request.Member.ID.Name)
+		log.Error(err, "Failed to join Member to cluster", "Namespace", request.Member.ID.Namespace, "Name", request.Member.ID.Name)
 		return err
 	}
 
 	go func() {
 		<-stream.Context().Done()
+		log.Info("Leaving Member from cluster", "Namespace", request.Member.ID.Namespace, "Name", request.Member.ID.Name)
+		member := &v1beta3.Member{}
+		err := c.client.Get(context.TODO(), name, member)
+		if err != nil && !k8serrors.IsNotFound(err) {
+			log.Error(err, "Failed to leave Member from cluster", "Namespace", request.Member.ID.Namespace, "Name", request.Member.ID.Name)
+		} else {
+			err = c.client.Delete(context.TODO(), member)
+			if err != nil && !k8serrors.IsNotFound(err) {
+				log.Error(err, "Failed to leave Member from cluster", "Namespace", request.Member.ID.Namespace, "Name", request.Member.ID.Name)
+			}
+		}
 		close(ch)
 	}()
 
@@ -308,6 +319,20 @@ func (c *Controller) JoinPartitionGroup(request *api.JoinPartitionGroupRequest, 
 
 	go func() {
 		<-stream.Context().Done()
+		partitionGroupMembership := &v1beta3.PartitionGroupMembership{}
+		name := types.NamespacedName{
+			Namespace: request.GroupID.Namespace,
+			Name:      fmt.Sprintf("%s-%s", request.MemberID.Name, request.GroupID.Name),
+		}
+		err := c.client.Get(context.TODO(), name, partitionGroupMembership)
+		if err != nil && !k8serrors.IsNotFound(err) {
+			log.Error(err, "Failed to leave Member from PartitionGroup", "Namespace", request.MemberID.Namespace, "Member", request.MemberID.Name, "PartitionGroup", request.GroupID.Name)
+		} else {
+			err = c.client.Delete(context.TODO(), partitionGroupMembership)
+			if err != nil && !k8serrors.IsNotFound(err) {
+				log.Error(err, "Failed to leave Member from PartitionGroup", "Namespace", request.MemberID.Namespace, "Member", request.MemberID.Name, "PartitionGroup", request.GroupID.Name)
+			}
+		}
 		close(ch)
 	}()
 
@@ -427,6 +452,20 @@ func (c *Controller) JoinMembershipGroup(request *api.JoinMembershipGroupRequest
 
 	go func() {
 		<-stream.Context().Done()
+		membership := &v1beta3.Membership{}
+		name := types.NamespacedName{
+			Namespace: request.GroupID.Namespace,
+			Name:      fmt.Sprintf("%s-%s", request.MemberID.Name, request.GroupID.Name),
+		}
+		err := c.client.Get(context.TODO(), name, membership)
+		if err != nil && !k8serrors.IsNotFound(err) {
+			log.Error(err, "Failed to leave Member from MembershipGroup", "Namespace", request.MemberID.Namespace, "Member", request.MemberID.Name, "MembershipGroup", request.GroupID.Name)
+		} else {
+			err = c.client.Delete(context.TODO(), membership)
+			if err != nil && !k8serrors.IsNotFound(err) {
+				log.Error(err, "Failed to leave Member from MembershipGroup", "Namespace", request.MemberID.Namespace, "Member", request.MemberID.Name, "MembershipGroup", request.GroupID.Name)
+			}
+		}
 		close(ch)
 	}()
 
@@ -583,15 +622,17 @@ func (c *Controller) processMembers(stop <-chan struct{}) {
 			continue
 		}
 
-		members := make([]api.Member, len(memberList.Items))
-		for i, member := range memberList.Items {
-			members[i] = api.Member{
-				ID: api.MemberId{
-					Name:      member.Name,
-					Namespace: member.Namespace,
-				},
-				Host: member.Service,
-				Port: member.Port.IntVal,
+		members := make([]api.Member, 0, len(memberList.Items))
+		for _, member := range memberList.Items {
+			if member.DeletionTimestamp == nil {
+				members = append(members, api.Member{
+					ID: api.MemberId{
+						Name:      member.Name,
+						Namespace: member.Namespace,
+					},
+					Host: member.Service,
+					Port: member.Port.IntVal,
+				})
 			}
 		}
 		sort.Slice(members, func(i, j int) bool {
@@ -644,8 +685,11 @@ func (c *Controller) processMembershipGroups(stop <-chan struct{}) {
 			continue
 		}
 
-		members := make([]api.Member, 0)
+		members := make([]api.Member, 0, len(membershipList.Items))
 		for _, membership := range membershipList.Items {
+			if membership.DeletionTimestamp != nil {
+				continue
+			}
 			member := &v1beta3.Member{}
 			memberName := types.NamespacedName{
 				Namespace: membership.Namespace,
@@ -655,14 +699,16 @@ func (c *Controller) processMembershipGroups(stop <-chan struct{}) {
 			if err != nil {
 				continue
 			}
-			members = append(members, api.Member{
-				ID: api.MemberId{
-					Name:      member.Name,
-					Namespace: member.Namespace,
-				},
-				Host: member.Service,
-				Port: member.Port.IntVal,
-			})
+			if member.DeletionTimestamp == nil {
+				members = append(members, api.Member{
+					ID: api.MemberId{
+						Name:      member.Name,
+						Namespace: member.Namespace,
+					},
+					Host: member.Service,
+					Port: member.Port.IntVal,
+				})
+			}
 		}
 		sort.Slice(members, func(i, j int) bool {
 			return members[i].ID.Name < members[j].ID.Name
@@ -754,8 +800,11 @@ func (c *Controller) processPartitionGroups(stop <-chan struct{}) {
 				break
 			}
 
-			members := make([]api.Member, 0)
+			members := make([]api.Member, 0, len(membershipList.Items))
 			for _, membership := range membershipList.Items {
+				if membership.DeletionTimestamp != nil {
+					continue
+				}
 				member := &v1beta3.Member{}
 				memberName := types.NamespacedName{
 					Namespace: membership.Namespace,
@@ -765,14 +814,16 @@ func (c *Controller) processPartitionGroups(stop <-chan struct{}) {
 				if err != nil {
 					continue
 				}
-				members = append(members, api.Member{
-					ID: api.MemberId{
-						Name:      member.Name,
-						Namespace: member.Namespace,
-					},
-					Host: member.Service,
-					Port: member.Port.IntVal,
-				})
+				if member.DeletionTimestamp == nil {
+					members = append(members, api.Member{
+						ID: api.MemberId{
+							Name:      member.Name,
+							Namespace: member.Namespace,
+						},
+						Host: member.Service,
+						Port: member.Port.IntVal,
+					})
+				}
 			}
 			sort.Slice(members, func(i, j int) bool {
 				return members[i].ID.Name < members[j].ID.Name

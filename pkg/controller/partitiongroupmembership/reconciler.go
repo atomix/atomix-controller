@@ -105,6 +105,21 @@ func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, err
 		return reconcile.Result{}, err
 	}
 
+	if partitionGroupMembership.DeletionTimestamp == nil {
+		addFinalizer := true
+		for _, finalizer := range partitionGroupMembership.Finalizers {
+			if finalizer == "partition-group-membership-controller" {
+				addFinalizer = false
+				break
+			}
+		}
+		if addFinalizer {
+			partitionGroupMembership.Finalizers = append(partitionGroupMembership.Finalizers, "partition-group-membership-controller")
+			err = r.client.Update(context.TODO(), partitionGroupMembership)
+			return reconcile.Result{}, err
+		}
+	}
+
 	defer func() {
 		go func() {
 			r.eventCh <- types.NamespacedName{
@@ -114,32 +129,53 @@ func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, err
 		}()
 	}()
 
-	member := &v1beta3.Member{}
-	memberName := types.NamespacedName{
-		Namespace: partitionGroupMembership.Namespace,
-		Name:      partitionGroupMembership.Bind.Member,
-	}
-	err = r.client.Get(context.TODO(), memberName, member)
-	if err != nil {
-		if !errors.IsNotFound(err) {
+	if partitionGroupMembership.DeletionTimestamp == nil {
+		member := &v1beta3.Member{}
+		memberName := types.NamespacedName{
+			Namespace: partitionGroupMembership.Namespace,
+			Name:      partitionGroupMembership.Bind.Member,
+		}
+		err = r.client.Get(context.TODO(), memberName, member)
+		if err != nil {
+			if !errors.IsNotFound(err) {
+				return reconcile.Result{}, err
+			}
+			err = r.client.Delete(context.TODO(), partitionGroupMembership)
 			return reconcile.Result{}, err
 		}
-		err = r.client.Delete(context.TODO(), partitionGroupMembership)
-		return reconcile.Result{}, err
-	}
 
-	partitionGroup := &v1beta3.PartitionGroup{}
-	partitionGroupName := types.NamespacedName{
-		Namespace: partitionGroupMembership.Namespace,
-		Name:      partitionGroupMembership.Bind.Group,
-	}
-	err = r.client.Get(context.TODO(), partitionGroupName, partitionGroup)
-	if err != nil {
-		if !errors.IsNotFound(err) {
+		partitionGroup := &v1beta3.PartitionGroup{}
+		partitionGroupName := types.NamespacedName{
+			Namespace: partitionGroupMembership.Namespace,
+			Name:      partitionGroupMembership.Bind.Group,
+		}
+		err = r.client.Get(context.TODO(), partitionGroupName, partitionGroup)
+		if err != nil {
+			if !errors.IsNotFound(err) {
+				return reconcile.Result{}, err
+			}
+			err = r.client.Delete(context.TODO(), partitionGroupMembership)
 			return reconcile.Result{}, err
 		}
-		err = r.client.Delete(context.TODO(), partitionGroupMembership)
-		return reconcile.Result{}, err
+	} else {
+		finalize := false
+		for _, finalizer := range partitionGroupMembership.Finalizers {
+			if finalizer == "partition-group-membership-controller" {
+				finalize = true
+				break
+			}
+		}
+		if finalize {
+			finalizers := make([]string, 0, len(partitionGroupMembership.Finalizers)-1)
+			for _, finalizer := range partitionGroupMembership.Finalizers {
+				if finalizer != "partition-group-membership-controller" {
+					finalizers = append(finalizers, finalizer)
+				}
+			}
+			partitionGroupMembership.Finalizers = finalizers
+			err = r.client.Update(context.TODO(), partitionGroupMembership)
+			return reconcile.Result{}, err
+		}
 	}
 	return reconcile.Result{}, nil
 }

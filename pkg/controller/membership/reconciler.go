@@ -105,6 +105,21 @@ func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, err
 		return reconcile.Result{}, err
 	}
 
+	if membership.DeletionTimestamp == nil {
+		addFinalizer := true
+		for _, finalizer := range membership.Finalizers {
+			if finalizer == "membership-controller" {
+				addFinalizer = false
+				break
+			}
+		}
+		if addFinalizer {
+			membership.Finalizers = append(membership.Finalizers, "membership-controller")
+			err = r.client.Update(context.TODO(), membership)
+			return reconcile.Result{}, err
+		}
+	}
+
 	defer func() {
 		go func() {
 			r.eventCh <- types.NamespacedName{
@@ -114,40 +129,54 @@ func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, err
 		}()
 	}()
 
-	member := &v1beta3.Member{}
-	memberName := types.NamespacedName{
-		Namespace: membership.Namespace,
-		Name:      membership.Bind.Member,
-	}
-	err = r.client.Get(context.TODO(), memberName, member)
-	if err != nil {
-		if !errors.IsNotFound(err) {
+	if membership.DeletionTimestamp == nil {
+		member := &v1beta3.Member{}
+		memberName := types.NamespacedName{
+			Namespace: membership.Namespace,
+			Name:      membership.Bind.Member,
+		}
+		err = r.client.Get(context.TODO(), memberName, member)
+		if err != nil {
+			if !errors.IsNotFound(err) {
+				return reconcile.Result{}, err
+			}
+			err = r.client.Delete(context.TODO(), membership)
 			return reconcile.Result{}, err
 		}
-		err = r.client.Delete(context.TODO(), membership)
-		return reconcile.Result{}, err
-	}
 
-	membershipGroup := &v1beta3.MembershipGroup{}
-	membershipGroupName := types.NamespacedName{
-		Namespace: membership.Namespace,
-		Name:      membership.Bind.Group,
-	}
-	err = r.client.Get(context.TODO(), membershipGroupName, membershipGroup)
-	if err != nil {
-		if !errors.IsNotFound(err) {
-			return reconcile.Result{}, err
-		}
-		err = r.client.Delete(context.TODO(), membership)
-		return reconcile.Result{}, err
-	}
-
-	go func() {
-		r.eventCh <- types.NamespacedName{
+		membershipGroup := &v1beta3.MembershipGroup{}
+		membershipGroupName := types.NamespacedName{
 			Namespace: membership.Namespace,
 			Name:      membership.Bind.Group,
 		}
-	}()
+		err = r.client.Get(context.TODO(), membershipGroupName, membershipGroup)
+		if err != nil {
+			if !errors.IsNotFound(err) {
+				return reconcile.Result{}, err
+			}
+			err = r.client.Delete(context.TODO(), membership)
+			return reconcile.Result{}, err
+		}
+	} else {
+		finalize := false
+		for _, finalizer := range membership.Finalizers {
+			if finalizer == "membership-controller" {
+				finalize = true
+				break
+			}
+		}
+		if finalize {
+			finalizers := make([]string, 0, len(membership.Finalizers)-1)
+			for _, finalizer := range membership.Finalizers {
+				if finalizer != "membership-controller" {
+					finalizers = append(finalizers, finalizer)
+				}
+			}
+			membership.Finalizers = finalizers
+			err = r.client.Update(context.TODO(), membership)
+			return reconcile.Result{}, err
+		}
+	}
 	return reconcile.Result{}, nil
 }
 
