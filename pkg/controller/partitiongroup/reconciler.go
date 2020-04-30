@@ -17,6 +17,7 @@ package partitiongroup
 import (
 	"context"
 	"fmt"
+	api "github.com/atomix/api/proto/atomix/controller"
 	"github.com/atomix/kubernetes-controller/pkg/apis/cloud/v1beta3"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -26,24 +27,24 @@ import (
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
+	"sort"
 )
 
 var log = logf.Log.WithName("partition_group_controller")
 
 // Add creates a new Database controller and adds it to the Manager. The Manager will set fields on the
 // controller and Start it when the Manager is Started.
-func Add(mgr manager.Manager, eventCh chan<- types.NamespacedName) error {
+func Add(mgr manager.Manager, eventCh chan<- api.JoinPartitionGroupResponse) error {
 	r := &Reconciler{
-		client:  mgr.GetClient(),
-		scheme:  mgr.GetScheme(),
-		config:  mgr.GetConfig(),
-		eventCh: eventCh,
+		client:     mgr.GetClient(),
+		scheme:     mgr.GetScheme(),
+		config:     mgr.GetConfig(),
+		responseCh: eventCh,
 	}
 
 	// Create a new controller
@@ -75,10 +76,10 @@ var _ reconcile.Reconciler = &Reconciler{}
 
 // Reconciler reconciles a PartitionGroup object
 type Reconciler struct {
-	client  client.Client
-	scheme  *runtime.Scheme
-	config  *rest.Config
-	eventCh chan<- types.NamespacedName
+	client     client.Client
+	scheme     *runtime.Scheme
+	config     *rest.Config
+	responseCh chan<- api.JoinPartitionGroupResponse
 }
 
 func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, error) {
@@ -99,15 +100,6 @@ func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, err
 		return reconcile.Result{}, err
 	}
 
-	defer func() {
-		go func() {
-			r.eventCh <- types.NamespacedName{
-				Namespace: partitionGroup.Namespace,
-				Name:      partitionGroup.Name,
-			}
-		}()
-	}()
-
 	if err := r.reconcilePartitions(partitionGroup); err != nil {
 		return reconcile.Result{}, err
 	}
@@ -116,13 +108,175 @@ func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, err
 		return reconcile.Result{}, err
 	}
 
-	if err := r.reconcileStatus(partitionGroup); err != nil {
-		if errors.IsConflict(err) {
-			return reconcile.Result{Requeue: true}, nil
-		}
+	partitionGroupMemberships := &v1beta3.PartitionGroupMembershipList{}
+	partitionGroupMembershipFields := map[string]string{
+		"bind.group": partitionGroup.Name,
+	}
+	listOpts := &client.ListOptions{Namespace: partitionGroup.Namespace, FieldSelector: fields.SelectorFromSet(partitionGroupMembershipFields)}
+	err = r.client.List(context.TODO(), partitionGroupMemberships, listOpts)
+	if err != nil {
 		return reconcile.Result{}, err
 	}
 
+	// Construct a set of partition group members
+	partitionGroupMembers := make(map[string]bool)
+	for _, partitionGroupMembership := range partitionGroupMemberships.Items {
+		if partitionGroupMembership.DeletionTimestamp == nil {
+			partitionGroupMembers[partitionGroupMembership.Bind.Member] = true
+		} else {
+			logger.Info("Deleting PartitionGroupMembership", "Namespace", partitionGroupMembership.Namespace, "Name", partitionGroupMembership.Name)
+		}
+	}
+
+	partitions := int(partitionGroup.Spec.Partitions)
+	membershipGroups := make([]api.MembershipGroup, 0)
+	for partition := 1; partition <= partitions; partition++ {
+		membershipGroup := &v1beta3.MembershipGroup{}
+		membershipGroupName := types.NamespacedName{
+			Namespace: partitionGroup.Namespace,
+			Name:      fmt.Sprintf("%s-%d", partitionGroup.Name, partition),
+		}
+		err = r.client.Get(context.TODO(), membershipGroupName, membershipGroup)
+		if err != nil {
+			return reconcile.Result{}, err
+		}
+
+		// Get the list of members in the group
+		membershipList := &v1beta3.MembershipList{}
+		membershipListOpts := &client.ListOptions{
+			Namespace: membershipGroup.Namespace,
+			FieldSelector: fields.SelectorFromSet(map[string]string{
+				"bind.group": membershipGroup.Name,
+			}),
+		}
+		err = r.client.List(context.TODO(), membershipList, membershipListOpts)
+		if err != nil {
+			return reconcile.Result{}, err
+		}
+
+		// Create a set of active members
+		members := make(map[string]bool)
+		for _, membership := range membershipList.Items {
+			if membership.DeletionTimestamp == nil {
+				members[membership.Bind.Member] = true
+			}
+		}
+
+		// Assign a group leader from the set of active members if necessary
+		leader := membershipGroup.Status.Leader
+		if len(members) > 0 && (leader == "" || !members[leader]) {
+			membershipGroup.Status.Leader = membershipList.Items[0].Bind.Member
+			membershipGroup.Status.Term = membershipGroup.Status.Term + 1
+			err = r.client.Status().Update(context.TODO(), membershipGroup)
+			return reconcile.Result{}, err
+		} else if leader != "" && len(members) == 0 {
+			membershipGroup.Status.Leader = ""
+			err = r.client.Status().Update(context.TODO(), membershipGroup)
+			return reconcile.Result{}, err
+		}
+
+		// Construct a response leader/term
+		responseTerm := api.TermID(membershipGroup.Status.Term)
+		var responseLeader *api.MemberId
+		if leader != "" {
+			responseLeader = &api.MemberId{
+				Namespace: membershipGroup.Namespace,
+				Name:      leader,
+			}
+		}
+
+		// Construct response membership from the set of members that have not been deleted
+		responseMembers := make([]api.Member, 0, len(membershipList.Items))
+		for _, membership := range membershipList.Items {
+			if membership.DeletionTimestamp != nil {
+				continue
+			}
+			member := &v1beta3.Member{}
+			memberName := types.NamespacedName{
+				Namespace: membership.Namespace,
+				Name:      membership.Bind.Member,
+			}
+			err := r.client.Get(context.TODO(), memberName, member)
+			if err != nil {
+				return reconcile.Result{}, nil
+			}
+			if member.DeletionTimestamp == nil {
+				// If the member is not in the set of partition group members, skip the response
+				if !partitionGroupMembers[membership.Bind.Member] {
+					return reconcile.Result{}, nil
+				}
+				responseMembers = append(responseMembers, api.Member{
+					ID: api.MemberId{
+						Name:      member.Name,
+						Namespace: member.Namespace,
+					},
+					Host: member.Service,
+					Port: member.Port.IntVal,
+				})
+			}
+		}
+
+		// Sort the membership to aid in deduplicating responses
+		sort.Slice(responseMembers, func(i, j int) bool {
+			return responseMembers[i].ID.Name < responseMembers[j].ID.Name
+		})
+
+		membershipGroups = append(membershipGroups, api.MembershipGroup{
+			ID: api.MembershipGroupId{
+				Namespace: membershipGroup.Namespace,
+				Name:      membershipGroup.Name,
+			},
+			Term:    responseTerm,
+			Leader:  responseLeader,
+			Members: responseMembers,
+		})
+	}
+
+	// Sort the membership groups to aid in deduplicating responses
+	sort.Slice(membershipGroups, func(i, j int) bool {
+		return membershipGroups[i].ID.Name < membershipGroups[j].ID.Name
+	})
+
+	// Construct a partition group response
+	response := api.JoinPartitionGroupResponse{
+		Group: api.PartitionGroup{
+			ID: api.PartitionGroupId{
+				Namespace: partitionGroup.Namespace,
+				Name:      partitionGroup.Name,
+			},
+			Partitions: membershipGroups,
+		},
+	}
+
+	// For each membership, if the membership has been deleted, finalize it before producing the response
+	for _, membership := range partitionGroupMemberships.Items {
+		if membership.DeletionTimestamp != nil {
+			finalize := false
+			for _, finalizer := range membership.Finalizers {
+				if finalizer == "event" {
+					finalize = true
+					break
+				}
+			}
+			if finalize {
+				finalizers := make([]string, 0, len(membership.Finalizers)-1)
+				for _, finalizer := range membership.Finalizers {
+					if finalizer != "event" {
+						finalizers = append(finalizers, finalizer)
+					}
+				}
+				update := &membership
+				update.Finalizers = finalizers
+				err = r.client.Update(context.TODO(), update)
+				if err != nil {
+					return reconcile.Result{}, err
+				}
+			}
+		}
+	}
+
+	// Produce the response
+	r.responseCh <- response
 	return reconcile.Result{}, nil
 }
 
@@ -154,16 +308,20 @@ func (r *Reconciler) reconcilePartition(partitionGroup *v1beta3.PartitionGroup, 
 
 func (r *Reconciler) addPartition(partitionGroup *v1beta3.PartitionGroup, partitionID int) error {
 	log.Info("Creating MembershipGroup", "Name", getMembershipGroupName(partitionGroup, partitionID), "Namespace", partitionGroup.Namespace)
+	owner := metav1.OwnerReference{
+		APIVersion: partitionGroup.APIVersion,
+		Kind:       partitionGroup.Kind,
+		Name:       partitionGroup.ObjectMeta.Name,
+		UID:        partitionGroup.ObjectMeta.UID,
+	}
 	membershipGroup := &v1beta3.MembershipGroup{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:        getMembershipGroupName(partitionGroup, partitionID),
-			Namespace:   partitionGroup.Namespace,
-			Labels:      partitionGroup.Labels,
-			Annotations: partitionGroup.Annotations,
+			Name:            getMembershipGroupName(partitionGroup, partitionID),
+			Namespace:       partitionGroup.Namespace,
+			Labels:          partitionGroup.Labels,
+			Annotations:     partitionGroup.Annotations,
+			OwnerReferences: []metav1.OwnerReference{owner},
 		},
-	}
-	if err := controllerutil.SetControllerReference(partitionGroup, membershipGroup, r.scheme); err != nil {
-		return err
 	}
 	return r.client.Create(context.TODO(), membershipGroup)
 }
@@ -214,15 +372,38 @@ func (r *Reconciler) reconcileMemberships(partitionGroup *v1beta3.PartitionGroup
 		}
 
 		if replicationFactor == 0 || len(memberships) < replicationFactor {
+			log.Info("Reconciling partition MembershipGroup", "Namespace", partitionGroup.Namespace, "Group", getMembershipGroupName(partitionGroup, j), "Members", len(partitionGroupMemberships.Items))
 			for k := 0; k < len(partitionGroupMemberships.Items); k++ {
 				partitionGroupMembership := partitionGroupMemberships.Items[(i+k)%len(partitionGroupMemberships.Items)]
 				_, exists := memberships[partitionGroupMembership.Bind.Member]
 				if !exists {
-					log.Info("Creating Membership", "Namespace", partitionGroup.Namespace, "Group", partitionGroup.Name, "Member", partitionGroupMembership.Bind.Member)
+					member := &v1beta3.Member{}
+					memberName := types.NamespacedName{
+						Namespace: partitionGroupMembership.Namespace,
+						Name:      partitionGroupMembership.Bind.Member,
+					}
+					err = r.client.Get(context.TODO(), memberName, member)
+					if err != nil {
+						if errors.IsNotFound(err) {
+							continue
+						}
+						return err
+					}
+
+					log.Info("Creating Membership", "Namespace", partitionGroup.Namespace, "Group", getMembershipGroupName(partitionGroup, j), "Member", partitionGroupMembership.Bind.Member)
+					owner := metav1.OwnerReference{
+						APIVersion: member.APIVersion,
+						Kind:       member.Kind,
+						Name:       member.ObjectMeta.Name,
+						UID:        member.ObjectMeta.UID,
+					}
+
 					membership := &v1beta3.Membership{
 						ObjectMeta: metav1.ObjectMeta{
-							Namespace: partitionGroup.Namespace,
-							Name:      fmt.Sprintf("%s-%s", partitionGroupMembership.Bind.Member, getMembershipGroupName(partitionGroup, j)),
+							Namespace:       partitionGroup.Namespace,
+							Name:            fmt.Sprintf("%s-%s", partitionGroupMembership.Bind.Member, getMembershipGroupName(partitionGroup, j)),
+							OwnerReferences: []metav1.OwnerReference{owner},
+							Finalizers:      []string{"event"},
 						},
 						Bind: v1beta3.MembershipBinding{
 							Member: partitionGroupMembership.Bind.Member,
@@ -234,14 +415,12 @@ func (r *Reconciler) reconcileMemberships(partitionGroup *v1beta3.PartitionGroup
 						return err
 					}
 					i++
+				} else {
+					log.Info("Membership found", "Namespace", partitionGroup.Namespace, "Group", getMembershipGroupName(partitionGroup, j), "Member", partitionGroupMembership.Bind.Member)
 				}
 			}
 		}
 	}
-	return nil
-}
-
-func (r *Reconciler) reconcileStatus(partitionGroup *v1beta3.PartitionGroup) error {
 	return nil
 }
 

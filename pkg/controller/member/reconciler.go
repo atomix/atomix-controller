@@ -16,12 +16,11 @@ package member
 
 import (
 	"context"
+	api "github.com/atomix/api/proto/atomix/controller"
 	"github.com/atomix/kubernetes-controller/pkg/apis/cloud/v1beta3"
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -30,18 +29,19 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
+	"sort"
 )
 
 var log = logf.Log.WithName("member_controller")
 
 // Add creates a new Database controller and adds it to the Manager. The Manager will set fields on the
 // controller and Start it when the Manager is Started.
-func Add(mgr manager.Manager, eventCh chan<- types.NamespacedName) error {
+func Add(mgr manager.Manager, responseCh chan<- api.JoinClusterResponse) error {
 	r := &Reconciler{
-		client:  mgr.GetClient(),
-		scheme:  mgr.GetScheme(),
-		config:  mgr.GetConfig(),
-		eventCh: eventCh,
+		client:     mgr.GetClient(),
+		scheme:     mgr.GetScheme(),
+		config:     mgr.GetConfig(),
+		responseCh: responseCh,
 	}
 
 	// Create a new controller
@@ -62,10 +62,10 @@ var _ reconcile.Reconciler = &Reconciler{}
 
 // Reconciler reconciles a PartitionGroup object
 type Reconciler struct {
-	client  client.Client
-	scheme  *runtime.Scheme
-	config  *rest.Config
-	eventCh chan<- types.NamespacedName
+	client     client.Client
+	scheme     *runtime.Scheme
+	config     *rest.Config
+	responseCh chan<- api.JoinClusterResponse
 }
 
 func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, error) {
@@ -86,55 +86,60 @@ func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, err
 		return reconcile.Result{}, err
 	}
 
-	go func() {
-		r.eventCh <- types.NamespacedName{
+	if member.DeletionTimestamp != nil {
+		logger.Info("Deleting Member", "Namespace", member.Namespace, "Name", member.Name)
+	}
+
+	// Get the set of members in the member's scope
+	memberList := &v1beta3.MemberList{}
+	memberListFields := map[string]string{
+		"scope": member.Scope,
+	}
+	memberListOpts := &client.ListOptions{
+		Namespace:     member.Namespace,
+		FieldSelector: fields.SelectorFromSet(memberListFields),
+	}
+	err = r.client.List(context.TODO(), memberList, memberListOpts)
+	if err != nil {
+		return reconcile.Result{}, err
+	}
+
+	// Create a list of members that have not been deleted
+	members := make([]api.Member, 0, len(memberList.Items))
+	for _, member := range memberList.Items {
+		if member.DeletionTimestamp == nil {
+			members = append(members, api.Member{
+				ID: api.MemberId{
+					Name:      member.Name,
+					Namespace: member.Namespace,
+				},
+				Host: member.Service,
+				Port: member.Port.IntVal,
+			})
+		}
+	}
+
+	// Sort the membership to aid in deduplicating responses
+	sort.Slice(members, func(i, j int) bool {
+		return members[i].ID.Name < members[j].ID.Name
+	})
+
+	// Construct a membership response
+	response := api.JoinClusterResponse{
+		Membership: api.Membership{
+			Members: members,
+		},
+		GroupID: api.MembershipGroupId{
 			Namespace: member.Namespace,
 			Name:      member.Scope,
-		}
-	}()
+		},
+	}
 
-	if member.DeletionTimestamp == nil {
-		pod := &corev1.Pod{}
-		podName := types.NamespacedName{
-			Namespace: member.Namespace,
-			Name:      member.Service,
-		}
-		err = r.client.Get(context.TODO(), podName, pod)
-		if err != nil {
-			if !errors.IsNotFound(err) {
-				return reconcile.Result{}, err
-			}
-			err = r.client.Delete(context.TODO(), member)
-			return reconcile.Result{}, err
-		}
-
-		if len(member.OwnerReferences) == 0 {
-			owner := metav1.OwnerReference{
-				APIVersion: "v1",
-				Kind:       "Pod",
-				Name:       pod.ObjectMeta.Name,
-				UID:        pod.ObjectMeta.UID,
-			}
-			member.ObjectMeta.OwnerReferences = []metav1.OwnerReference{owner}
-			err = r.client.Update(context.TODO(), member)
-			return reconcile.Result{}, err
-		}
-		addFinalizer := true
-		for _, finalizer := range member.Finalizers {
-			if finalizer == "member-controller" {
-				addFinalizer = false
-				break
-			}
-		}
-		if addFinalizer {
-			member.Finalizers = append(member.Finalizers, "member-controller")
-			err = r.client.Update(context.TODO(), member)
-			return reconcile.Result{}, err
-		}
-	} else {
+	// If the updated member has been deleted, finalize it before producing the response
+	if member.DeletionTimestamp != nil {
 		finalize := false
 		for _, finalizer := range member.Finalizers {
-			if finalizer == "member-controller" {
+			if finalizer == "event" {
 				finalize = true
 				break
 			}
@@ -142,14 +147,19 @@ func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, err
 		if finalize {
 			finalizers := make([]string, 0, len(member.Finalizers)-1)
 			for _, finalizer := range member.Finalizers {
-				if finalizer != "member-controller" {
+				if finalizer != "event" {
 					finalizers = append(finalizers, finalizer)
 				}
 			}
 			member.Finalizers = finalizers
 			err = r.client.Update(context.TODO(), member)
-			return reconcile.Result{}, err
+			if err != nil {
+				return reconcile.Result{}, err
+			}
 		}
 	}
+
+	// Produce the response
+	r.responseCh <- response
 	return reconcile.Result{}, nil
 }

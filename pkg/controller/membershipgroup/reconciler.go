@@ -16,9 +16,9 @@ package membershipgroup
 
 import (
 	"context"
+	api "github.com/atomix/api/proto/atomix/controller"
 	"github.com/atomix/kubernetes-controller/pkg/apis/cloud/v1beta3"
 	"k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -30,18 +30,19 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
+	"sort"
 )
 
 var log = logf.Log.WithName("membership_group_controller")
 
 // Add creates a new Database controller and adds it to the Manager. The Manager will set fields on the
 // controller and Start it when the Manager is Started.
-func Add(mgr manager.Manager, eventCh chan<- types.NamespacedName) error {
+func Add(mgr manager.Manager, eventCh chan<- api.JoinMembershipGroupResponse) error {
 	r := &Reconciler{
-		client:  mgr.GetClient(),
-		scheme:  mgr.GetScheme(),
-		config:  mgr.GetConfig(),
-		eventCh: eventCh,
+		client:     mgr.GetClient(),
+		scheme:     mgr.GetScheme(),
+		config:     mgr.GetConfig(),
+		responseCh: eventCh,
 	}
 
 	// Create a new controller
@@ -66,16 +67,6 @@ func Add(mgr manager.Manager, eventCh chan<- types.NamespacedName) error {
 		return err
 	}
 
-	// Watch for changes to secondary resource Leadership and requeue the MembershipGroup
-	err = c.Watch(&source.Kind{Type: &v1beta3.Leadership{}}, &handler.EnqueueRequestsFromMapFunc{
-		ToRequests: &leadershipMapper{
-			client: mgr.GetClient(),
-		},
-	})
-	if err != nil {
-		return err
-	}
-
 	return nil
 }
 
@@ -83,10 +74,10 @@ var _ reconcile.Reconciler = &Reconciler{}
 
 // Reconciler reconciles a PartitionGroup object
 type Reconciler struct {
-	client  client.Client
-	scheme  *runtime.Scheme
-	config  *rest.Config
-	eventCh chan<- types.NamespacedName
+	client     client.Client
+	scheme     *runtime.Scheme
+	config     *rest.Config
+	responseCh chan<- api.JoinMembershipGroupResponse
 }
 
 func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, error) {
@@ -107,63 +98,130 @@ func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, err
 		return reconcile.Result{}, err
 	}
 
-	defer func() {
-		go func() {
-			r.eventCh <- types.NamespacedName{
-				Namespace: membershipGroup.Namespace,
-				Name:      membershipGroup.Name,
-			}
-		}()
-	}()
-
-	leadership := &v1beta3.Leadership{}
-	err = r.client.Get(context.TODO(), request.NamespacedName, leadership)
-	if err != nil && !errors.IsNotFound(err) {
-		return reconcile.Result{}, err
-	} else if err != nil || leadership.DeletionTimestamp != nil {
-		membershipList := &v1beta3.MembershipList{}
-		membershipFields := map[string]string{
+	// Get the list of members in the group
+	membershipList := &v1beta3.MembershipList{}
+	membershipListOpts := &client.ListOptions{
+		Namespace: membershipGroup.Namespace,
+		FieldSelector: fields.SelectorFromSet(map[string]string{
 			"bind.group": membershipGroup.Name,
-		}
-		membershipListOpts := &client.ListOptions{Namespace: membershipGroup.Namespace, FieldSelector: fields.SelectorFromSet(membershipFields)}
-		err = r.client.List(context.TODO(), membershipList, membershipListOpts)
-		if err != nil {
-			return reconcile.Result{}, err
-		}
+		}),
+	}
+	err = r.client.List(context.TODO(), membershipList, membershipListOpts)
+	if err != nil {
+		return reconcile.Result{}, err
+	}
 
-		if len(membershipList.Items) > 0 {
-			term := uint64(1)
-			if leadership.DeletionTimestamp != nil {
-				term = leadership.Term + 1
-			}
-			membership := membershipList.Items[0]
-			owner := metav1.OwnerReference{
-				APIVersion: membership.APIVersion,
-				Kind:       membership.Kind,
-				Name:       membership.ObjectMeta.Name,
-				UID:        membership.ObjectMeta.UID,
-			}
-			leadership := &v1beta3.Leadership{
-				ObjectMeta: metav1.ObjectMeta{
-					Namespace:       request.Namespace,
-					Name:            request.Name,
-					OwnerReferences: []metav1.OwnerReference{owner},
-					Finalizers:      []string{request.Name},
-				},
-				Group:  membership.Bind.Group,
-				Term:   term,
-				Leader: membership.Bind.Member,
-			}
-			err = r.client.Create(context.TODO(), leadership)
-			if err != nil {
-				return reconcile.Result{}, err
-			}
-		} else if leadership.DeletionTimestamp != nil {
-			leadership.Finalizers = []string{}
-			err = r.client.Update(context.TODO(), leadership)
-			return reconcile.Result{}, err
+	// Create a set of active members
+	members := make(map[string]bool)
+	for _, membership := range membershipList.Items {
+		if membership.DeletionTimestamp == nil {
+			members[membership.Bind.Member] = true
+		} else {
+			logger.Info("Deleting Membership", "Namespace", membership.Namespace, "Name", membership.Name)
 		}
 	}
+
+	// Assign a group leader from the set of active members if necessary
+	leader := membershipGroup.Status.Leader
+	if len(members) > 0 && (leader == "" || !members[leader]) {
+		for member := range members {
+			leader = member
+			break
+		}
+		membershipGroup.Status.Leader = leader
+		membershipGroup.Status.Term = membershipGroup.Status.Term + 1
+		err = r.client.Status().Update(context.TODO(), membershipGroup)
+		return reconcile.Result{}, err
+	} else if leader != "" && len(members) == 0 {
+		membershipGroup.Status.Leader = ""
+		err = r.client.Status().Update(context.TODO(), membershipGroup)
+		return reconcile.Result{}, err
+	}
+
+	// Construct a response leader/term
+	responseTerm := api.TermID(membershipGroup.Status.Term)
+	var responseLeader *api.MemberId
+	if leader != "" {
+		responseLeader = &api.MemberId{
+			Namespace: membershipGroup.Namespace,
+			Name:      leader,
+		}
+	}
+
+	// Construct response membership from the set of members that have not been deleted
+	responseMembers := make([]api.Member, 0, len(membershipList.Items))
+	for _, membership := range membershipList.Items {
+		if membership.DeletionTimestamp != nil {
+			continue
+		}
+		member := &v1beta3.Member{}
+		memberName := types.NamespacedName{
+			Namespace: membership.Namespace,
+			Name:      membership.Bind.Member,
+		}
+		err := r.client.Get(context.TODO(), memberName, member)
+		if err != nil {
+			return reconcile.Result{}, nil
+		}
+		if member.DeletionTimestamp == nil {
+			responseMembers = append(responseMembers, api.Member{
+				ID: api.MemberId{
+					Name:      member.Name,
+					Namespace: member.Namespace,
+				},
+				Host: member.Service,
+				Port: member.Port.IntVal,
+			})
+		}
+	}
+
+	// Sort the membership to aid in deduplicating responses
+	sort.Slice(responseMembers, func(i, j int) bool {
+		return responseMembers[i].ID.Name < responseMembers[j].ID.Name
+	})
+
+	// Construct a membership response
+	response := api.JoinMembershipGroupResponse{
+		Group: api.MembershipGroup{
+			ID: api.MembershipGroupId{
+				Namespace: membershipGroup.Namespace,
+				Name:      membershipGroup.Name,
+			},
+			Term:    responseTerm,
+			Leader:  responseLeader,
+			Members: responseMembers,
+		},
+	}
+
+	// For each membership, if the membership has been deleted, finalize it before producing the response
+	for _, membership := range membershipList.Items {
+		if membership.DeletionTimestamp != nil {
+			finalize := false
+			for _, finalizer := range membership.Finalizers {
+				if finalizer == "event" {
+					finalize = true
+					break
+				}
+			}
+			if finalize {
+				finalizers := make([]string, 0, len(membership.Finalizers)-1)
+				for _, finalizer := range membership.Finalizers {
+					if finalizer != "event" {
+						finalizers = append(finalizers, finalizer)
+					}
+				}
+				update := &membership
+				update.Finalizers = finalizers
+				err = r.client.Update(context.TODO(), update)
+				if err != nil {
+					return reconcile.Result{}, err
+				}
+			}
+		}
+	}
+
+	// Produce the response
+	r.responseCh <- response
 	return reconcile.Result{}, nil
 }
 
@@ -177,28 +235,6 @@ func (m *membershipMapper) Map(object handler.MapObject) []reconcile.Request {
 	membershipGroupName := types.NamespacedName{
 		Namespace: membership.Namespace,
 		Name:      membership.Bind.Group,
-	}
-	err := m.client.Get(context.TODO(), membershipGroupName, membershipGroup)
-	if err != nil {
-		return []reconcile.Request{}
-	}
-	return []reconcile.Request{
-		{
-			NamespacedName: membershipGroupName,
-		},
-	}
-}
-
-type leadershipMapper struct {
-	client client.Client
-}
-
-func (m *leadershipMapper) Map(object handler.MapObject) []reconcile.Request {
-	leadership := object.Object.(*v1beta3.Leadership)
-	membershipGroup := &v1beta3.MembershipGroup{}
-	membershipGroupName := types.NamespacedName{
-		Namespace: leadership.Namespace,
-		Name:      leadership.Group,
 	}
 	err := m.client.Get(context.TODO(), membershipGroupName, membershipGroup)
 	if err != nil {
