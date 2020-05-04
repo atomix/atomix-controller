@@ -16,7 +16,7 @@ package membershipgroup
 
 import (
 	"context"
-	"github.com/atomix/api/proto/atomix/gossip"
+	membershipapi "github.com/atomix/api/proto/atomix/membership"
 	"github.com/atomix/kubernetes-controller/pkg/apis/cloud/v1beta3"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/fields"
@@ -37,7 +37,7 @@ var log = logf.Log.WithName("membership_group_controller")
 
 // Add creates a new Database controller and adds it to the Manager. The Manager will set fields on the
 // controller and Start it when the Manager is Started.
-func Add(mgr manager.Manager, responseCh chan<- gossip.JoinGossipGroupResponse) error {
+func Add(mgr manager.Manager, responseCh chan<- membershipapi.JoinMembershipGroupResponse) error {
 	r := &Reconciler{
 		client:     mgr.GetClient(),
 		scheme:     mgr.GetScheme(),
@@ -77,7 +77,7 @@ type Reconciler struct {
 	client     client.Client
 	scheme     *runtime.Scheme
 	config     *rest.Config
-	responseCh chan<- gossip.JoinGossipGroupResponse
+	responseCh chan<- membershipapi.JoinMembershipGroupResponse
 }
 
 func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, error) {
@@ -139,7 +139,7 @@ func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, err
 	}
 
 	// Construct response membership from the set of members that have not been deleted
-	responseMembers := make([]gossip.Member, 0, len(membershipList.Items))
+	responseMembers := make([]membershipapi.Member, 0, len(membershipList.Items))
 	for _, membership := range membershipList.Items {
 		if membership.DeletionTimestamp != nil {
 			continue
@@ -154,8 +154,8 @@ func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, err
 			return reconcile.Result{}, nil
 		}
 		if member.DeletionTimestamp == nil {
-			responseMembers = append(responseMembers, gossip.Member{
-				ID: gossip.MemberId{
+			responseMembers = append(responseMembers, membershipapi.Member{
+				ID: membershipapi.MemberId{
 					Name:      member.Properties.Name,
 					Namespace: member.Properties.Namespace,
 				},
@@ -171,9 +171,9 @@ func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, err
 	})
 
 	// Construct a membership response
-	response := gossip.JoinGossipGroupResponse{
-		Group: gossip.GossipGroup{
-			ID: gossip.GossipGroupId{
+	response := membershipapi.JoinMembershipGroupResponse{
+		Group: membershipapi.MembershipGroup{
+			ID: membershipapi.MembershipGroupId{
 				Namespace: membershipGroup.Namespace,
 				Name:      membershipGroup.Name,
 			},

@@ -19,8 +19,8 @@ import (
 	"fmt"
 	"github.com/atomix/api/proto/atomix/cluster"
 	databaseapi "github.com/atomix/api/proto/atomix/database"
-	gossipapi "github.com/atomix/api/proto/atomix/gossip"
-	pbapi "github.com/atomix/api/proto/atomix/pb"
+	membershipapi "github.com/atomix/api/proto/atomix/membership"
+	partitionapi "github.com/atomix/api/proto/atomix/partition"
 	primitiveapi "github.com/atomix/api/proto/atomix/primitive"
 	protocolapi "github.com/atomix/api/proto/atomix/protocol"
 	"github.com/atomix/kubernetes-controller/pkg/apis/cloud/v1beta3"
@@ -55,8 +55,8 @@ var log = logf.Log.WithName("atomix_controller")
 // AddController adds the Atomix controller to the k8s controller manager
 func AddController(mgr manager.Manager) error {
 	clusterResponseCh := make(chan cluster.JoinClusterResponse)
-	gossipGroupResponseCh := make(chan gossipapi.JoinGossipGroupResponse)
-	replicaGroupResponseCh := make(chan pbapi.JoinReplicaGroupResponse)
+	gossipGroupResponseCh := make(chan membershipapi.JoinMembershipGroupResponse)
+	replicaGroupResponseCh := make(chan partitionapi.JoinPartitionGroupResponse)
 
 	c := newController(mgr.GetClient(), mgr.GetScheme(), mgr.GetConfig(), clusterResponseCh, gossipGroupResponseCh, replicaGroupResponseCh)
 	err := mgr.Add(c)
@@ -120,8 +120,8 @@ func newController(
 	scheme *runtime.Scheme,
 	config *rest.Config,
 	clusterResponseCh chan cluster.JoinClusterResponse,
-	gossipGroupResponseCh chan gossipapi.JoinGossipGroupResponse,
-	replicaGroupResponseCh chan pbapi.JoinReplicaGroupResponse,
+	gossipGroupResponseCh chan membershipapi.JoinMembershipGroupResponse,
+	replicaGroupResponseCh chan partitionapi.JoinPartitionGroupResponse,
 	opts ...grpc.ServerOption) *Controller {
 	return &Controller{
 		client:                   client,
@@ -130,9 +130,9 @@ func newController(
 		clusterResponseIn:        clusterResponseCh,
 		clusterResponsesOut:      make(map[string]map[string]chan<- cluster.JoinClusterResponse),
 		gossipGroupResponseIn:    gossipGroupResponseCh,
-		gossipGroupResponsesOut:  make(map[string]map[string]chan<- gossipapi.JoinGossipGroupResponse),
+		gossipGroupResponsesOut:  make(map[string]map[string]chan<- membershipapi.JoinMembershipGroupResponse),
 		replicaGroupResponseIn:   replicaGroupResponseCh,
-		replicaGroupResponsesOut: make(map[string]map[string]chan<- pbapi.JoinReplicaGroupResponse),
+		replicaGroupResponsesOut: make(map[string]map[string]chan<- partitionapi.JoinPartitionGroupResponse),
 		opts:                     opts,
 	}
 }
@@ -145,10 +145,10 @@ type Controller struct {
 	opts                     []grpc.ServerOption
 	clusterResponseIn        chan cluster.JoinClusterResponse
 	clusterResponsesOut      map[string]map[string]chan<- cluster.JoinClusterResponse
-	gossipGroupResponseIn    chan gossipapi.JoinGossipGroupResponse
-	gossipGroupResponsesOut  map[string]map[string]chan<- gossipapi.JoinGossipGroupResponse
-	replicaGroupResponseIn   chan pbapi.JoinReplicaGroupResponse
-	replicaGroupResponsesOut map[string]map[string]chan<- pbapi.JoinReplicaGroupResponse
+	gossipGroupResponseIn    chan membershipapi.JoinMembershipGroupResponse
+	gossipGroupResponsesOut  map[string]map[string]chan<- membershipapi.JoinMembershipGroupResponse
+	replicaGroupResponseIn   chan partitionapi.JoinPartitionGroupResponse
+	replicaGroupResponsesOut map[string]map[string]chan<- partitionapi.JoinPartitionGroupResponse
 	mu                       sync.RWMutex
 }
 
@@ -316,15 +316,15 @@ func (c *Controller) JoinCluster(request *cluster.JoinClusterRequest, stream clu
 	return nil
 }
 
-func (c *Controller) JoinGossipGroup(request *gossipapi.JoinGossipGroupRequest, stream gossipapi.GossipService_JoinGossipGroupServer) error {
+func (c *Controller) JoinMembershipGroup(request *membershipapi.JoinMembershipGroupRequest, stream membershipapi.MembershipService_JoinMembershipGroupServer) error {
 	log.Info("Received JoinMembershipGroupRequest", "Request", request)
 
-	ch := make(chan gossipapi.JoinGossipGroupResponse)
+	ch := make(chan membershipapi.JoinMembershipGroupResponse)
 	key := uuid.New().String()
 	c.mu.Lock()
 	membershipGroupsOut, ok := c.gossipGroupResponsesOut[request.GroupID.String()]
 	if !ok {
-		membershipGroupsOut = make(map[string]chan<- gossipapi.JoinGossipGroupResponse)
+		membershipGroupsOut = make(map[string]chan<- membershipapi.JoinMembershipGroupResponse)
 		c.gossipGroupResponsesOut[request.GroupID.String()] = membershipGroupsOut
 	}
 	membershipGroupsOut[key] = ch
@@ -343,7 +343,7 @@ func (c *Controller) JoinGossipGroup(request *gossipapi.JoinGossipGroupRequest, 
 	}()
 
 	// If no member was added, send an initial response to acknowledge the stream
-	var initialResponse *gossipapi.JoinGossipGroupResponse
+	var initialResponse *membershipapi.JoinMembershipGroupResponse
 	if request.MemberID == nil {
 		// Get the membership group
 		membershipGroup := &v1beta3.MembershipGroup{}
@@ -355,10 +355,10 @@ func (c *Controller) JoinGossipGroup(request *gossipapi.JoinGossipGroupRequest, 
 		if err != nil && !k8serrors.IsNotFound(err) {
 			return err
 		} else if err != nil {
-			initialResponse = &gossipapi.JoinGossipGroupResponse{
-				Group: gossipapi.GossipGroup{
+			initialResponse = &membershipapi.JoinMembershipGroupResponse{
+				Group: membershipapi.MembershipGroup{
 					ID:      request.GroupID,
-					Members: []gossipapi.Member{},
+					Members: []membershipapi.Member{},
 				},
 			}
 		} else {
@@ -414,7 +414,7 @@ func (c *Controller) JoinGossipGroup(request *gossipapi.JoinGossipGroupRequest, 
 			}
 
 			// Construct response membership from the set of members that have not been deleted
-			responseMembers := make([]gossipapi.Member, 0, len(membershipList.Items))
+			responseMembers := make([]membershipapi.Member, 0, len(membershipList.Items))
 			for _, membership := range membershipList.Items {
 				if membership.DeletionTimestamp != nil {
 					continue
@@ -429,8 +429,8 @@ func (c *Controller) JoinGossipGroup(request *gossipapi.JoinGossipGroupRequest, 
 					continue
 				}
 				if member.DeletionTimestamp == nil {
-					responseMembers = append(responseMembers, gossipapi.Member{
-						ID: gossipapi.MemberId{
+					responseMembers = append(responseMembers, membershipapi.Member{
+						ID: membershipapi.MemberId{
 							Name:      member.Properties.Name,
 							Namespace: member.Properties.Namespace,
 						},
@@ -446,9 +446,9 @@ func (c *Controller) JoinGossipGroup(request *gossipapi.JoinGossipGroupRequest, 
 			})
 
 			// Construct a membership response
-			initialResponse = &gossipapi.JoinGossipGroupResponse{
-				Group: gossipapi.GossipGroup{
-					ID: gossipapi.GossipGroupId{
+			initialResponse = &membershipapi.JoinMembershipGroupResponse{
+				Group: membershipapi.MembershipGroup{
+					ID: membershipapi.MembershipGroupId{
 						Namespace: membershipGroup.Namespace,
 						Name:      membershipGroup.Name,
 					},
@@ -552,7 +552,7 @@ func (c *Controller) JoinGossipGroup(request *gossipapi.JoinGossipGroupRequest, 
 	}()
 
 	// Process response changes
-	var lastResponse gossipapi.JoinGossipGroupResponse
+	var lastResponse membershipapi.JoinMembershipGroupResponse
 	if initialResponse != nil {
 		lastResponse = *initialResponse
 	}
@@ -569,15 +569,15 @@ func (c *Controller) JoinGossipGroup(request *gossipapi.JoinGossipGroupRequest, 
 	return nil
 }
 
-func (c *Controller) JoinReplicaGroup(request *pbapi.JoinReplicaGroupRequest, stream pbapi.ReplicaGroupService_JoinReplicaGroupServer) error {
+func (c *Controller) JoinPartitionGroup(request *partitionapi.JoinPartitionGroupRequest, stream partitionapi.PartitionService_JoinPartitionGroupServer) error {
 	log.Info("Received JoinPartitionGroupRequest", "Request", request)
 
-	ch := make(chan pbapi.JoinReplicaGroupResponse)
+	ch := make(chan partitionapi.JoinPartitionGroupResponse)
 	key := uuid.New().String()
 	c.mu.Lock()
 	partitionGroupsOut, ok := c.replicaGroupResponsesOut[request.GroupID.String()]
 	if !ok {
-		partitionGroupsOut = make(map[string]chan<- pbapi.JoinReplicaGroupResponse)
+		partitionGroupsOut = make(map[string]chan<- partitionapi.JoinPartitionGroupResponse)
 		c.replicaGroupResponsesOut[request.GroupID.String()] = partitionGroupsOut
 	}
 	partitionGroupsOut[key] = ch
@@ -596,8 +596,8 @@ func (c *Controller) JoinReplicaGroup(request *pbapi.JoinReplicaGroupRequest, st
 	}()
 
 	// If no member was added, send an initial response to acknowledge the stream
-	var initialResponse *pbapi.JoinReplicaGroupResponse
-	if request.ReplicaID == nil {
+	var initialResponse *partitionapi.JoinPartitionGroupResponse
+	if request.MemberID == nil {
 		// Get the partition group
 		partitionGroup := &v1beta3.PartitionGroup{}
 		partitionGroupName := types.NamespacedName{
@@ -608,10 +608,10 @@ func (c *Controller) JoinReplicaGroup(request *pbapi.JoinReplicaGroupRequest, st
 		if err != nil && !k8serrors.IsNotFound(err) {
 			return err
 		} else if err != nil {
-			initialResponse = &pbapi.JoinReplicaGroupResponse{
-				Group: pbapi.ReplicaGroup{
+			initialResponse = &partitionapi.JoinPartitionGroupResponse{
+				Group: partitionapi.PartitionGroup{
 					ID:         request.GroupID,
-					Partitions: []pbapi.Partition{},
+					Partitions: []partitionapi.Partition{},
 				},
 			}
 		} else {
@@ -671,7 +671,7 @@ func (c *Controller) JoinReplicaGroup(request *pbapi.JoinReplicaGroupRequest, st
 			}
 
 			numPartitions := int(partitionGroup.Spec.Partitions)
-			partitions := make([]pbapi.Partition, 0)
+			partitions := make([]partitionapi.Partition, 0)
 			for partition := 1; partition <= numPartitions; partition++ {
 				membershipGroup := &v1beta3.MembershipGroup{}
 				membershipGroupName := types.NamespacedName{
@@ -705,8 +705,8 @@ func (c *Controller) JoinReplicaGroup(request *pbapi.JoinReplicaGroupRequest, st
 				}
 
 				// Construct a response leader/term
-				responseTerm := pbapi.Term(membershipGroup.Status.Term)
-				var responseLeader *pbapi.ReplicaId
+				responseTerm := partitionapi.Term(membershipGroup.Status.Term)
+				var responseLeader *partitionapi.MemberId
 				if membershipGroup.Status.Leader != "" {
 					leaderMember := &v1beta3.Member{}
 					leaderMemberName := types.NamespacedName{
@@ -715,7 +715,7 @@ func (c *Controller) JoinReplicaGroup(request *pbapi.JoinReplicaGroupRequest, st
 					}
 					err := c.client.Get(context.TODO(), leaderMemberName, leaderMember)
 					if err == nil {
-						responseLeader = &pbapi.ReplicaId{
+						responseLeader = &partitionapi.MemberId{
 							Namespace: leaderMember.Properties.Namespace,
 							Name:      leaderMember.Properties.Name,
 						}
@@ -725,7 +725,7 @@ func (c *Controller) JoinReplicaGroup(request *pbapi.JoinReplicaGroupRequest, st
 				}
 
 				// Construct response membership from the set of members that have not been deleted
-				responseReplicas := make([]pbapi.Replica, 0, len(membershipList.Items))
+				responseMembers := make([]partitionapi.Member, 0, len(membershipList.Items))
 				for _, membership := range membershipList.Items {
 					if membership.DeletionTimestamp != nil {
 						continue
@@ -740,8 +740,8 @@ func (c *Controller) JoinReplicaGroup(request *pbapi.JoinReplicaGroupRequest, st
 						continue
 					}
 					if member.DeletionTimestamp == nil {
-						responseReplicas = append(responseReplicas, pbapi.Replica{
-							ID: pbapi.ReplicaId{
+						responseMembers = append(responseMembers, partitionapi.Member{
+							ID: partitionapi.MemberId{
 								Name:      member.Properties.Name,
 								Namespace: member.Properties.Namespace,
 							},
@@ -752,19 +752,19 @@ func (c *Controller) JoinReplicaGroup(request *pbapi.JoinReplicaGroupRequest, st
 				}
 
 				// Sort the membership to aid in deduplicating responses
-				sort.Slice(responseReplicas, func(i, j int) bool {
-					return responseReplicas[i].ID.Name < responseReplicas[j].ID.Name
+				sort.Slice(responseMembers, func(i, j int) bool {
+					return responseMembers[i].ID.Name < responseMembers[j].ID.Name
 				})
 
-				partitions = append(partitions, pbapi.Partition{
-					ID: pbapi.PartitionId{
+				partitions = append(partitions, partitionapi.Partition{
+					ID: partitionapi.PartitionId{
 						Namespace: membershipGroup.Namespace,
 						Name:      membershipGroup.Name,
 						Index:     uint32(partition),
 					},
-					Term:     responseTerm,
-					Leader:   responseLeader,
-					Replicas: responseReplicas,
+					Term:    responseTerm,
+					Leader:  responseLeader,
+					Members: responseMembers,
 				})
 			}
 
@@ -774,9 +774,9 @@ func (c *Controller) JoinReplicaGroup(request *pbapi.JoinReplicaGroupRequest, st
 			})
 
 			// Construct a partition group response
-			initialResponse = &pbapi.JoinReplicaGroupResponse{
-				Group: pbapi.ReplicaGroup{
-					ID: pbapi.ReplicaGroupId{
+			initialResponse = &partitionapi.JoinPartitionGroupResponse{
+				Group: partitionapi.PartitionGroup{
+					ID: partitionapi.PartitionGroupId{
 						Namespace: partitionGroup.Namespace,
 						Name:      partitionGroup.Name,
 					},
@@ -791,16 +791,16 @@ func (c *Controller) JoinReplicaGroup(request *pbapi.JoinReplicaGroupRequest, st
 			return err
 		}
 	} else {
-		log.Info("Joining Member to PartitionGroup", "Namespace", request.ReplicaID.Namespace, "Member", request.ReplicaID.Name, "PartitionGroup", request.GroupID.Name)
+		log.Info("Joining Member to PartitionGroup", "Namespace", request.MemberID.Namespace, "Member", request.MemberID.Name, "PartitionGroup", request.GroupID.Name)
 		// Get the member joining the group
 		member := &v1beta3.Member{}
 		memberName := types.NamespacedName{
-			Namespace: request.ReplicaID.Namespace,
-			Name:      request.ReplicaID.Name,
+			Namespace: request.MemberID.Namespace,
+			Name:      request.MemberID.Name,
 		}
 		err := c.client.Get(stream.Context(), memberName, member)
 		if err != nil {
-			log.Error(err, "Failed to join Member to PartitionGroup", "Namespace", request.ReplicaID.Namespace, "Member", request.ReplicaID.Name, "PartitionGroup", request.GroupID.Name)
+			log.Error(err, "Failed to join Member to PartitionGroup", "Namespace", request.MemberID.Namespace, "Member", request.MemberID.Name, "PartitionGroup", request.GroupID.Name)
 			return err
 		}
 
@@ -813,7 +813,7 @@ func (c *Controller) JoinReplicaGroup(request *pbapi.JoinReplicaGroupRequest, st
 		err = c.client.Get(stream.Context(), partitionGroupName, partitionGroup)
 		if err != nil {
 			if !k8serrors.IsNotFound(err) {
-				log.Error(err, "Failed to join Member to PartitionGroup", "Namespace", request.ReplicaID.Namespace, "Member", request.ReplicaID.Name, "PartitionGroup", request.GroupID.Name)
+				log.Error(err, "Failed to join Member to PartitionGroup", "Namespace", request.MemberID.Namespace, "Member", request.MemberID.Name, "PartitionGroup", request.GroupID.Name)
 				return err
 			}
 			partitionGroup = &v1beta3.PartitionGroup{
@@ -828,7 +828,7 @@ func (c *Controller) JoinReplicaGroup(request *pbapi.JoinReplicaGroupRequest, st
 			}
 			err = c.client.Create(stream.Context(), partitionGroup)
 			if err != nil && !k8serrors.IsAlreadyExists(err) {
-				log.Error(err, "Failed to join Member to PartitionGroup", "Namespace", request.ReplicaID.Namespace, "Member", request.ReplicaID.Name, "PartitionGroup", request.GroupID.Name)
+				log.Error(err, "Failed to join Member to PartitionGroup", "Namespace", request.MemberID.Namespace, "Member", request.MemberID.Name, "PartitionGroup", request.GroupID.Name)
 				return err
 			}
 		}
@@ -844,12 +844,12 @@ func (c *Controller) JoinReplicaGroup(request *pbapi.JoinReplicaGroupRequest, st
 		partitionGroupMembership := &v1beta3.PartitionGroupMembership{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace:       request.GroupID.Namespace,
-				Name:            fmt.Sprintf("%s-%s", request.ReplicaID.Name, request.GroupID.Name),
+				Name:            fmt.Sprintf("%s-%s", request.MemberID.Name, request.GroupID.Name),
 				OwnerReferences: []metav1.OwnerReference{owner},
 				Finalizers:      []string{"event"},
 			},
 			Bind: v1beta3.PartitionGroupMembershipBinding{
-				Member: request.ReplicaID.Name,
+				Member: request.MemberID.Name,
 				Group:  request.GroupID.Name,
 			},
 		}
@@ -857,26 +857,26 @@ func (c *Controller) JoinReplicaGroup(request *pbapi.JoinReplicaGroupRequest, st
 		// Create the partition group membership
 		err = c.client.Create(stream.Context(), partitionGroupMembership)
 		if err != nil && !k8serrors.IsAlreadyExists(err) {
-			log.Error(err, "Failed to join Member to PartitionGroup", "Namespace", request.ReplicaID.Namespace, "Member", request.ReplicaID.Name, "PartitionGroup", request.GroupID.Name)
+			log.Error(err, "Failed to join Member to PartitionGroup", "Namespace", request.MemberID.Namespace, "Member", request.MemberID.Name, "PartitionGroup", request.GroupID.Name)
 			return err
 		}
 	}
 
 	go func() {
 		<-stream.Context().Done()
-		if request.ReplicaID != nil {
+		if request.MemberID != nil {
 			partitionGroupMembership := &v1beta3.PartitionGroupMembership{}
 			name := types.NamespacedName{
 				Namespace: request.GroupID.Namespace,
-				Name:      fmt.Sprintf("%s-%s", request.ReplicaID.Name, request.GroupID.Name),
+				Name:      fmt.Sprintf("%s-%s", request.MemberID.Name, request.GroupID.Name),
 			}
 			err := c.client.Get(context.TODO(), name, partitionGroupMembership)
 			if err != nil && !k8serrors.IsNotFound(err) {
-				log.Error(err, "Failed to leave Member from PartitionGroup", "Namespace", request.ReplicaID.Namespace, "Member", request.ReplicaID.Name, "PartitionGroup", request.GroupID.Name)
+				log.Error(err, "Failed to leave Member from PartitionGroup", "Namespace", request.MemberID.Namespace, "Member", request.MemberID.Name, "PartitionGroup", request.GroupID.Name)
 			} else {
 				err = c.client.Delete(context.TODO(), partitionGroupMembership)
 				if err != nil && !k8serrors.IsNotFound(err) {
-					log.Error(err, "Failed to leave Member from PartitionGroup", "Namespace", request.ReplicaID.Namespace, "Member", request.ReplicaID.Name, "PartitionGroup", request.GroupID.Name)
+					log.Error(err, "Failed to leave Member from PartitionGroup", "Namespace", request.MemberID.Namespace, "Member", request.MemberID.Name, "PartitionGroup", request.GroupID.Name)
 				}
 			}
 		}
@@ -884,7 +884,7 @@ func (c *Controller) JoinReplicaGroup(request *pbapi.JoinReplicaGroupRequest, st
 	}()
 
 	// Process response changes
-	var lastResponse pbapi.JoinReplicaGroupResponse
+	var lastResponse partitionapi.JoinPartitionGroupResponse
 	if initialResponse != nil {
 		lastResponse = *initialResponse
 	}
@@ -1293,8 +1293,8 @@ func (c *Controller) Start(stop <-chan struct{}) error {
 	go func() {
 		databaseapi.RegisterDatabaseServiceServer(s, c)
 		cluster.RegisterClusterServiceServer(s, c)
-		gossipapi.RegisterGossipServiceServer(s, c)
-		pbapi.RegisterReplicaGroupServiceServer(s, c)
+		membershipapi.RegisterMembershipServiceServer(s, c)
+		partitionapi.RegisterPartitionServiceServer(s, c)
 		if err := s.Serve(lis); err != nil {
 			errs <- err
 		}
@@ -1367,6 +1367,6 @@ func (c *Controller) processReplicaGroupResponses(stop <-chan struct{}) {
 
 var _ databaseapi.DatabaseServiceServer = &Controller{}
 var _ cluster.ClusterServiceServer = &Controller{}
-var _ gossipapi.GossipServiceServer = &Controller{}
-var _ pbapi.ReplicaGroupServiceServer = &Controller{}
+var _ membershipapi.MembershipServiceServer = &Controller{}
+var _ partitionapi.PartitionServiceServer = &Controller{}
 var _ primitiveapi.PrimitiveServiceServer = &Controller{}

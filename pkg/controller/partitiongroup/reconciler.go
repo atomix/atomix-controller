@@ -17,7 +17,7 @@ package partitiongroup
 import (
 	"context"
 	"fmt"
-	"github.com/atomix/api/proto/atomix/pb"
+	partitionapi "github.com/atomix/api/proto/atomix/partition"
 	"github.com/atomix/kubernetes-controller/pkg/apis/cloud/v1beta3"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -39,7 +39,7 @@ var log = logf.Log.WithName("partition_group_controller")
 
 // Add creates a new Database controller and adds it to the Manager. The Manager will set fields on the
 // controller and Start it when the Manager is Started.
-func Add(mgr manager.Manager, responseCh chan<- pb.JoinReplicaGroupResponse) error {
+func Add(mgr manager.Manager, responseCh chan<- partitionapi.JoinPartitionGroupResponse) error {
 	r := &Reconciler{
 		client:     mgr.GetClient(),
 		scheme:     mgr.GetScheme(),
@@ -79,7 +79,7 @@ type Reconciler struct {
 	client     client.Client
 	scheme     *runtime.Scheme
 	config     *rest.Config
-	responseCh chan<- pb.JoinReplicaGroupResponse
+	responseCh chan<- partitionapi.JoinPartitionGroupResponse
 }
 
 func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, error) {
@@ -129,7 +129,7 @@ func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, err
 	}
 
 	numPartitions := int(partitionGroup.Spec.Partitions)
-	partitions := make([]pb.Partition, 0)
+	partitions := make([]partitionapi.Partition, 0)
 	for partition := 1; partition <= numPartitions; partition++ {
 		membershipGroup := &v1beta3.MembershipGroup{}
 		membershipGroupName := types.NamespacedName{
@@ -176,8 +176,8 @@ func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, err
 		}
 
 		// Construct a response leader/term
-		responseTerm := pb.Term(membershipGroup.Status.Term)
-		var responseLeader *pb.ReplicaId
+		responseTerm := partitionapi.Term(membershipGroup.Status.Term)
+		var responseLeader *partitionapi.MemberId
 		if leader != "" {
 			leaderMember := &v1beta3.Member{}
 			leaderMemberName := types.NamespacedName{
@@ -186,7 +186,7 @@ func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, err
 			}
 			err := r.client.Get(context.TODO(), leaderMemberName, leaderMember)
 			if err == nil {
-				responseLeader = &pb.ReplicaId{
+				responseLeader = &partitionapi.MemberId{
 					Namespace: leaderMember.Properties.Namespace,
 					Name:      leaderMember.Properties.Name,
 				}
@@ -196,7 +196,7 @@ func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, err
 		}
 
 		// Construct response membership from the set of members that have not been deleted
-		responseReplicas := make([]pb.Replica, 0, len(membershipList.Items))
+		responseMembers := make([]partitionapi.Member, 0, len(membershipList.Items))
 		for _, membership := range membershipList.Items {
 			if membership.DeletionTimestamp != nil {
 				continue
@@ -215,8 +215,8 @@ func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, err
 				if !partitionGroupMembers[membership.Bind.Member] {
 					return reconcile.Result{}, nil
 				}
-				responseReplicas = append(responseReplicas, pb.Replica{
-					ID: pb.ReplicaId{
+				responseMembers = append(responseMembers, partitionapi.Member{
+					ID: partitionapi.MemberId{
 						Name:      member.Properties.Name,
 						Namespace: member.Properties.Namespace,
 					},
@@ -227,19 +227,19 @@ func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, err
 		}
 
 		// Sort the membership to aid in deduplicating responses
-		sort.Slice(responseReplicas, func(i, j int) bool {
-			return responseReplicas[i].ID.Name < responseReplicas[j].ID.Name
+		sort.Slice(responseMembers, func(i, j int) bool {
+			return responseMembers[i].ID.Name < responseMembers[j].ID.Name
 		})
 
-		partitions = append(partitions, pb.Partition{
-			ID: pb.PartitionId{
+		partitions = append(partitions, partitionapi.Partition{
+			ID: partitionapi.PartitionId{
 				Namespace: membershipGroup.Namespace,
 				Name:      membershipGroup.Name,
 				Index:     uint32(partition),
 			},
-			Term:     responseTerm,
-			Leader:   responseLeader,
-			Replicas: responseReplicas,
+			Term:    responseTerm,
+			Leader:  responseLeader,
+			Members: responseMembers,
 		})
 	}
 
@@ -249,9 +249,9 @@ func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, err
 	})
 
 	// Construct a partition group response
-	response := pb.JoinReplicaGroupResponse{
-		Group: pb.ReplicaGroup{
-			ID: pb.ReplicaGroupId{
+	response := partitionapi.JoinPartitionGroupResponse{
+		Group: partitionapi.PartitionGroup{
+			ID: partitionapi.PartitionGroupId{
 				Namespace: partitionGroup.Namespace,
 				Name:      partitionGroup.Name,
 			},
