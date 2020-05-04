@@ -207,11 +207,11 @@ func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, err
 				}
 				responseReplicas = append(responseReplicas, pb.Replica{
 					ID: pb.ReplicaId{
-						Name:      member.Name,
-						Namespace: member.Namespace,
+						Name:      member.Properties.Name,
+						Namespace: member.Properties.Namespace,
 					},
-					Host: member.Service,
-					Port: member.Port.IntVal,
+					Host: member.Properties.Service,
+					Port: member.Properties.Port.IntVal,
 				})
 			}
 		}

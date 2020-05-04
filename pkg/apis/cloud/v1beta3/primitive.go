@@ -37,7 +37,7 @@ const (
 )
 
 // GetProto returns the primitive type proto
-func (t PrimitiveType) GetProto() primitive.PrimitiveType {
+func (t PrimitiveType) Proto() primitive.PrimitiveType {
 	switch t {
 	case PrimitiveTypeCounter:
 		return primitive.PrimitiveType_COUNTER
@@ -90,6 +90,13 @@ func GetPrimitiveType(t primitive.PrimitiveType) PrimitiveType {
 	return PrimitiveTypeUnknown
 }
 
+// PrimitiveProperties contains the properties for a Primitive resource
+type PrimitiveProperties struct {
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+	Protocol          string        `json:"protocol,omitempty"`
+	Type              PrimitiveType `json:"type,omitempty"`
+}
+
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
@@ -98,8 +105,7 @@ func GetPrimitiveType(t primitive.PrimitiveType) PrimitiveType {
 type Primitive struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
-	Type              PrimitiveType `json:"type,omitempty"`
-	Scope             string        `json:"scope,omitempty"`
+	Properties        PrimitiveProperties `json:"properties,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

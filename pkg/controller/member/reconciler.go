@@ -93,7 +93,7 @@ func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, err
 	// Get the set of members in the member's scope
 	memberList := &v1beta3.MemberList{}
 	memberListFields := map[string]string{
-		"scope": member.Scope,
+		"properties.namespace": member.Properties.Namespace,
 	}
 	memberListOpts := &client.ListOptions{
 		Namespace:     member.Namespace,
@@ -110,11 +110,11 @@ func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, err
 		if member.DeletionTimestamp == nil {
 			members = append(members, cluster.Member{
 				ID: cluster.MemberId{
-					Name:      member.Name,
-					Namespace: member.Namespace,
+					Name:      member.Properties.Name,
+					Namespace: member.Properties.Namespace,
 				},
-				Host: member.Service,
-				Port: member.Port.IntVal,
+				Host: member.Properties.Service,
+				Port: member.Properties.Port.IntVal,
 			})
 		}
 	}
@@ -128,7 +128,7 @@ func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, err
 	response := cluster.JoinClusterResponse{
 		ClusterID: cluster.ClusterId{
 			Namespace: member.Namespace,
-			Name:      member.Scope,
+			Name:      member.Properties.Namespace,
 		},
 		Members: members,
 	}

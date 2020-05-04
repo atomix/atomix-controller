@@ -19,6 +19,13 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
+// MemberProperties describes immutable member properties
+type MemberProperties struct {
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+	Service           string             `json:"service,omitempty"`
+	Port              intstr.IntOrString `json:"port,omitempty"`
+}
+
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
@@ -27,9 +34,7 @@ import (
 type Member struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
-	Service           string             `json:"service,omitempty"`
-	Port              intstr.IntOrString `json:"port,omitempty"`
-	Scope             string             `json:"scope,omitempty"`
+	Properties        MemberProperties `json:"properties,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

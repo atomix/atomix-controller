@@ -18,9 +18,11 @@ import (
 	"context"
 	"fmt"
 	"github.com/atomix/api/proto/atomix/cluster"
-	db "github.com/atomix/api/proto/atomix/database"
-	"github.com/atomix/api/proto/atomix/gossip"
-	"github.com/atomix/api/proto/atomix/pb"
+	databaseapi "github.com/atomix/api/proto/atomix/database"
+	gossipapi "github.com/atomix/api/proto/atomix/gossip"
+	pbapi "github.com/atomix/api/proto/atomix/pb"
+	primitiveapi "github.com/atomix/api/proto/atomix/primitive"
+	protocolapi "github.com/atomix/api/proto/atomix/protocol"
 	"github.com/atomix/kubernetes-controller/pkg/apis/cloud/v1beta3"
 	"github.com/atomix/kubernetes-controller/pkg/controller/database"
 	"github.com/atomix/kubernetes-controller/pkg/controller/member"
@@ -29,6 +31,8 @@ import (
 	"github.com/atomix/kubernetes-controller/pkg/controller/util/k8s"
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -51,8 +55,8 @@ var log = logf.Log.WithName("atomix_controller")
 // AddController adds the Atomix controller to the k8s controller manager
 func AddController(mgr manager.Manager) error {
 	clusterResponseCh := make(chan cluster.JoinClusterResponse)
-	gossipGroupResponseCh := make(chan gossip.JoinGossipGroupResponse)
-	replicaGroupResponseCh := make(chan pb.JoinReplicaGroupResponse)
+	gossipGroupResponseCh := make(chan gossipapi.JoinGossipGroupResponse)
+	replicaGroupResponseCh := make(chan pbapi.JoinReplicaGroupResponse)
 
 	c := newController(mgr.GetClient(), mgr.GetScheme(), mgr.GetConfig(), clusterResponseCh, gossipGroupResponseCh, replicaGroupResponseCh)
 	err := mgr.Add(c)
@@ -60,9 +64,9 @@ func AddController(mgr manager.Manager) error {
 		return err
 	}
 
-	if err := mgr.GetFieldIndexer().IndexField(&v1beta3.Member{}, "scope", func(rawObj runtime.Object) []string {
+	if err := mgr.GetFieldIndexer().IndexField(&v1beta3.Member{}, "properties.namespace", func(rawObj runtime.Object) []string {
 		member := rawObj.(*v1beta3.Member)
-		return []string{member.Scope}
+		return []string{member.Properties.Namespace}
 	}); err != nil {
 		return err
 	}
@@ -77,6 +81,20 @@ func AddController(mgr manager.Manager) error {
 	if err := mgr.GetFieldIndexer().IndexField(&v1beta3.PartitionGroupMembership{}, "bind.group", func(rawObj runtime.Object) []string {
 		membership := rawObj.(*v1beta3.PartitionGroupMembership)
 		return []string{membership.Bind.Group}
+	}); err != nil {
+		return err
+	}
+
+	if err := mgr.GetFieldIndexer().IndexField(&v1beta3.Primitive{}, "properties.type", func(rawObj runtime.Object) []string {
+		primitive := rawObj.(*v1beta3.Primitive)
+		return []string{string(primitive.Properties.Type)}
+	}); err != nil {
+		return err
+	}
+
+	if err := mgr.GetFieldIndexer().IndexField(&v1beta3.Primitive{}, "properties.protocol", func(rawObj runtime.Object) []string {
+		primitive := rawObj.(*v1beta3.Primitive)
+		return []string{primitive.Properties.Protocol}
 	}); err != nil {
 		return err
 	}
@@ -102,8 +120,8 @@ func newController(
 	scheme *runtime.Scheme,
 	config *rest.Config,
 	clusterResponseCh chan cluster.JoinClusterResponse,
-	gossipGroupResponseCh chan gossip.JoinGossipGroupResponse,
-	replicaGroupResponseCh chan pb.JoinReplicaGroupResponse,
+	gossipGroupResponseCh chan gossipapi.JoinGossipGroupResponse,
+	replicaGroupResponseCh chan pbapi.JoinReplicaGroupResponse,
 	opts ...grpc.ServerOption) *Controller {
 	return &Controller{
 		client:                   client,
@@ -112,9 +130,9 @@ func newController(
 		clusterResponseIn:        clusterResponseCh,
 		clusterResponsesOut:      make(map[string]map[string]chan<- cluster.JoinClusterResponse),
 		gossipGroupResponseIn:    gossipGroupResponseCh,
-		gossipGroupResponsesOut:  make(map[string]map[string]chan<- gossip.JoinGossipGroupResponse),
+		gossipGroupResponsesOut:  make(map[string]map[string]chan<- gossipapi.JoinGossipGroupResponse),
 		replicaGroupResponseIn:   replicaGroupResponseCh,
-		replicaGroupResponsesOut: make(map[string]map[string]chan<- pb.JoinReplicaGroupResponse),
+		replicaGroupResponsesOut: make(map[string]map[string]chan<- pbapi.JoinReplicaGroupResponse),
 		opts:                     opts,
 	}
 }
@@ -127,10 +145,10 @@ type Controller struct {
 	opts                     []grpc.ServerOption
 	clusterResponseIn        chan cluster.JoinClusterResponse
 	clusterResponsesOut      map[string]map[string]chan<- cluster.JoinClusterResponse
-	gossipGroupResponseIn    chan gossip.JoinGossipGroupResponse
-	gossipGroupResponsesOut  map[string]map[string]chan<- gossip.JoinGossipGroupResponse
-	replicaGroupResponseIn   chan pb.JoinReplicaGroupResponse
-	replicaGroupResponsesOut map[string]map[string]chan<- pb.JoinReplicaGroupResponse
+	gossipGroupResponseIn    chan gossipapi.JoinGossipGroupResponse
+	gossipGroupResponsesOut  map[string]map[string]chan<- gossipapi.JoinGossipGroupResponse
+	replicaGroupResponseIn   chan pbapi.JoinReplicaGroupResponse
+	replicaGroupResponsesOut map[string]map[string]chan<- pbapi.JoinReplicaGroupResponse
 	mu                       sync.RWMutex
 }
 
@@ -166,7 +184,7 @@ func (c *Controller) JoinCluster(request *cluster.JoinClusterRequest, stream clu
 		// Get the set of members in the member's scope
 		memberList := &v1beta3.MemberList{}
 		memberListFields := map[string]string{
-			"scope": request.ClusterID.Name,
+			"properties.namespace": request.ClusterID.Name,
 		}
 		memberListOpts := &client.ListOptions{
 			Namespace:     request.ClusterID.Namespace,
@@ -183,11 +201,11 @@ func (c *Controller) JoinCluster(request *cluster.JoinClusterRequest, stream clu
 			if member.DeletionTimestamp == nil {
 				members = append(members, cluster.Member{
 					ID: cluster.MemberId{
-						Name:      member.Name,
-						Namespace: member.Namespace,
+						Name:      member.Properties.Name,
+						Namespace: member.Properties.Namespace,
 					},
-					Host: member.Service,
-					Port: member.Port.IntVal,
+					Host: member.Properties.Service,
+					Port: member.Properties.Port.IntVal,
 				})
 			}
 		}
@@ -240,9 +258,14 @@ func (c *Controller) JoinCluster(request *cluster.JoinClusterRequest, stream clu
 				OwnerReferences: []metav1.OwnerReference{owner},
 				Finalizers:      []string{"event"},
 			},
-			Service: request.Member.Host,
-			Port:    intstr.FromInt(int(request.Member.Port)),
-			Scope:   request.ClusterID.Name,
+			Properties: v1beta3.MemberProperties{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: request.ClusterID.Name,
+					Name:      request.Member.ID.Name,
+				},
+				Service: request.Member.Host,
+				Port:    intstr.FromInt(int(request.Member.Port)),
+			},
 		}
 
 		// Create the member
@@ -293,15 +316,15 @@ func (c *Controller) JoinCluster(request *cluster.JoinClusterRequest, stream clu
 	return nil
 }
 
-func (c *Controller) JoinGossipGroup(request *gossip.JoinGossipGroupRequest, stream gossip.GossipService_JoinGossipGroupServer) error {
+func (c *Controller) JoinGossipGroup(request *gossipapi.JoinGossipGroupRequest, stream gossipapi.GossipService_JoinGossipGroupServer) error {
 	log.Info("Received JoinMembershipGroupRequest", "Request", request)
 
-	ch := make(chan gossip.JoinGossipGroupResponse)
+	ch := make(chan gossipapi.JoinGossipGroupResponse)
 	key := uuid.New().String()
 	c.mu.Lock()
 	membershipGroupsOut, ok := c.gossipGroupResponsesOut[request.GroupID.String()]
 	if !ok {
-		membershipGroupsOut = make(map[string]chan<- gossip.JoinGossipGroupResponse)
+		membershipGroupsOut = make(map[string]chan<- gossipapi.JoinGossipGroupResponse)
 		c.gossipGroupResponsesOut[request.GroupID.String()] = membershipGroupsOut
 	}
 	membershipGroupsOut[key] = ch
@@ -320,7 +343,7 @@ func (c *Controller) JoinGossipGroup(request *gossip.JoinGossipGroupRequest, str
 	}()
 
 	// If no member was added, send an initial response to acknowledge the stream
-	var initialResponse *gossip.JoinGossipGroupResponse
+	var initialResponse *gossipapi.JoinGossipGroupResponse
 	if request.MemberID == nil {
 		// Get the membership group
 		membershipGroup := &v1beta3.MembershipGroup{}
@@ -332,10 +355,10 @@ func (c *Controller) JoinGossipGroup(request *gossip.JoinGossipGroupRequest, str
 		if err != nil && !k8serrors.IsNotFound(err) {
 			return err
 		} else if err != nil {
-			initialResponse = &gossip.JoinGossipGroupResponse{
-				Group: gossip.GossipGroup{
+			initialResponse = &gossipapi.JoinGossipGroupResponse{
+				Group: gossipapi.GossipGroup{
 					ID:      request.GroupID,
-					Members: []gossip.Member{},
+					Members: []gossipapi.Member{},
 				},
 			}
 		} else {
@@ -391,7 +414,7 @@ func (c *Controller) JoinGossipGroup(request *gossip.JoinGossipGroupRequest, str
 			}
 
 			// Construct response membership from the set of members that have not been deleted
-			responseMembers := make([]gossip.Member, 0, len(membershipList.Items))
+			responseMembers := make([]gossipapi.Member, 0, len(membershipList.Items))
 			for _, membership := range membershipList.Items {
 				if membership.DeletionTimestamp != nil {
 					continue
@@ -406,13 +429,13 @@ func (c *Controller) JoinGossipGroup(request *gossip.JoinGossipGroupRequest, str
 					continue
 				}
 				if member.DeletionTimestamp == nil {
-					responseMembers = append(responseMembers, gossip.Member{
-						ID: gossip.MemberId{
+					responseMembers = append(responseMembers, gossipapi.Member{
+						ID: gossipapi.MemberId{
 							Name:      member.Name,
 							Namespace: member.Namespace,
 						},
-						Host: member.Service,
-						Port: member.Port.IntVal,
+						Host: member.Properties.Service,
+						Port: member.Properties.Port.IntVal,
 					})
 				}
 			}
@@ -423,9 +446,9 @@ func (c *Controller) JoinGossipGroup(request *gossip.JoinGossipGroupRequest, str
 			})
 
 			// Construct a membership response
-			initialResponse = &gossip.JoinGossipGroupResponse{
-				Group: gossip.GossipGroup{
-					ID: gossip.GossipGroupId{
+			initialResponse = &gossipapi.JoinGossipGroupResponse{
+				Group: gossipapi.GossipGroup{
+					ID: gossipapi.GossipGroupId{
 						Namespace: membershipGroup.Namespace,
 						Name:      membershipGroup.Name,
 					},
@@ -529,7 +552,7 @@ func (c *Controller) JoinGossipGroup(request *gossip.JoinGossipGroupRequest, str
 	}()
 
 	// Process response changes
-	var lastResponse gossip.JoinGossipGroupResponse
+	var lastResponse gossipapi.JoinGossipGroupResponse
 	if initialResponse != nil {
 		lastResponse = *initialResponse
 	}
@@ -546,15 +569,15 @@ func (c *Controller) JoinGossipGroup(request *gossip.JoinGossipGroupRequest, str
 	return nil
 }
 
-func (c *Controller) JoinReplicaGroup(request *pb.JoinReplicaGroupRequest, stream pb.ReplicaGroupService_JoinReplicaGroupServer) error {
+func (c *Controller) JoinReplicaGroup(request *pbapi.JoinReplicaGroupRequest, stream pbapi.ReplicaGroupService_JoinReplicaGroupServer) error {
 	log.Info("Received JoinPartitionGroupRequest", "Request", request)
 
-	ch := make(chan pb.JoinReplicaGroupResponse)
+	ch := make(chan pbapi.JoinReplicaGroupResponse)
 	key := uuid.New().String()
 	c.mu.Lock()
 	partitionGroupsOut, ok := c.replicaGroupResponsesOut[request.GroupID.String()]
 	if !ok {
-		partitionGroupsOut = make(map[string]chan<- pb.JoinReplicaGroupResponse)
+		partitionGroupsOut = make(map[string]chan<- pbapi.JoinReplicaGroupResponse)
 		c.replicaGroupResponsesOut[request.GroupID.String()] = partitionGroupsOut
 	}
 	partitionGroupsOut[key] = ch
@@ -573,7 +596,7 @@ func (c *Controller) JoinReplicaGroup(request *pb.JoinReplicaGroupRequest, strea
 	}()
 
 	// If no member was added, send an initial response to acknowledge the stream
-	var initialResponse *pb.JoinReplicaGroupResponse
+	var initialResponse *pbapi.JoinReplicaGroupResponse
 	if request.ReplicaID == nil {
 		// Get the partition group
 		partitionGroup := &v1beta3.PartitionGroup{}
@@ -585,10 +608,10 @@ func (c *Controller) JoinReplicaGroup(request *pb.JoinReplicaGroupRequest, strea
 		if err != nil && !k8serrors.IsNotFound(err) {
 			return err
 		} else if err != nil {
-			initialResponse = &pb.JoinReplicaGroupResponse{
-				Group: pb.ReplicaGroup{
+			initialResponse = &pbapi.JoinReplicaGroupResponse{
+				Group: pbapi.ReplicaGroup{
 					ID:         request.GroupID,
-					Partitions: []pb.Partition{},
+					Partitions: []pbapi.Partition{},
 				},
 			}
 		} else {
@@ -648,7 +671,7 @@ func (c *Controller) JoinReplicaGroup(request *pb.JoinReplicaGroupRequest, strea
 			}
 
 			numPartitions := int(partitionGroup.Spec.Partitions)
-			partitions := make([]pb.Partition, 0)
+			partitions := make([]pbapi.Partition, 0)
 			for partition := 1; partition <= numPartitions; partition++ {
 				membershipGroup := &v1beta3.MembershipGroup{}
 				membershipGroupName := types.NamespacedName{
@@ -682,17 +705,17 @@ func (c *Controller) JoinReplicaGroup(request *pb.JoinReplicaGroupRequest, strea
 				}
 
 				// Construct a response leader/term
-				responseTerm := pb.Term(membershipGroup.Status.Term)
-				var responseLeader *pb.ReplicaId
+				responseTerm := pbapi.Term(membershipGroup.Status.Term)
+				var responseLeader *pbapi.ReplicaId
 				if membershipGroup.Status.Leader != "" {
-					responseLeader = &pb.ReplicaId{
+					responseLeader = &pbapi.ReplicaId{
 						Namespace: membershipGroup.Namespace,
 						Name:      membershipGroup.Status.Leader,
 					}
 				}
 
 				// Construct response membership from the set of members that have not been deleted
-				responseReplicas := make([]pb.Replica, 0, len(membershipList.Items))
+				responseReplicas := make([]pbapi.Replica, 0, len(membershipList.Items))
 				for _, membership := range membershipList.Items {
 					if membership.DeletionTimestamp != nil {
 						continue
@@ -707,13 +730,13 @@ func (c *Controller) JoinReplicaGroup(request *pb.JoinReplicaGroupRequest, strea
 						continue
 					}
 					if member.DeletionTimestamp == nil {
-						responseReplicas = append(responseReplicas, pb.Replica{
-							ID: pb.ReplicaId{
+						responseReplicas = append(responseReplicas, pbapi.Replica{
+							ID: pbapi.ReplicaId{
 								Name:      member.Name,
 								Namespace: member.Namespace,
 							},
-							Host: member.Service,
-							Port: member.Port.IntVal,
+							Host: member.Properties.Service,
+							Port: member.Properties.Port.IntVal,
 						})
 					}
 				}
@@ -723,8 +746,8 @@ func (c *Controller) JoinReplicaGroup(request *pb.JoinReplicaGroupRequest, strea
 					return responseReplicas[i].ID.Name < responseReplicas[j].ID.Name
 				})
 
-				partitions = append(partitions, pb.Partition{
-					ID: pb.PartitionId{
+				partitions = append(partitions, pbapi.Partition{
+					ID: pbapi.PartitionId{
 						Namespace: membershipGroup.Namespace,
 						Name:      membershipGroup.Name,
 						Index:     uint32(partition),
@@ -741,9 +764,9 @@ func (c *Controller) JoinReplicaGroup(request *pb.JoinReplicaGroupRequest, strea
 			})
 
 			// Construct a partition group response
-			initialResponse = &pb.JoinReplicaGroupResponse{
-				Group: pb.ReplicaGroup{
-					ID: pb.ReplicaGroupId{
+			initialResponse = &pbapi.JoinReplicaGroupResponse{
+				Group: pbapi.ReplicaGroup{
+					ID: pbapi.ReplicaGroupId{
 						Namespace: partitionGroup.Namespace,
 						Name:      partitionGroup.Name,
 					},
@@ -851,7 +874,7 @@ func (c *Controller) JoinReplicaGroup(request *pb.JoinReplicaGroupRequest, strea
 	}()
 
 	// Process response changes
-	var lastResponse pb.JoinReplicaGroupResponse
+	var lastResponse pbapi.JoinReplicaGroupResponse
 	if initialResponse != nil {
 		lastResponse = *initialResponse
 	}
@@ -869,7 +892,7 @@ func (c *Controller) JoinReplicaGroup(request *pb.JoinReplicaGroupRequest, strea
 }
 
 // GetDatabases get a list of databases managed by the controller
-func (c *Controller) GetDatabases(ctx context.Context, request *db.GetDatabasesRequest) (*db.GetDatabasesResponse, error) {
+func (c *Controller) GetDatabases(ctx context.Context, request *databaseapi.GetDatabasesRequest) (*databaseapi.GetDatabasesResponse, error) {
 	databases := &v1beta3.DatabaseList{}
 
 	opts := &client.ListOptions{
@@ -898,7 +921,7 @@ func (c *Controller) GetDatabases(ctx context.Context, request *db.GetDatabasesR
 					continue
 				}
 
-				pbpartitions := make([]*db.Partition, 0, len(partitions.Items))
+				pbpartitions := make([]*databaseapi.Partition, 0, len(partitions.Items))
 				for _, partition := range partitions.Items {
 					pbpartition, err := k8s.NewPartitionProto(&partition)
 					if err != nil {
@@ -907,15 +930,15 @@ func (c *Controller) GetDatabases(ctx context.Context, request *db.GetDatabasesR
 					pbpartitions = append(pbpartitions, pbpartition)
 				}
 				pbdatabase.Partitions = pbpartitions
-				return &db.GetDatabasesResponse{
-					Databases: []*db.Database{pbdatabase},
+				return &databaseapi.GetDatabasesResponse{
+					Databases: []*databaseapi.Database{pbdatabase},
 				}, nil
 			}
 		}
-		return &db.GetDatabasesResponse{}, nil
+		return &databaseapi.GetDatabasesResponse{}, nil
 	}
 
-	pbdatabases := make([]*db.Database, 0, len(databases.Items))
+	pbdatabases := make([]*databaseapi.Database, 0, len(databases.Items))
 	for _, database := range databases.Items {
 		pbdatabase := k8s.NewDatabaseProto(&database)
 
@@ -933,7 +956,7 @@ func (c *Controller) GetDatabases(ctx context.Context, request *db.GetDatabasesR
 			continue
 		}
 
-		pbpartitions := make([]*db.Partition, 0, len(partitions.Items))
+		pbpartitions := make([]*databaseapi.Partition, 0, len(partitions.Items))
 		for _, partition := range partitions.Items {
 			pbpartition, err := k8s.NewPartitionProto(&partition)
 			if err != nil {
@@ -945,8 +968,304 @@ func (c *Controller) GetDatabases(ctx context.Context, request *db.GetDatabasesR
 		pbdatabases = append(pbdatabases, pbdatabase)
 	}
 
-	return &db.GetDatabasesResponse{
+	return &databaseapi.GetDatabasesResponse{
 		Databases: pbdatabases,
+	}, nil
+}
+
+func getPrimitiveNamespacedName(protocol protocolapi.ProtocolId, primitive primitiveapi.PrimitiveId) types.NamespacedName {
+	return types.NamespacedName{
+		Namespace: getPrimitiveNamespace(protocol, primitive),
+		Name:      getPrimitiveName(protocol, primitive),
+	}
+}
+
+func getPrimitiveNamespace(protocol protocolapi.ProtocolId, primitive primitiveapi.PrimitiveId) string {
+	return protocol.Namespace
+}
+
+func getPrimitiveName(protocol protocolapi.ProtocolId, primitive primitiveapi.PrimitiveId) string {
+	return fmt.Sprintf("%s-%s-%s", protocol.Name, primitive.Namespace, primitive.Name)
+}
+
+func (c *Controller) CreatePrimitive(ctx context.Context, request *primitiveapi.CreatePrimitiveRequest) (*primitiveapi.CreatePrimitiveResponse, error) {
+	protocol := &v1beta3.Protocol{}
+	protocolName := types.NamespacedName{
+		Namespace: request.Protocol.Namespace,
+		Name:      request.Protocol.Name,
+	}
+	err := c.client.Get(ctx, protocolName, protocol)
+	if err != nil {
+		return nil, err
+	}
+
+	primitive := &v1beta3.Primitive{}
+	primitiveName := getPrimitiveNamespacedName(request.Protocol, request.Primitive)
+	err = c.client.Get(ctx, primitiveName, primitive)
+	if err != nil {
+		if !k8serrors.IsNotFound(err) {
+			return nil, err
+		}
+
+		primitiveOwner := metav1.OwnerReference{
+			APIVersion: protocol.APIVersion,
+			Kind:       protocol.Kind,
+			Name:       protocol.ObjectMeta.Name,
+			UID:        protocol.ObjectMeta.UID,
+		}
+
+		primitive = &v1beta3.Primitive{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace:       getPrimitiveNamespace(request.Protocol, request.Primitive),
+				Name:            getPrimitiveName(request.Protocol, request.Primitive),
+				OwnerReferences: []metav1.OwnerReference{primitiveOwner},
+			},
+			Properties: v1beta3.PrimitiveProperties{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: request.Primitive.Namespace,
+					Name:      request.Primitive.Name,
+				},
+				Type:     v1beta3.GetPrimitiveType(request.Type),
+				Protocol: protocol.Name,
+			},
+		}
+		err = c.client.Create(ctx, primitive)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return &primitiveapi.CreatePrimitiveResponse{
+		Primitive: primitiveapi.PrimitiveMetadata{
+			Protocol: protocolapi.ProtocolId{
+				Namespace: primitive.Namespace,
+				Name:      primitive.Properties.Protocol,
+			},
+			Primitive: primitiveapi.PrimitiveId{
+				Namespace: primitive.Properties.Namespace,
+				Name:      primitive.Properties.Name,
+			},
+			Type: primitive.Properties.Type.Proto(),
+		},
+	}, nil
+}
+
+func (c *Controller) GetPrimitive(ctx context.Context, request *primitiveapi.GetPrimitiveRequest) (*primitiveapi.GetPrimitiveResponse, error) {
+	protocol := &v1beta3.Protocol{}
+	protocolName := types.NamespacedName{
+		Namespace: request.Protocol.Namespace,
+		Name:      request.Protocol.Name,
+	}
+	err := c.client.Get(ctx, protocolName, protocol)
+	if err != nil {
+		return nil, err
+	}
+
+	primitive := &v1beta3.Primitive{}
+	primitiveName := getPrimitiveNamespacedName(request.Protocol, request.Primitive)
+	err = c.client.Get(ctx, primitiveName, primitive)
+	if err != nil {
+		return nil, err
+	}
+	return &primitiveapi.GetPrimitiveResponse{
+		Primitive: primitiveapi.PrimitiveMetadata{
+			Protocol: protocolapi.ProtocolId{
+				Namespace: primitive.Namespace,
+				Name:      primitive.Properties.Protocol,
+			},
+			Primitive: primitiveapi.PrimitiveId{
+				Namespace: primitive.Properties.Namespace,
+				Name:      primitive.Properties.Name,
+			},
+			Type: primitive.Properties.Type.Proto(),
+		},
+	}, nil
+}
+
+func (c *Controller) GetPrimitives(ctx context.Context, request *primitiveapi.GetPrimitivesRequest) (*primitiveapi.GetPrimitivesResponse, error) {
+	if request.Protocol != nil && request.Type != primitiveapi.PrimitiveType_UNKNOWN && request.Primitive != nil {
+		protocol := &v1beta3.Protocol{}
+		protocolName := types.NamespacedName{
+			Namespace: request.Protocol.Namespace,
+			Name:      request.Protocol.Name,
+		}
+		err := c.client.Get(ctx, protocolName, protocol)
+		if err != nil {
+			return nil, err
+		}
+
+		primitive := &v1beta3.Primitive{}
+		primitiveName := getPrimitiveNamespacedName(*request.Protocol, *request.Primitive)
+		err = c.client.Get(ctx, primitiveName, primitive)
+		if err != nil {
+			return nil, err
+		}
+
+		if primitive.Properties.Type.Proto() != request.Type {
+			return nil, status.Error(codes.NotFound, "primitive not found")
+		}
+		return &primitiveapi.GetPrimitivesResponse{
+			Primitives: []primitiveapi.PrimitiveMetadata{
+				{
+					Protocol: protocolapi.ProtocolId{
+						Namespace: primitive.Namespace,
+						Name:      primitive.Properties.Protocol,
+					},
+					Primitive: primitiveapi.PrimitiveId{
+						Namespace: primitive.Properties.Namespace,
+						Name:      primitive.Properties.Name,
+					},
+					Type: primitive.Properties.Type.Proto(),
+				},
+			},
+		}, nil
+	} else if request.Protocol != nil && request.Type != primitiveapi.PrimitiveType_UNKNOWN {
+		if request.Protocol.Name != "" {
+			protocol := &v1beta3.Protocol{}
+			protocolName := types.NamespacedName{
+				Namespace: request.Protocol.Namespace,
+				Name:      request.Protocol.Name,
+			}
+			err := c.client.Get(ctx, protocolName, protocol)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		primitivesList := &v1beta3.PrimitiveList{}
+		primitivesListFields := map[string]string{
+			"properties.type": string(v1beta3.GetPrimitiveType(request.Type)),
+		}
+		if request.Protocol.Name != "" {
+			primitivesListFields["properties.protocol"] = request.Protocol.Name
+		}
+		primitivesListOpts := &client.ListOptions{
+			Namespace:     request.Protocol.Namespace,
+			FieldSelector: fields.SelectorFromSet(primitivesListFields),
+		}
+		err := c.client.List(ctx, primitivesList, primitivesListOpts)
+		if err != nil {
+			return nil, err
+		}
+		primitives := make([]primitiveapi.PrimitiveMetadata, 0, len(primitivesList.Items))
+		for _, primitive := range primitivesList.Items {
+			primitives = append(primitives, primitiveapi.PrimitiveMetadata{
+				Protocol: protocolapi.ProtocolId{
+					Namespace: primitive.Namespace,
+					Name:      primitive.Properties.Protocol,
+				},
+				Primitive: primitiveapi.PrimitiveId{
+					Namespace: primitive.Properties.Namespace,
+					Name:      primitive.Properties.Name,
+				},
+				Type: primitive.Properties.Type.Proto(),
+			})
+		}
+		return &primitiveapi.GetPrimitivesResponse{
+			Primitives: primitives,
+		}, nil
+	} else if request.Protocol != nil {
+		if request.Protocol.Name != "" {
+			protocol := &v1beta3.Protocol{}
+			protocolName := types.NamespacedName{
+				Namespace: request.Protocol.Namespace,
+				Name:      request.Protocol.Name,
+			}
+			err := c.client.Get(ctx, protocolName, protocol)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		primitivesList := &v1beta3.PrimitiveList{}
+		primitivesListFields := map[string]string{}
+		if request.Protocol.Name != "" {
+			primitivesListFields["properties.protocol"] = request.Protocol.Name
+		}
+		primitivesListOpts := &client.ListOptions{
+			Namespace:     request.Protocol.Namespace,
+			FieldSelector: fields.SelectorFromSet(primitivesListFields),
+		}
+		err := c.client.List(ctx, primitivesList, primitivesListOpts)
+		if err != nil {
+			return nil, err
+		}
+		primitives := make([]primitiveapi.PrimitiveMetadata, 0, len(primitivesList.Items))
+		for _, primitive := range primitivesList.Items {
+			primitives = append(primitives, primitiveapi.PrimitiveMetadata{
+				Protocol: protocolapi.ProtocolId{
+					Namespace: primitive.Namespace,
+					Name:      primitive.Properties.Protocol,
+				},
+				Primitive: primitiveapi.PrimitiveId{
+					Namespace: primitive.Properties.Namespace,
+					Name:      primitive.Properties.Name,
+				},
+				Type: primitive.Properties.Type.Proto(),
+			})
+		}
+		return &primitiveapi.GetPrimitivesResponse{
+			Primitives: primitives,
+		}, nil
+	} else {
+		primitivesList := &v1beta3.PrimitiveList{}
+		err := c.client.List(ctx, primitivesList)
+		if err != nil {
+			return nil, err
+		}
+		primitives := make([]primitiveapi.PrimitiveMetadata, 0, len(primitivesList.Items))
+		for _, primitive := range primitivesList.Items {
+			primitives = append(primitives, primitiveapi.PrimitiveMetadata{
+				Protocol: protocolapi.ProtocolId{
+					Namespace: primitive.Namespace,
+					Name:      primitive.Properties.Protocol,
+				},
+				Primitive: primitiveapi.PrimitiveId{
+					Namespace: primitive.Properties.Namespace,
+					Name:      primitive.Properties.Name,
+				},
+				Type: primitive.Properties.Type.Proto(),
+			})
+		}
+		return &primitiveapi.GetPrimitivesResponse{
+			Primitives: primitives,
+		}, nil
+	}
+}
+
+func (c *Controller) DeletePrimitive(ctx context.Context, request *primitiveapi.DeletePrimitiveRequest) (*primitiveapi.DeletePrimitiveResponse, error) {
+	protocol := &v1beta3.Protocol{}
+	protocolName := types.NamespacedName{
+		Namespace: request.Protocol.Namespace,
+		Name:      request.Protocol.Name,
+	}
+	err := c.client.Get(ctx, protocolName, protocol)
+	if err != nil {
+		return nil, err
+	}
+
+	primitive := &v1beta3.Primitive{}
+	primitiveName := getPrimitiveNamespacedName(request.Protocol, request.Primitive)
+	err = c.client.Get(ctx, primitiveName, primitive)
+	if err != nil {
+		return nil, err
+	}
+
+	err = c.client.Delete(ctx, primitive)
+	if err != nil {
+		return nil, err
+	}
+	return &primitiveapi.DeletePrimitiveResponse{
+		Primitive: primitiveapi.PrimitiveMetadata{
+			Protocol: protocolapi.ProtocolId{
+				Namespace: primitive.Namespace,
+				Name:      primitive.Properties.Protocol,
+			},
+			Primitive: primitiveapi.PrimitiveId{
+				Namespace: primitive.Properties.Namespace,
+				Name:      primitive.Properties.Name,
+			},
+			Type: primitive.Properties.Type.Proto(),
+		},
 	}, nil
 }
 
@@ -962,10 +1281,10 @@ func (c *Controller) Start(stop <-chan struct{}) error {
 
 	s := grpc.NewServer(c.opts...)
 	go func() {
-		db.RegisterDatabaseServiceServer(s, c)
+		databaseapi.RegisterDatabaseServiceServer(s, c)
 		cluster.RegisterClusterServiceServer(s, c)
-		gossip.RegisterGossipServiceServer(s, c)
-		pb.RegisterReplicaGroupServiceServer(s, c)
+		gossipapi.RegisterGossipServiceServer(s, c)
+		pbapi.RegisterReplicaGroupServiceServer(s, c)
 		if err := s.Serve(lis); err != nil {
 			errs <- err
 		}
@@ -1036,7 +1355,8 @@ func (c *Controller) processReplicaGroupResponses(stop <-chan struct{}) {
 	}
 }
 
-var _ db.DatabaseServiceServer = &Controller{}
+var _ databaseapi.DatabaseServiceServer = &Controller{}
 var _ cluster.ClusterServiceServer = &Controller{}
-var _ gossip.GossipServiceServer = &Controller{}
-var _ pb.ReplicaGroupServiceServer = &Controller{}
+var _ gossipapi.GossipServiceServer = &Controller{}
+var _ pbapi.ReplicaGroupServiceServer = &Controller{}
+var _ primitiveapi.PrimitiveServiceServer = &Controller{}

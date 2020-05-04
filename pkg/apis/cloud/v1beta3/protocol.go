@@ -27,17 +27,17 @@ type ProtocolType struct {
 
 // DatabaseProtocolType is a protocol type for databases
 type DatabaseProtocolType struct {
-	metav1.ObjectMeta `json:"database,omitempty"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
 }
 
 // GossipProtocolType is a gossip protocol type
 type GossipProtocolType struct {
-	metav1.ObjectMeta `json:"membershipGroup,omitempty"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
 }
 
 // PrimaryBackupProtocolType is a primary-backup protocol type
 type PrimaryBackupProtocolType struct {
-	metav1.ObjectMeta `json:"partitionGroup,omitempty"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
 }
 
 // +genclient

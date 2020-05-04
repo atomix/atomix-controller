@@ -156,11 +156,11 @@ func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, err
 		if member.DeletionTimestamp == nil {
 			responseMembers = append(responseMembers, gossip.Member{
 				ID: gossip.MemberId{
-					Name:      member.Name,
-					Namespace: member.Namespace,
+					Name:      member.Properties.Name,
+					Namespace: member.Properties.Namespace,
 				},
-				Host: member.Service,
-				Port: member.Port.IntVal,
+				Host: member.Properties.Service,
+				Port: member.Properties.Port.IntVal,
 			})
 		}
 	}
