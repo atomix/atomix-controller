@@ -293,6 +293,259 @@ func (c *Controller) JoinCluster(request *cluster.JoinClusterRequest, stream clu
 	return nil
 }
 
+func (c *Controller) JoinGossipGroup(request *gossip.JoinGossipGroupRequest, stream gossip.GossipService_JoinGossipGroupServer) error {
+	log.Info("Received JoinMembershipGroupRequest", "Request", request)
+
+	ch := make(chan gossip.JoinGossipGroupResponse)
+	key := uuid.New().String()
+	c.mu.Lock()
+	membershipGroupsOut, ok := c.gossipGroupResponsesOut[request.GroupID.String()]
+	if !ok {
+		membershipGroupsOut = make(map[string]chan<- gossip.JoinGossipGroupResponse)
+		c.gossipGroupResponsesOut[request.GroupID.String()] = membershipGroupsOut
+	}
+	membershipGroupsOut[key] = ch
+	c.mu.Unlock()
+
+	defer func() {
+		c.mu.Lock()
+		membershipGroupsOut, ok := c.gossipGroupResponsesOut[request.GroupID.String()]
+		if ok {
+			delete(membershipGroupsOut, key)
+			if len(membershipGroupsOut) == 0 {
+				delete(c.gossipGroupResponsesOut, request.GroupID.String())
+			}
+		}
+		c.mu.Unlock()
+	}()
+
+	// If no member was added, send an initial response to acknowledge the stream
+	var initialResponse *gossip.JoinGossipGroupResponse
+	if request.MemberID == nil {
+		// Get the membership group
+		membershipGroup := &v1beta3.MembershipGroup{}
+		membershipGroupName := types.NamespacedName{
+			Namespace: request.GroupID.Namespace,
+			Name:      request.GroupID.Name,
+		}
+		err := c.client.Get(context.TODO(), membershipGroupName, membershipGroup)
+		if err != nil && !k8serrors.IsNotFound(err) {
+			return err
+		} else if err != nil {
+			initialResponse = &gossip.JoinGossipGroupResponse{
+				Group: gossip.GossipGroup{
+					ID:      request.GroupID,
+					Members: []gossip.Member{},
+				},
+			}
+		} else {
+			// Create the protocol if necessary
+			protocol := &v1beta3.Protocol{}
+			protocolName := types.NamespacedName{
+				Namespace: request.GroupID.Namespace,
+				Name:      request.GroupID.Name,
+			}
+			err := c.client.Get(context.TODO(), protocolName, protocol)
+			if err != nil {
+				if !k8serrors.IsNotFound(err) {
+					return err
+				}
+				protocolOwner := metav1.OwnerReference{
+					APIVersion: membershipGroup.APIVersion,
+					Kind:       membershipGroup.Kind,
+					Name:       membershipGroup.ObjectMeta.Name,
+					UID:        membershipGroup.ObjectMeta.UID,
+				}
+				protocol = &v1beta3.Protocol{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace:       request.GroupID.Namespace,
+						Name:            request.GroupID.Name,
+						OwnerReferences: []metav1.OwnerReference{protocolOwner},
+					},
+					Type: v1beta3.ProtocolType{
+						Gossip: &v1beta3.GossipProtocolType{
+							ObjectMeta: metav1.ObjectMeta{
+								Namespace: request.GroupID.Namespace,
+								Name:      request.GroupID.Name,
+							},
+						},
+					},
+				}
+				err := c.client.Create(context.TODO(), protocol)
+				if err != nil && !k8serrors.IsAlreadyExists(err) {
+					return err
+				}
+			}
+
+			// Get the list of members in the group
+			membershipList := &v1beta3.MembershipList{}
+			membershipListOpts := &client.ListOptions{
+				Namespace: request.GroupID.Namespace,
+				FieldSelector: fields.SelectorFromSet(map[string]string{
+					"bind.group": request.GroupID.Name,
+				}),
+			}
+			err = c.client.List(context.TODO(), membershipList, membershipListOpts)
+			if err != nil {
+				return err
+			}
+
+			// Construct response membership from the set of members that have not been deleted
+			responseMembers := make([]gossip.Member, 0, len(membershipList.Items))
+			for _, membership := range membershipList.Items {
+				if membership.DeletionTimestamp != nil {
+					continue
+				}
+				member := &v1beta3.Member{}
+				memberName := types.NamespacedName{
+					Namespace: membership.Namespace,
+					Name:      membership.Bind.Member,
+				}
+				err := c.client.Get(context.TODO(), memberName, member)
+				if err != nil {
+					continue
+				}
+				if member.DeletionTimestamp == nil {
+					responseMembers = append(responseMembers, gossip.Member{
+						ID: gossip.MemberId{
+							Name:      member.Name,
+							Namespace: member.Namespace,
+						},
+						Host: member.Service,
+						Port: member.Port.IntVal,
+					})
+				}
+			}
+
+			// Sort the membership to aid in deduplicating responses
+			sort.Slice(responseMembers, func(i, j int) bool {
+				return responseMembers[i].ID.Name < responseMembers[j].ID.Name
+			})
+
+			// Construct a membership response
+			initialResponse = &gossip.JoinGossipGroupResponse{
+				Group: gossip.GossipGroup{
+					ID: gossip.GossipGroupId{
+						Namespace: membershipGroup.Namespace,
+						Name:      membershipGroup.Name,
+					},
+					Members: responseMembers,
+				},
+			}
+		}
+
+		// Send the initial response
+		err = stream.Send(initialResponse)
+		if err != nil {
+			return err
+		}
+	} else {
+		log.Info("Joining Member to MembershipGroup", "Namespace", request.MemberID.Namespace, "Name", request.MemberID.Name)
+		// Get the member joining the group
+		member := &v1beta3.Member{}
+		memberName := types.NamespacedName{
+			Namespace: request.MemberID.Namespace,
+			Name:      request.MemberID.Name,
+		}
+		err := c.client.Get(stream.Context(), memberName, member)
+		if err != nil {
+			log.Error(err, "Failed to join Member to MembershipGroup", "Namespace", request.MemberID.Namespace, "Member", request.MemberID.Name, "MembershipGroup", request.GroupID.Name)
+			return err
+		}
+
+		// Create the group if necessary
+		membershipGroup := &v1beta3.MembershipGroup{}
+		membershipGroupName := types.NamespacedName{
+			Namespace: request.GroupID.Namespace,
+			Name:      request.GroupID.Name,
+		}
+		err = c.client.Get(stream.Context(), membershipGroupName, membershipGroup)
+		if err != nil {
+			if !k8serrors.IsNotFound(err) {
+				log.Error(err, "Failed to join Member to MembershipGroup", "Namespace", request.MemberID.Namespace, "Member", request.MemberID.Name, "MembershipGroup", request.GroupID.Name)
+				return err
+			}
+			membershipGroup = &v1beta3.MembershipGroup{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: request.GroupID.Namespace,
+					Name:      request.GroupID.Name,
+				},
+			}
+			err = c.client.Create(stream.Context(), membershipGroup)
+			if err != nil && !k8serrors.IsAlreadyExists(err) {
+				log.Error(err, "Failed to join Member to MembershipGroup", "Namespace", request.MemberID.Namespace, "Member", request.MemberID.Name, "MembershipGroup", request.GroupID.Name)
+				return err
+			}
+		}
+
+		owner := metav1.OwnerReference{
+			APIVersion: member.APIVersion,
+			Kind:       member.Kind,
+			Name:       member.ObjectMeta.Name,
+			UID:        member.ObjectMeta.UID,
+		}
+
+		// Create the group membership
+		membership := &v1beta3.Membership{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace:       request.GroupID.Namespace,
+				Name:            fmt.Sprintf("%s-%s", request.MemberID.Name, request.GroupID.Name),
+				OwnerReferences: []metav1.OwnerReference{owner},
+				Finalizers:      []string{"event"},
+			},
+			Bind: v1beta3.MembershipBinding{
+				Member: request.MemberID.Name,
+				Group:  request.GroupID.Name,
+			},
+		}
+
+		// Create the group membership
+		err = c.client.Create(stream.Context(), membership)
+		if err != nil && !k8serrors.IsAlreadyExists(err) {
+			log.Error(err, "Failed to join Member to MembershipGroup", "Namespace", request.MemberID.Namespace, "Member", request.MemberID.Name, "MembershipGroup", request.GroupID.Name)
+			return err
+		}
+	}
+
+	go func() {
+		<-stream.Context().Done()
+		if request.MemberID != nil {
+			membership := &v1beta3.Membership{}
+			name := types.NamespacedName{
+				Namespace: request.GroupID.Namespace,
+				Name:      fmt.Sprintf("%s-%s", request.MemberID.Name, request.GroupID.Name),
+			}
+			err := c.client.Get(context.TODO(), name, membership)
+			if err != nil && !k8serrors.IsNotFound(err) {
+				log.Error(err, "Failed to leave Member from MembershipGroup", "Namespace", request.MemberID.Namespace, "Member", request.MemberID.Name, "MembershipGroup", request.GroupID.Name)
+			} else {
+				err = c.client.Delete(context.TODO(), membership)
+				if err != nil && !k8serrors.IsNotFound(err) {
+					log.Error(err, "Failed to leave Member from MembershipGroup", "Namespace", request.MemberID.Namespace, "Member", request.MemberID.Name, "MembershipGroup", request.GroupID.Name)
+				}
+			}
+		}
+		close(ch)
+	}()
+
+	// Process response changes
+	var lastResponse gossip.JoinGossipGroupResponse
+	if initialResponse != nil {
+		lastResponse = *initialResponse
+	}
+	for response := range ch {
+		if response.String() != lastResponse.String() {
+			log.Info("Sending JoinMembershipGroupResponse", "Response", response)
+			err := stream.Send(&response)
+			if err != nil {
+				log.Error(err, "An error occurred in the membership group response stream")
+			}
+			lastResponse = response
+		}
+	}
+	return nil
+}
+
 func (c *Controller) JoinReplicaGroup(request *pb.JoinReplicaGroupRequest, stream pb.ReplicaGroupService_JoinReplicaGroupServer) error {
 	log.Info("Received JoinPartitionGroupRequest", "Request", request)
 
@@ -339,6 +592,44 @@ func (c *Controller) JoinReplicaGroup(request *pb.JoinReplicaGroupRequest, strea
 				},
 			}
 		} else {
+			// Create the protocol if necessary
+			protocol := &v1beta3.Protocol{}
+			protocolName := types.NamespacedName{
+				Namespace: request.GroupID.Namespace,
+				Name:      request.GroupID.Name,
+			}
+			err := c.client.Get(context.TODO(), protocolName, protocol)
+			if err != nil {
+				if !k8serrors.IsNotFound(err) {
+					return err
+				}
+				protocolOwner := metav1.OwnerReference{
+					APIVersion: partitionGroup.APIVersion,
+					Kind:       partitionGroup.Kind,
+					Name:       partitionGroup.ObjectMeta.Name,
+					UID:        partitionGroup.ObjectMeta.UID,
+				}
+				protocol = &v1beta3.Protocol{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace:       request.GroupID.Namespace,
+						Name:            request.GroupID.Name,
+						OwnerReferences: []metav1.OwnerReference{protocolOwner},
+					},
+					Type: v1beta3.ProtocolType{
+						PrimaryBackup: &v1beta3.PrimaryBackupProtocolType{
+							ObjectMeta: metav1.ObjectMeta{
+								Namespace: request.GroupID.Namespace,
+								Name:      request.GroupID.Name,
+							},
+						},
+					},
+				}
+				err := c.client.Create(context.TODO(), protocol)
+				if err != nil && !k8serrors.IsAlreadyExists(err) {
+					return err
+				}
+			}
+
 			// Get the list of partition group members
 			partitionGroupMemberships := &v1beta3.PartitionGroupMembershipList{}
 			partitionGroupMembershipFields := map[string]string{
@@ -570,221 +861,6 @@ func (c *Controller) JoinReplicaGroup(request *pb.JoinReplicaGroupRequest, strea
 			err := stream.Send(&response)
 			if err != nil {
 				log.Error(err, "An error occurred in the partition group response stream")
-			}
-			lastResponse = response
-		}
-	}
-	return nil
-}
-
-func (c *Controller) JoinGossipGroup(request *gossip.JoinGossipGroupRequest, stream gossip.GossipService_JoinGossipGroupServer) error {
-	log.Info("Received JoinMembershipGroupRequest", "Request", request)
-
-	ch := make(chan gossip.JoinGossipGroupResponse)
-	key := uuid.New().String()
-	c.mu.Lock()
-	membershipGroupsOut, ok := c.gossipGroupResponsesOut[request.GroupID.String()]
-	if !ok {
-		membershipGroupsOut = make(map[string]chan<- gossip.JoinGossipGroupResponse)
-		c.gossipGroupResponsesOut[request.GroupID.String()] = membershipGroupsOut
-	}
-	membershipGroupsOut[key] = ch
-	c.mu.Unlock()
-
-	defer func() {
-		c.mu.Lock()
-		membershipGroupsOut, ok := c.gossipGroupResponsesOut[request.GroupID.String()]
-		if ok {
-			delete(membershipGroupsOut, key)
-			if len(membershipGroupsOut) == 0 {
-				delete(c.gossipGroupResponsesOut, request.GroupID.String())
-			}
-		}
-		c.mu.Unlock()
-	}()
-
-	// If no member was added, send an initial response to acknowledge the stream
-	var initialResponse *gossip.JoinGossipGroupResponse
-	if request.MemberID == nil {
-		// Get the membership group
-		membershipGroup := &v1beta3.MembershipGroup{}
-		membershipGroupName := types.NamespacedName{
-			Namespace: request.GroupID.Namespace,
-			Name:      request.GroupID.Name,
-		}
-		err := c.client.Get(context.TODO(), membershipGroupName, membershipGroup)
-		if err != nil && !k8serrors.IsNotFound(err) {
-			return err
-		} else if err != nil {
-			initialResponse = &gossip.JoinGossipGroupResponse{
-				Group: gossip.GossipGroup{
-					ID:      request.GroupID,
-					Members: []gossip.Member{},
-				},
-			}
-		} else {
-			// Get the list of members in the group
-			membershipList := &v1beta3.MembershipList{}
-			membershipListOpts := &client.ListOptions{
-				Namespace: request.GroupID.Namespace,
-				FieldSelector: fields.SelectorFromSet(map[string]string{
-					"bind.group": request.GroupID.Name,
-				}),
-			}
-			err := c.client.List(context.TODO(), membershipList, membershipListOpts)
-			if err != nil {
-				return err
-			}
-
-			// Construct response membership from the set of members that have not been deleted
-			responseMembers := make([]gossip.Member, 0, len(membershipList.Items))
-			for _, membership := range membershipList.Items {
-				if membership.DeletionTimestamp != nil {
-					continue
-				}
-				member := &v1beta3.Member{}
-				memberName := types.NamespacedName{
-					Namespace: membership.Namespace,
-					Name:      membership.Bind.Member,
-				}
-				err := c.client.Get(context.TODO(), memberName, member)
-				if err != nil {
-					continue
-				}
-				if member.DeletionTimestamp == nil {
-					responseMembers = append(responseMembers, gossip.Member{
-						ID: gossip.MemberId{
-							Name:      member.Name,
-							Namespace: member.Namespace,
-						},
-						Host: member.Service,
-						Port: member.Port.IntVal,
-					})
-				}
-			}
-
-			// Sort the membership to aid in deduplicating responses
-			sort.Slice(responseMembers, func(i, j int) bool {
-				return responseMembers[i].ID.Name < responseMembers[j].ID.Name
-			})
-
-			// Construct a membership response
-			initialResponse = &gossip.JoinGossipGroupResponse{
-				Group: gossip.GossipGroup{
-					ID: gossip.GossipGroupId{
-						Namespace: membershipGroup.Namespace,
-						Name:      membershipGroup.Name,
-					},
-					Members: responseMembers,
-				},
-			}
-		}
-
-		// Send the initial response
-		err = stream.Send(initialResponse)
-		if err != nil {
-			return err
-		}
-	} else {
-		log.Info("Joining Member to MembershipGroup", "Namespace", request.MemberID.Namespace, "Name", request.MemberID.Name)
-		// Get the member joining the group
-		member := &v1beta3.Member{}
-		memberName := types.NamespacedName{
-			Namespace: request.MemberID.Namespace,
-			Name:      request.MemberID.Name,
-		}
-		err := c.client.Get(stream.Context(), memberName, member)
-		if err != nil {
-			log.Error(err, "Failed to join Member to MembershipGroup", "Namespace", request.MemberID.Namespace, "Member", request.MemberID.Name, "MembershipGroup", request.GroupID.Name)
-			return err
-		}
-
-		// Create the group if necessary
-		membershipGroup := &v1beta3.MembershipGroup{}
-		membershipGroupName := types.NamespacedName{
-			Namespace: request.GroupID.Namespace,
-			Name:      request.GroupID.Name,
-		}
-		err = c.client.Get(stream.Context(), membershipGroupName, membershipGroup)
-		if err != nil {
-			if !k8serrors.IsNotFound(err) {
-				log.Error(err, "Failed to join Member to MembershipGroup", "Namespace", request.MemberID.Namespace, "Member", request.MemberID.Name, "MembershipGroup", request.GroupID.Name)
-				return err
-			}
-			membershipGroup = &v1beta3.MembershipGroup{
-				ObjectMeta: metav1.ObjectMeta{
-					Namespace: request.GroupID.Namespace,
-					Name:      request.GroupID.Name,
-				},
-			}
-			err = c.client.Create(stream.Context(), membershipGroup)
-			if err != nil && !k8serrors.IsAlreadyExists(err) {
-				log.Error(err, "Failed to join Member to MembershipGroup", "Namespace", request.MemberID.Namespace, "Member", request.MemberID.Name, "MembershipGroup", request.GroupID.Name)
-				return err
-			}
-		}
-
-		owner := metav1.OwnerReference{
-			APIVersion: member.APIVersion,
-			Kind:       member.Kind,
-			Name:       member.ObjectMeta.Name,
-			UID:        member.ObjectMeta.UID,
-		}
-
-		// Create the group membership
-		membership := &v1beta3.Membership{
-			ObjectMeta: metav1.ObjectMeta{
-				Namespace:       request.GroupID.Namespace,
-				Name:            fmt.Sprintf("%s-%s", request.MemberID.Name, request.GroupID.Name),
-				OwnerReferences: []metav1.OwnerReference{owner},
-				Finalizers:      []string{"event"},
-			},
-			Bind: v1beta3.MembershipBinding{
-				Member: request.MemberID.Name,
-				Group:  request.GroupID.Name,
-			},
-		}
-
-		// Create the group membership
-		err = c.client.Create(stream.Context(), membership)
-		if err != nil && !k8serrors.IsAlreadyExists(err) {
-			log.Error(err, "Failed to join Member to MembershipGroup", "Namespace", request.MemberID.Namespace, "Member", request.MemberID.Name, "MembershipGroup", request.GroupID.Name)
-			return err
-		}
-	}
-
-	go func() {
-		<-stream.Context().Done()
-		if request.MemberID != nil {
-			membership := &v1beta3.Membership{}
-			name := types.NamespacedName{
-				Namespace: request.GroupID.Namespace,
-				Name:      fmt.Sprintf("%s-%s", request.MemberID.Name, request.GroupID.Name),
-			}
-			err := c.client.Get(context.TODO(), name, membership)
-			if err != nil && !k8serrors.IsNotFound(err) {
-				log.Error(err, "Failed to leave Member from MembershipGroup", "Namespace", request.MemberID.Namespace, "Member", request.MemberID.Name, "MembershipGroup", request.GroupID.Name)
-			} else {
-				err = c.client.Delete(context.TODO(), membership)
-				if err != nil && !k8serrors.IsNotFound(err) {
-					log.Error(err, "Failed to leave Member from MembershipGroup", "Namespace", request.MemberID.Namespace, "Member", request.MemberID.Name, "MembershipGroup", request.GroupID.Name)
-				}
-			}
-		}
-		close(ch)
-	}()
-
-	// Process response changes
-	var lastResponse gossip.JoinGossipGroupResponse
-	if initialResponse != nil {
-		lastResponse = *initialResponse
-	}
-	for response := range ch {
-		if response.String() != lastResponse.String() {
-			log.Info("Sending JoinMembershipGroupResponse", "Response", response)
-			err := stream.Send(&response)
-			if err != nil {
-				log.Error(err, "An error occurred in the membership group response stream")
 			}
 			lastResponse = response
 		}

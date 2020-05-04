@@ -19,7 +19,9 @@ import (
 	"github.com/atomix/kubernetes-controller/pkg/apis/cloud/v1beta3"
 	"github.com/atomix/kubernetes-controller/pkg/controller/util/k8s"
 	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -99,6 +101,10 @@ func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, err
 
 	v1beta3.SetDatabaseDefaults(database)
 
+	if err = r.reconcileProtocol(database); err != nil {
+		return reconcile.Result{}, err
+	}
+
 	for i := 1; i <= int(database.Spec.Partitions); i++ {
 		if err = r.reconcilePartition(database, i); err != nil {
 			return reconcile.Result{}, err
@@ -113,6 +119,44 @@ func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, err
 	}
 
 	return reconcile.Result{}, nil
+}
+
+func (r *Reconciler) reconcileProtocol(database *v1beta3.Database) error {
+	protocol := &v1beta3.Protocol{}
+	name := types.NamespacedName{
+		Namespace: database.Namespace,
+		Name:      database.Name,
+	}
+	err := r.client.Get(context.TODO(), name, protocol)
+	if err != nil {
+		if !errors.IsNotFound(err) {
+			return err
+		}
+		return r.addProtocol(database)
+	}
+	return nil
+}
+
+func (r *Reconciler) addProtocol(database *v1beta3.Database) error {
+	log.Info("Creating Protocol", "Name", database.Name, "Namespace", database.Namespace)
+	protocol := &v1beta3.Protocol{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: database.Namespace,
+			Name:      database.Name,
+		},
+		Type: v1beta3.ProtocolType{
+			Database: &v1beta3.DatabaseProtocolType{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: database.Namespace,
+					Name:      database.Name,
+				},
+			},
+		},
+	}
+	if err := controllerutil.SetControllerReference(database, protocol, r.scheme); err != nil {
+		return err
+	}
+	return r.client.Create(context.TODO(), protocol)
 }
 
 func (r *Reconciler) reconcilePartition(database *v1beta3.Database, partitionID int) error {
