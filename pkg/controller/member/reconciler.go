@@ -16,7 +16,7 @@ package member
 
 import (
 	"context"
-	api "github.com/atomix/api/proto/atomix/controller"
+	"github.com/atomix/api/proto/atomix/cluster"
 	"github.com/atomix/kubernetes-controller/pkg/apis/cloud/v1beta3"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/fields"
@@ -36,7 +36,7 @@ var log = logf.Log.WithName("member_controller")
 
 // Add creates a new Database controller and adds it to the Manager. The Manager will set fields on the
 // controller and Start it when the Manager is Started.
-func Add(mgr manager.Manager, responseCh chan<- api.JoinClusterResponse) error {
+func Add(mgr manager.Manager, responseCh chan<- cluster.JoinClusterResponse) error {
 	r := &Reconciler{
 		client:     mgr.GetClient(),
 		scheme:     mgr.GetScheme(),
@@ -65,7 +65,7 @@ type Reconciler struct {
 	client     client.Client
 	scheme     *runtime.Scheme
 	config     *rest.Config
-	responseCh chan<- api.JoinClusterResponse
+	responseCh chan<- cluster.JoinClusterResponse
 }
 
 func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, error) {
@@ -105,11 +105,11 @@ func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, err
 	}
 
 	// Create a list of members that have not been deleted
-	members := make([]api.Member, 0, len(memberList.Items))
+	members := make([]cluster.Member, 0, len(memberList.Items))
 	for _, member := range memberList.Items {
 		if member.DeletionTimestamp == nil {
-			members = append(members, api.Member{
-				ID: api.MemberId{
+			members = append(members, cluster.Member{
+				ID: cluster.MemberId{
 					Name:      member.Name,
 					Namespace: member.Namespace,
 				},
@@ -125,14 +125,12 @@ func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, err
 	})
 
 	// Construct a membership response
-	response := api.JoinClusterResponse{
-		Membership: api.Membership{
-			Members: members,
-		},
-		GroupID: api.MembershipGroupId{
+	response := cluster.JoinClusterResponse{
+		ClusterID: cluster.ClusterId{
 			Namespace: member.Namespace,
 			Name:      member.Scope,
 		},
+		Members: members,
 	}
 
 	// If the updated member has been deleted, finalize it before producing the response

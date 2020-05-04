@@ -16,7 +16,7 @@ package membershipgroup
 
 import (
 	"context"
-	api "github.com/atomix/api/proto/atomix/controller"
+	"github.com/atomix/api/proto/atomix/gossip"
 	"github.com/atomix/kubernetes-controller/pkg/apis/cloud/v1beta3"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/fields"
@@ -37,12 +37,12 @@ var log = logf.Log.WithName("membership_group_controller")
 
 // Add creates a new Database controller and adds it to the Manager. The Manager will set fields on the
 // controller and Start it when the Manager is Started.
-func Add(mgr manager.Manager, eventCh chan<- api.JoinMembershipGroupResponse) error {
+func Add(mgr manager.Manager, responseCh chan<- gossip.JoinGossipGroupResponse) error {
 	r := &Reconciler{
 		client:     mgr.GetClient(),
 		scheme:     mgr.GetScheme(),
 		config:     mgr.GetConfig(),
-		responseCh: eventCh,
+		responseCh: responseCh,
 	}
 
 	// Create a new controller
@@ -77,7 +77,7 @@ type Reconciler struct {
 	client     client.Client
 	scheme     *runtime.Scheme
 	config     *rest.Config
-	responseCh chan<- api.JoinMembershipGroupResponse
+	responseCh chan<- gossip.JoinGossipGroupResponse
 }
 
 func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, error) {
@@ -138,18 +138,8 @@ func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, err
 		return reconcile.Result{}, err
 	}
 
-	// Construct a response leader/term
-	responseTerm := api.TermID(membershipGroup.Status.Term)
-	var responseLeader *api.MemberId
-	if leader != "" {
-		responseLeader = &api.MemberId{
-			Namespace: membershipGroup.Namespace,
-			Name:      leader,
-		}
-	}
-
 	// Construct response membership from the set of members that have not been deleted
-	responseMembers := make([]api.Member, 0, len(membershipList.Items))
+	responseMembers := make([]gossip.Member, 0, len(membershipList.Items))
 	for _, membership := range membershipList.Items {
 		if membership.DeletionTimestamp != nil {
 			continue
@@ -164,8 +154,8 @@ func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, err
 			return reconcile.Result{}, nil
 		}
 		if member.DeletionTimestamp == nil {
-			responseMembers = append(responseMembers, api.Member{
-				ID: api.MemberId{
+			responseMembers = append(responseMembers, gossip.Member{
+				ID: gossip.MemberId{
 					Name:      member.Name,
 					Namespace: member.Namespace,
 				},
@@ -181,14 +171,12 @@ func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, err
 	})
 
 	// Construct a membership response
-	response := api.JoinMembershipGroupResponse{
-		Group: api.MembershipGroup{
-			ID: api.MembershipGroupId{
+	response := gossip.JoinGossipGroupResponse{
+		Group: gossip.GossipGroup{
+			ID: gossip.GossipGroupId{
 				Namespace: membershipGroup.Namespace,
 				Name:      membershipGroup.Name,
 			},
-			Term:    responseTerm,
-			Leader:  responseLeader,
 			Members: responseMembers,
 		},
 	}

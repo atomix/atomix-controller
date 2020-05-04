@@ -17,7 +17,7 @@ package partitiongroup
 import (
 	"context"
 	"fmt"
-	api "github.com/atomix/api/proto/atomix/controller"
+	"github.com/atomix/api/proto/atomix/pb"
 	"github.com/atomix/kubernetes-controller/pkg/apis/cloud/v1beta3"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -39,12 +39,12 @@ var log = logf.Log.WithName("partition_group_controller")
 
 // Add creates a new Database controller and adds it to the Manager. The Manager will set fields on the
 // controller and Start it when the Manager is Started.
-func Add(mgr manager.Manager, eventCh chan<- api.JoinPartitionGroupResponse) error {
+func Add(mgr manager.Manager, responseCh chan<- pb.JoinReplicaGroupResponse) error {
 	r := &Reconciler{
 		client:     mgr.GetClient(),
 		scheme:     mgr.GetScheme(),
 		config:     mgr.GetConfig(),
-		responseCh: eventCh,
+		responseCh: responseCh,
 	}
 
 	// Create a new controller
@@ -79,7 +79,7 @@ type Reconciler struct {
 	client     client.Client
 	scheme     *runtime.Scheme
 	config     *rest.Config
-	responseCh chan<- api.JoinPartitionGroupResponse
+	responseCh chan<- pb.JoinReplicaGroupResponse
 }
 
 func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, error) {
@@ -128,9 +128,9 @@ func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, err
 		}
 	}
 
-	partitions := int(partitionGroup.Spec.Partitions)
-	membershipGroups := make([]api.MembershipGroup, 0)
-	for partition := 1; partition <= partitions; partition++ {
+	numPartitions := int(partitionGroup.Spec.Partitions)
+	partitions := make([]pb.Partition, 0)
+	for partition := 1; partition <= numPartitions; partition++ {
 		membershipGroup := &v1beta3.MembershipGroup{}
 		membershipGroupName := types.NamespacedName{
 			Namespace: partitionGroup.Namespace,
@@ -176,17 +176,17 @@ func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, err
 		}
 
 		// Construct a response leader/term
-		responseTerm := api.TermID(membershipGroup.Status.Term)
-		var responseLeader *api.MemberId
+		responseTerm := pb.Term(membershipGroup.Status.Term)
+		var responseLeader *pb.ReplicaId
 		if leader != "" {
-			responseLeader = &api.MemberId{
+			responseLeader = &pb.ReplicaId{
 				Namespace: membershipGroup.Namespace,
 				Name:      leader,
 			}
 		}
 
 		// Construct response membership from the set of members that have not been deleted
-		responseMembers := make([]api.Member, 0, len(membershipList.Items))
+		responseReplicas := make([]pb.Replica, 0, len(membershipList.Items))
 		for _, membership := range membershipList.Items {
 			if membership.DeletionTimestamp != nil {
 				continue
@@ -205,8 +205,8 @@ func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, err
 				if !partitionGroupMembers[membership.Bind.Member] {
 					return reconcile.Result{}, nil
 				}
-				responseMembers = append(responseMembers, api.Member{
-					ID: api.MemberId{
+				responseReplicas = append(responseReplicas, pb.Replica{
+					ID: pb.ReplicaId{
 						Name:      member.Name,
 						Namespace: member.Namespace,
 					},
@@ -217,34 +217,35 @@ func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, err
 		}
 
 		// Sort the membership to aid in deduplicating responses
-		sort.Slice(responseMembers, func(i, j int) bool {
-			return responseMembers[i].ID.Name < responseMembers[j].ID.Name
+		sort.Slice(responseReplicas, func(i, j int) bool {
+			return responseReplicas[i].ID.Name < responseReplicas[j].ID.Name
 		})
 
-		membershipGroups = append(membershipGroups, api.MembershipGroup{
-			ID: api.MembershipGroupId{
+		partitions = append(partitions, pb.Partition{
+			ID: pb.PartitionId{
 				Namespace: membershipGroup.Namespace,
 				Name:      membershipGroup.Name,
+				Index:     uint32(partition),
 			},
-			Term:    responseTerm,
-			Leader:  responseLeader,
-			Members: responseMembers,
+			Term:     responseTerm,
+			Leader:   responseLeader,
+			Replicas: responseReplicas,
 		})
 	}
 
 	// Sort the membership groups to aid in deduplicating responses
-	sort.Slice(membershipGroups, func(i, j int) bool {
-		return membershipGroups[i].ID.Name < membershipGroups[j].ID.Name
+	sort.Slice(partitions, func(i, j int) bool {
+		return partitions[i].ID.Name < partitions[j].ID.Name
 	})
 
 	// Construct a partition group response
-	response := api.JoinPartitionGroupResponse{
-		Group: api.PartitionGroup{
-			ID: api.PartitionGroupId{
+	response := pb.JoinReplicaGroupResponse{
+		Group: pb.ReplicaGroup{
+			ID: pb.ReplicaGroupId{
 				Namespace: partitionGroup.Namespace,
 				Name:      partitionGroup.Name,
 			},
-			Partitions: membershipGroups,
+			Partitions: partitions,
 		},
 	}
 
