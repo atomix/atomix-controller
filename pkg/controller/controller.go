@@ -431,8 +431,8 @@ func (c *Controller) JoinGossipGroup(request *gossipapi.JoinGossipGroupRequest, 
 				if member.DeletionTimestamp == nil {
 					responseMembers = append(responseMembers, gossipapi.Member{
 						ID: gossipapi.MemberId{
-							Name:      member.Name,
-							Namespace: member.Namespace,
+							Name:      member.Properties.Name,
+							Namespace: member.Properties.Namespace,
 						},
 						Host: member.Properties.Service,
 						Port: member.Properties.Port.IntVal,
@@ -708,9 +708,19 @@ func (c *Controller) JoinReplicaGroup(request *pbapi.JoinReplicaGroupRequest, st
 				responseTerm := pbapi.Term(membershipGroup.Status.Term)
 				var responseLeader *pbapi.ReplicaId
 				if membershipGroup.Status.Leader != "" {
-					responseLeader = &pbapi.ReplicaId{
+					leaderMember := &v1beta3.Member{}
+					leaderMemberName := types.NamespacedName{
 						Namespace: membershipGroup.Namespace,
 						Name:      membershipGroup.Status.Leader,
+					}
+					err := c.client.Get(context.TODO(), leaderMemberName, leaderMember)
+					if err == nil {
+						responseLeader = &pbapi.ReplicaId{
+							Namespace: leaderMember.Properties.Namespace,
+							Name:      leaderMember.Properties.Name,
+						}
+					} else if !k8serrors.IsNotFound(err) {
+						return err
 					}
 				}
 
@@ -732,8 +742,8 @@ func (c *Controller) JoinReplicaGroup(request *pbapi.JoinReplicaGroupRequest, st
 					if member.DeletionTimestamp == nil {
 						responseReplicas = append(responseReplicas, pbapi.Replica{
 							ID: pbapi.ReplicaId{
-								Name:      member.Name,
-								Namespace: member.Namespace,
+								Name:      member.Properties.Name,
+								Namespace: member.Properties.Namespace,
 							},
 							Host: member.Properties.Service,
 							Port: member.Properties.Port.IntVal,

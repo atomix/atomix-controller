@@ -179,9 +179,19 @@ func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, err
 		responseTerm := pb.Term(membershipGroup.Status.Term)
 		var responseLeader *pb.ReplicaId
 		if leader != "" {
-			responseLeader = &pb.ReplicaId{
+			leaderMember := &v1beta3.Member{}
+			leaderMemberName := types.NamespacedName{
 				Namespace: membershipGroup.Namespace,
 				Name:      leader,
+			}
+			err := r.client.Get(context.TODO(), leaderMemberName, leaderMember)
+			if err == nil {
+				responseLeader = &pb.ReplicaId{
+					Namespace: leaderMember.Properties.Namespace,
+					Name:      leaderMember.Properties.Name,
+				}
+			} else if !errors.IsNotFound(err) {
+				return reconcile.Result{}, err
 			}
 		}
 
