@@ -288,7 +288,7 @@ func (c *Controller) JoinCluster(request *cluster.JoinClusterRequest, stream clu
 			err := c.client.Get(context.TODO(), name, member)
 			if err != nil && !k8serrors.IsNotFound(err) {
 				log.Error(err, "Failed to leave Member from cluster", "Namespace", request.Member.ID.Namespace, "Name", request.Member.ID.Name)
-			} else {
+			} else if err == nil {
 				err = c.client.Delete(context.TODO(), member)
 				if err != nil && !k8serrors.IsNotFound(err) {
 					log.Error(err, "Failed to leave Member from cluster", "Namespace", request.Member.ID.Namespace, "Name", request.Member.ID.Name)
