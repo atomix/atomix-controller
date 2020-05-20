@@ -16,13 +16,16 @@ package controller
 
 import (
 	"context"
-	api "github.com/atomix/api/proto/atomix/controller"
+	"errors"
+	databaseapi "github.com/atomix/api/proto/atomix/database"
 	"github.com/atomix/kubernetes-controller/pkg/apis/cloud/v1beta3"
 	"github.com/atomix/kubernetes-controller/pkg/controller/database"
 	"github.com/atomix/kubernetes-controller/pkg/controller/util/k8s"
 	"google.golang.org/grpc"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
 	"net"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -58,66 +61,70 @@ func newController(client client.Client, scheme *runtime.Scheme, config *rest.Co
 
 // Controller an implementation of the Atomix controller API
 type Controller struct {
-	api.ControllerServiceServer
 	client client.Client
 	scheme *runtime.Scheme
 	config *rest.Config
 	opts   []grpc.ServerOption
 }
 
+// GetDatabase get a database managed by the controller
+func (c *Controller) GetDatabase(ctx context.Context, request *databaseapi.GetDatabaseRequest) (*databaseapi.GetDatabaseResponse, error) {
+	database := &v1beta3.Database{}
+	name := types.NamespacedName{
+		Namespace: k8s.GetDatabaseNamespace(request.ID),
+		Name:      request.ID.Name,
+	}
+	err := c.client.Get(ctx, name, database)
+	if err != nil {
+		if k8serrors.IsNotFound(err) {
+			return nil, errors.New("database not found")
+		}
+		return nil, err
+	}
+
+	pbdatabase := k8s.NewDatabaseProto(database)
+	options := &client.ListOptions{
+		Namespace:     k8s.GetDatabaseNamespace(request.ID),
+		LabelSelector: labels.SelectorFromSet(k8s.GetPartitionLabelsForDatabase(database)),
+	}
+	partitions := &v1beta3.PartitionList{}
+	err = c.client.List(context.TODO(), partitions, options)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(partitions.Items) != int(database.Spec.Partitions) {
+		return nil, errors.New("database not found")
+	}
+
+	pbpartitions := make([]databaseapi.Partition, 0, len(partitions.Items))
+	for _, partition := range partitions.Items {
+		pbpartitions = append(pbpartitions, *k8s.NewPartitionProto(&partition))
+	}
+	pbdatabase.Partitions = pbpartitions
+	return &databaseapi.GetDatabaseResponse{
+		Database: pbdatabase,
+	}, nil
+}
+
 // GetDatabases get a list of databases managed by the controller
-func (c *Controller) GetDatabases(ctx context.Context, request *api.GetDatabasesRequest) (*api.GetDatabasesResponse, error) {
+func (c *Controller) GetDatabases(ctx context.Context, request *databaseapi.GetDatabasesRequest) (*databaseapi.GetDatabasesResponse, error) {
 	databases := &v1beta3.DatabaseList{}
 
 	opts := &client.ListOptions{
-		Namespace: k8s.GetDatabaseNamespace(request.ID),
+		Namespace: k8s.GetDatabaseNamespace(databaseapi.DatabaseId{Namespace: request.Namespace}),
 	}
 
 	if err := c.client.List(ctx, databases, opts); err != nil {
 		return nil, err
 	}
 
-	if request.ID != nil && request.ID.Name != "" {
-		for _, database := range databases.Items {
-			if database.Name == request.ID.Name {
-				pbdatabase := k8s.NewDatabaseProto(&database)
-				options := &client.ListOptions{
-					Namespace:     k8s.GetDatabaseNamespace(request.ID),
-					LabelSelector: labels.SelectorFromSet(k8s.GetPartitionLabelsForDatabase(&database)),
-				}
-				partitions := &v1beta3.PartitionList{}
-				err := c.client.List(context.TODO(), partitions, options)
-				if err != nil {
-					return nil, err
-				}
-
-				if len(partitions.Items) != int(database.Spec.Partitions) {
-					continue
-				}
-
-				pbpartitions := make([]*api.Partition, 0, len(partitions.Items))
-				for _, partition := range partitions.Items {
-					pbpartition, err := k8s.NewPartitionProto(&partition)
-					if err != nil {
-						return nil, err
-					}
-					pbpartitions = append(pbpartitions, pbpartition)
-				}
-				pbdatabase.Partitions = pbpartitions
-				return &api.GetDatabasesResponse{
-					Databases: []*api.Database{pbdatabase},
-				}, nil
-			}
-		}
-		return &api.GetDatabasesResponse{}, nil
-	}
-
-	pbdatabases := make([]*api.Database, 0, len(databases.Items))
+	pbdatabases := make([]databaseapi.Database, 0, len(databases.Items))
 	for _, database := range databases.Items {
 		pbdatabase := k8s.NewDatabaseProto(&database)
 
 		options := &client.ListOptions{
-			Namespace:     k8s.GetDatabaseNamespace(request.ID),
+			Namespace:     k8s.GetDatabaseNamespace(databaseapi.DatabaseId{Namespace: request.Namespace}),
 			LabelSelector: labels.SelectorFromSet(k8s.GetPartitionLabelsForDatabase(&database)),
 		}
 		partitions := &v1beta3.PartitionList{}
@@ -130,19 +137,15 @@ func (c *Controller) GetDatabases(ctx context.Context, request *api.GetDatabases
 			continue
 		}
 
-		pbpartitions := make([]*api.Partition, 0, len(partitions.Items))
+		pbpartitions := make([]databaseapi.Partition, 0, len(partitions.Items))
 		for _, partition := range partitions.Items {
-			pbpartition, err := k8s.NewPartitionProto(&partition)
-			if err != nil {
-				return nil, err
-			}
-			pbpartitions = append(pbpartitions, pbpartition)
+			pbpartitions = append(pbpartitions, *k8s.NewPartitionProto(&partition))
 		}
 		pbdatabase.Partitions = pbpartitions
-		pbdatabases = append(pbdatabases, pbdatabase)
+		pbdatabases = append(pbdatabases, *pbdatabase)
 	}
 
-	return &api.GetDatabasesResponse{
+	return &databaseapi.GetDatabasesResponse{
 		Databases: pbdatabases,
 	}, nil
 }
@@ -159,7 +162,7 @@ func (c *Controller) Start(stop <-chan struct{}) error {
 
 	s := grpc.NewServer(c.opts...)
 	go func() {
-		api.RegisterControllerServiceServer(s, c)
+		databaseapi.RegisterDatabaseServiceServer(s, c)
 		if err := s.Serve(lis); err != nil {
 			errs <- err
 		}

@@ -16,12 +16,12 @@ package k8s
 
 import (
 	"fmt"
-	api "github.com/atomix/api/proto/atomix/controller"
+	databaseapi "github.com/atomix/api/proto/atomix/database"
 	"github.com/atomix/kubernetes-controller/pkg/apis/cloud/v1beta3"
 )
 
 // GetDatabaseNamespace returns the Database namespace for the given database ID
-func GetDatabaseNamespace(id *api.DatabaseId) string {
+func GetDatabaseNamespace(id databaseapi.DatabaseId) string {
 	if id.Namespace != "" {
 		return id.Namespace
 	}
@@ -29,23 +29,25 @@ func GetDatabaseNamespace(id *api.DatabaseId) string {
 }
 
 // NewPartitionProto returns the partition proto message for the given Partition
-func NewPartitionProto(p *v1beta3.Partition) (*api.Partition, error) {
+func NewPartitionProto(p *v1beta3.Partition) *databaseapi.Partition {
 	host := fmt.Sprintf("%s.%s.svc.cluster.local", p.Spec.ServiceName, p.Namespace)
-	return &api.Partition{
-		PartitionID: p.Spec.PartitionID,
-		Endpoints: []*api.PartitionEndpoint{
+	return &databaseapi.Partition{
+		PartitionID: databaseapi.PartitionId{
+			Partition: p.Spec.PartitionID,
+		},
+		Endpoints: []databaseapi.PartitionEndpoint{
 			{
 				Host: host,
 				Port: partitionPort,
 			},
 		},
-	}, nil
+	}
 }
 
 // NewDatabaseProto returns a Database proto message for the given Database
-func NewDatabaseProto(database *v1beta3.Database) *api.Database {
-	return &api.Database{
-		ID: &api.DatabaseId{
+func NewDatabaseProto(database *v1beta3.Database) *databaseapi.Database {
+	return &databaseapi.Database{
+		ID: databaseapi.DatabaseId{
 			Name:      database.Name,
 			Namespace: database.Namespace,
 		},

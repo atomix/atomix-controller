@@ -21,8 +21,7 @@ require (
 	go.uber.org/atomic v1.3.2 // indirect
 	go.uber.org/multierr v1.1.0 // indirect
 	golang.org/x/net v0.0.0-20191004110552-13f9640d40b9
-	google.golang.org/genproto v0.0.0-20190530194941-fb225487d101 // indirect
-	google.golang.org/grpc v1.23.1
+	google.golang.org/grpc v1.27.0
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	k8s.io/api v0.17.2
 	k8s.io/apimachinery v0.17.2
@@ -31,3 +30,5 @@ require (
 	sigs.k8s.io/controller-runtime v0.5.2
 	sigs.k8s.io/testing_frameworks v0.1.1 // indirect
 )
+
+replace github.com/atomix/api => ../atomix-api
