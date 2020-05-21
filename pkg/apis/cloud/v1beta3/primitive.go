@@ -23,20 +23,31 @@ import (
 type PrimitiveType string
 
 const (
-	PrimitiveTypeUnknown     PrimitiveType = "Unknown"
-	PrimitiveTypeCounter     PrimitiveType = "Counter"
-	PrimitiveTypeElection    PrimitiveType = "Election"
-	PrimitiveTypeIndexedMap  PrimitiveType = "IndexedMap"
+	// PrimitiveTypeUnknown is the default unknown primitive type
+	PrimitiveTypeUnknown PrimitiveType = "Unknown"
+	// PrimitiveTypeCounter is the primitive type for a counter
+	PrimitiveTypeCounter PrimitiveType = "Counter"
+	// PrimitiveTypeElection is the primitive type for an election
+	PrimitiveTypeElection PrimitiveType = "Election"
+	// PrimitiveTypeIndexedMap is the primitive type for an indexed map
+	PrimitiveTypeIndexedMap PrimitiveType = "IndexedMap"
+	// PrimitiveTypeLeaderLatch is the primitive type for a leader latch
 	PrimitiveTypeLeaderLatch PrimitiveType = "LeaderLatch"
-	PrimitiveTypeList        PrimitiveType = "List"
-	PrimitiveTypeLock        PrimitiveType = "Lock"
-	PrimitiveTypeLog         PrimitiveType = "Log"
-	PrimitiveTypeMap         PrimitiveType = "Map"
-	PrimitiveTypeSet         PrimitiveType = "Set"
-	PrimitiveTypeValue       PrimitiveType = "Value"
+	// PrimitiveTypeList is the primitive type for a list
+	PrimitiveTypeList PrimitiveType = "List"
+	// PrimitiveTypeLock is the primitive type for a lock
+	PrimitiveTypeLock PrimitiveType = "Lock"
+	// PrimitiveTypeLog is the primitive type for a log
+	PrimitiveTypeLog PrimitiveType = "Log"
+	// PrimitiveTypeMap is the primitive type for a map
+	PrimitiveTypeMap PrimitiveType = "Map"
+	// PrimitiveTypeSet is the primitive type for a set
+	PrimitiveTypeSet PrimitiveType = "Set"
+	// PrimitiveTypeValue is the primitive type for a value
+	PrimitiveTypeValue PrimitiveType = "Value"
 )
 
-// GetProto returns the primitive type proto
+// Proto returns the primitive type proto
 func (t PrimitiveType) Proto() primitive.PrimitiveType {
 	switch t {
 	case PrimitiveTypeCounter:

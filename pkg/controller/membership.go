@@ -34,6 +34,7 @@ func registerMembershipServiceServer(s *grpc.Server, srv membershipapi.Membershi
 	membershipapi.RegisterMembershipServiceServer(s, srv)
 }
 
+// JoinGroup handles a group join request
 func (c *Controller) JoinGroup(request *membershipapi.JoinGroupRequest, stream membershipapi.MembershipService_JoinGroupServer) error {
 	log.Info("Received JoinGroupRequest", "Request", request)
 

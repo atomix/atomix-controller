@@ -40,6 +40,7 @@ func getPrimitiveNamespacedName(database databaseapi.DatabaseId, primitive primi
 	}
 }
 
+// CreatePrimitive handles a create primitive request
 func (c *Controller) CreatePrimitive(ctx context.Context, request *primitiveapi.CreatePrimitiveRequest) (*primitiveapi.CreatePrimitiveResponse, error) {
 	database := &v1beta3.Database{}
 	databaseName := types.NamespacedName{
@@ -101,6 +102,7 @@ func (c *Controller) CreatePrimitive(ctx context.Context, request *primitiveapi.
 	}, nil
 }
 
+// GetPrimitive handles a get primitive request
 func (c *Controller) GetPrimitive(ctx context.Context, request *primitiveapi.GetPrimitiveRequest) (*primitiveapi.GetPrimitiveResponse, error) {
 	database := &v1beta3.Database{}
 	databaseName := types.NamespacedName{
@@ -133,6 +135,7 @@ func (c *Controller) GetPrimitive(ctx context.Context, request *primitiveapi.Get
 	}, nil
 }
 
+// GetPrimitives handles a list primitives request
 func (c *Controller) GetPrimitives(ctx context.Context, request *primitiveapi.GetPrimitivesRequest) (*primitiveapi.GetPrimitivesResponse, error) {
 	if request.Database != nil && request.Type != primitiveapi.PrimitiveType_UNKNOWN && request.Primitive != nil {
 		database := &v1beta3.Database{}
@@ -284,6 +287,7 @@ func (c *Controller) GetPrimitives(ctx context.Context, request *primitiveapi.Ge
 	}
 }
 
+// DeletePrimitive handles a delete primitive request
 func (c *Controller) DeletePrimitive(ctx context.Context, request *primitiveapi.DeletePrimitiveRequest) (*primitiveapi.DeletePrimitiveResponse, error) {
 	database := &v1beta3.Database{}
 	databaseName := types.NamespacedName{

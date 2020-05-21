@@ -68,6 +68,7 @@ type Reconciler struct {
 	responseCh chan<- membershipapi.JoinGroupResponse
 }
 
+// Reconcile reconciles a member request
 func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, error) {
 	logger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
 	logger.Info("Reconciling Member")
