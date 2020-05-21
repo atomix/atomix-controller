@@ -19,6 +19,10 @@ images: # @HELP build kubernetes-controller Docker image
 	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o build/controller/_output/bin/kubernetes-controller ./cmd/controller
 	docker build . -f build/controller/Dockerfile -t atomix/kubernetes-controller:${CONTROLLER_VERSION}
 
+kind: images
+	@if [ "`kind get clusters`" = '' ]; then echo "no kind cluster found" && exit 1; fi
+	kind load docker-image atomix/kubernetes-controller:${CONTROLLER_VERSION}
+
 push: # @HELP push kubernetes-controller Docker image
 	docker push atomix/kubernetes-controller:${CONTROLLER_VERSION}
 

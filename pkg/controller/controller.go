@@ -33,9 +33,9 @@ var log = logf.Log.WithName("controller_atomix")
 
 // AddController adds the Atomix controller to the k8s controller manager
 func AddController(mgr manager.Manager) error {
-	clusterCh := make(chan membershipapi.JoinClusterResponse)
+	membershipCh := make(chan membershipapi.JoinGroupResponse)
 
-	c := newController(mgr.GetClient(), mgr.GetScheme(), mgr.GetConfig(), clusterCh)
+	c := newController(mgr.GetClient(), mgr.GetScheme(), mgr.GetConfig(), membershipCh)
 	err := mgr.Add(c)
 	if err != nil {
 		return err
@@ -58,33 +58,33 @@ func AddController(mgr manager.Manager) error {
 	if err = database.Add(mgr); err != nil {
 		return err
 	}
-	if err = member.Add(mgr, clusterCh); err != nil {
+	if err = member.Add(mgr, membershipCh); err != nil {
 		return err
 	}
 	return nil
 }
 
 // newController creates a new controller server
-func newController(client client.Client, scheme *runtime.Scheme, config *rest.Config, clusterCh chan membershipapi.JoinClusterResponse, opts ...grpc.ServerOption) *Controller {
+func newController(client client.Client, scheme *runtime.Scheme, config *rest.Config, membershipCh chan membershipapi.JoinGroupResponse, opts ...grpc.ServerOption) *Controller {
 	return &Controller{
-		client:              client,
-		scheme:              scheme,
-		config:              config,
-		opts:                opts,
-		clusterResponseIn:   clusterCh,
-		clusterResponsesOut: make(map[string]map[string]chan<- membershipapi.JoinClusterResponse),
+		client:                 client,
+		scheme:                 scheme,
+		config:                 config,
+		opts:                   opts,
+		membershipResponseIn:   membershipCh,
+		membershipResponsesOut: make(map[string]map[string]chan<- membershipapi.JoinGroupResponse),
 	}
 }
 
 // Controller an implementation of the Atomix controller API
 type Controller struct {
-	client              client.Client
-	scheme              *runtime.Scheme
-	config              *rest.Config
-	opts                []grpc.ServerOption
-	clusterResponseIn   chan membershipapi.JoinClusterResponse
-	clusterResponsesOut map[string]map[string]chan<- membershipapi.JoinClusterResponse
-	mu                  sync.RWMutex
+	client                 client.Client
+	scheme                 *runtime.Scheme
+	config                 *rest.Config
+	opts                   []grpc.ServerOption
+	membershipResponseIn   chan membershipapi.JoinGroupResponse
+	membershipResponsesOut map[string]map[string]chan<- membershipapi.JoinGroupResponse
+	mu                     sync.RWMutex
 }
 
 // Start starts the controller server
@@ -122,11 +122,11 @@ func (c *Controller) Start(stop <-chan struct{}) error {
 func (c *Controller) processMembershipResponses(stop <-chan struct{}) {
 	go func() {
 		<-stop
-		close(c.clusterResponseIn)
+		close(c.membershipResponseIn)
 	}()
-	for response := range c.clusterResponseIn {
+	for response := range c.membershipResponseIn {
 		c.mu.RLock()
-		responseChs, ok := c.clusterResponsesOut[response.ClusterID.String()]
+		responseChs, ok := c.membershipResponsesOut[response.GroupID.String()]
 		if ok {
 			for _, responseCh := range responseChs {
 				responseCh <- response

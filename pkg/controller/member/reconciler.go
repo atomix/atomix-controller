@@ -36,7 +36,7 @@ var log = logf.Log.WithName("member_controller")
 
 // Add creates a new Database controller and adds it to the Manager. The Manager will set fields on the
 // controller and Start it when the Manager is Started.
-func Add(mgr manager.Manager, responseCh chan<- membershipapi.JoinClusterResponse) error {
+func Add(mgr manager.Manager, responseCh chan<- membershipapi.JoinGroupResponse) error {
 	r := &Reconciler{
 		client:     mgr.GetClient(),
 		scheme:     mgr.GetScheme(),
@@ -65,7 +65,7 @@ type Reconciler struct {
 	client     client.Client
 	scheme     *runtime.Scheme
 	config     *rest.Config
-	responseCh chan<- membershipapi.JoinClusterResponse
+	responseCh chan<- membershipapi.JoinGroupResponse
 }
 
 func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, error) {
@@ -125,8 +125,8 @@ func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, err
 	})
 
 	// Construct a membership response
-	response := membershipapi.JoinClusterResponse{
-		ClusterID: membershipapi.ClusterId{
+	response := membershipapi.JoinGroupResponse{
+		GroupID: membershipapi.GroupId{
 			Namespace: member.Namespace,
 			Name:      member.Properties.Namespace,
 		},

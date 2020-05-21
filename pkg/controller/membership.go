@@ -34,42 +34,42 @@ func registerMembershipServiceServer(s *grpc.Server, srv membershipapi.Membershi
 	membershipapi.RegisterMembershipServiceServer(s, srv)
 }
 
-func (c *Controller) JoinCluster(request *membershipapi.JoinClusterRequest, stream membershipapi.MembershipService_JoinClusterServer) error {
-	log.Info("Received JoinClusterRequest", "Request", request)
+func (c *Controller) JoinGroup(request *membershipapi.JoinGroupRequest, stream membershipapi.MembershipService_JoinGroupServer) error {
+	log.Info("Received JoinGroupRequest", "Request", request)
 
-	ch := make(chan membershipapi.JoinClusterResponse)
+	ch := make(chan membershipapi.JoinGroupResponse)
 	key := uuid.New().String()
 	c.mu.Lock()
-	membersOut, ok := c.clusterResponsesOut[request.ClusterID.String()]
+	membersOut, ok := c.membershipResponsesOut[request.GroupID.String()]
 	if !ok {
-		membersOut = make(map[string]chan<- membershipapi.JoinClusterResponse)
-		c.clusterResponsesOut[request.ClusterID.String()] = membersOut
+		membersOut = make(map[string]chan<- membershipapi.JoinGroupResponse)
+		c.membershipResponsesOut[request.GroupID.String()] = membersOut
 	}
 	membersOut[key] = ch
 	c.mu.Unlock()
 
 	defer func() {
 		c.mu.Lock()
-		membersOut, ok := c.clusterResponsesOut[request.ClusterID.String()]
+		membersOut, ok := c.membershipResponsesOut[request.GroupID.String()]
 		if ok {
 			delete(membersOut, key)
 			if len(membersOut) == 0 {
-				delete(c.clusterResponsesOut, request.ClusterID.String())
+				delete(c.membershipResponsesOut, request.GroupID.String())
 			}
 		}
 		c.mu.Unlock()
 	}()
 
 	// If no member was added, send an initial response to acknowledge the stream
-	var initialResponse *membershipapi.JoinClusterResponse
+	var initialResponse *membershipapi.JoinGroupResponse
 	if request.Member == nil {
 		// Get the set of members in the member's scope
 		memberList := &v1beta3.MemberList{}
 		memberListFields := map[string]string{
-			"properties.namespace": request.ClusterID.Name,
+			"properties.namespace": request.GroupID.Name,
 		}
 		memberListOpts := &client.ListOptions{
-			Namespace:     request.ClusterID.Namespace,
+			Namespace:     request.GroupID.Namespace,
 			FieldSelector: fields.SelectorFromSet(memberListFields),
 		}
 		err := c.client.List(stream.Context(), memberList, memberListOpts)
@@ -98,22 +98,23 @@ func (c *Controller) JoinCluster(request *membershipapi.JoinClusterRequest, stre
 		})
 
 		// Construct a membership response
-		initialResponse = &membershipapi.JoinClusterResponse{
-			ClusterID: membershipapi.ClusterId{
-				Namespace: request.ClusterID.Namespace,
-				Name:      request.ClusterID.Name,
+		initialResponse = &membershipapi.JoinGroupResponse{
+			GroupID: membershipapi.GroupId{
+				Namespace: request.GroupID.Namespace,
+				Name:      request.GroupID.Name,
 			},
 			Members: members,
 		}
 
 		// Send the initial response
+		log.Info("Sending JoinGroupResponse", "Response", initialResponse)
 		err = stream.Send(initialResponse)
 		if err != nil {
 			return err
 		}
 	} else {
-		log.Info("Joining Member to cluster", "Namespace", request.Member.ID.Namespace, "Name", request.Member.ID.Name)
-		// Get the pod joining the cluster
+		log.Info("Joining Member to group", "Namespace", request.Member.ID.Namespace, "Name", request.Member.ID.Name)
+		// Get the pod joining the group
 		pod := &corev1.Pod{}
 		name := types.NamespacedName{
 			Namespace: request.Member.ID.Namespace,
@@ -121,7 +122,7 @@ func (c *Controller) JoinCluster(request *membershipapi.JoinClusterRequest, stre
 		}
 		err := c.client.Get(stream.Context(), name, pod)
 		if err != nil {
-			log.Error(err, "Failed to join Member to cluster", "Namespace", request.Member.ID.Namespace, "Name", request.Member.ID.Name)
+			log.Error(err, "Failed to join Member to group", "Namespace", request.Member.ID.Namespace, "Name", request.Member.ID.Name)
 			return err
 		}
 
@@ -142,7 +143,7 @@ func (c *Controller) JoinCluster(request *membershipapi.JoinClusterRequest, stre
 			},
 			Properties: v1beta3.MemberProperties{
 				ObjectMeta: metav1.ObjectMeta{
-					Namespace: request.ClusterID.Name,
+					Namespace: request.GroupID.Name,
 					Name:      request.Member.ID.Name,
 				},
 				Service: request.Member.Host,
@@ -153,7 +154,7 @@ func (c *Controller) JoinCluster(request *membershipapi.JoinClusterRequest, stre
 		// Create the member
 		err = c.client.Create(stream.Context(), member)
 		if err != nil && !errors.IsAlreadyExists(err) {
-			log.Error(err, "Failed to join Member to cluster", "Namespace", request.Member.ID.Namespace, "Name", request.Member.ID.Name)
+			log.Error(err, "Failed to join Member to group", "Namespace", request.Member.ID.Namespace, "Name", request.Member.ID.Name)
 			return err
 		}
 	}
@@ -161,7 +162,7 @@ func (c *Controller) JoinCluster(request *membershipapi.JoinClusterRequest, stre
 	go func() {
 		<-stream.Context().Done()
 		if request.Member != nil {
-			log.Info("Leaving Member from cluster", "Namespace", request.Member.ID.Namespace, "Name", request.Member.ID.Name)
+			log.Info("Leaving Member from group", "Namespace", request.Member.ID.Namespace, "Name", request.Member.ID.Name)
 			member := &v1beta3.Member{}
 			name := types.NamespacedName{
 				Namespace: request.Member.ID.Namespace,
@@ -169,11 +170,11 @@ func (c *Controller) JoinCluster(request *membershipapi.JoinClusterRequest, stre
 			}
 			err := c.client.Get(context.TODO(), name, member)
 			if err != nil && !errors.IsNotFound(err) {
-				log.Error(err, "Failed to leave Member from cluster", "Namespace", request.Member.ID.Namespace, "Name", request.Member.ID.Name)
+				log.Error(err, "Failed to leave Member from group", "Namespace", request.Member.ID.Namespace, "Name", request.Member.ID.Name)
 			} else if err == nil {
 				err = c.client.Delete(context.TODO(), member)
 				if err != nil && !errors.IsNotFound(err) {
-					log.Error(err, "Failed to leave Member from cluster", "Namespace", request.Member.ID.Namespace, "Name", request.Member.ID.Name)
+					log.Error(err, "Failed to leave Member from group", "Namespace", request.Member.ID.Namespace, "Name", request.Member.ID.Name)
 				}
 			}
 		}
@@ -181,13 +182,13 @@ func (c *Controller) JoinCluster(request *membershipapi.JoinClusterRequest, stre
 	}()
 
 	// Process response changes
-	var lastResponse membershipapi.JoinClusterResponse
+	var lastResponse membershipapi.JoinGroupResponse
 	if initialResponse != nil {
 		lastResponse = *initialResponse
 	}
 	for response := range ch {
 		if response.String() != lastResponse.String() {
-			log.Info("Sending JoinClusterResponse", "Response", response)
+			log.Info("Sending JoinGroupResponse", "Response", response)
 			err := stream.Send(&response)
 			if err != nil {
 				log.Error(err, "An error occurred in the membership response stream")
