@@ -119,7 +119,7 @@ func (c *Controller) JoinGroup(request *membershipapi.JoinGroupRequest, stream m
 		pod := &corev1.Pod{}
 		name := types.NamespacedName{
 			Namespace: request.Member.ID.Namespace,
-			Name:      request.Member.Host,
+			Name:      request.Member.ID.Name,
 		}
 		err := c.client.Get(stream.Context(), name, pod)
 		if err != nil {
@@ -167,7 +167,7 @@ func (c *Controller) JoinGroup(request *membershipapi.JoinGroupRequest, stream m
 			member := &v1beta3.Member{}
 			name := types.NamespacedName{
 				Namespace: request.Member.ID.Namespace,
-				Name:      request.Member.Host,
+				Name:      request.Member.ID.Name,
 			}
 			err := c.client.Get(context.TODO(), name, member)
 			if err != nil && !errors.IsNotFound(err) {
