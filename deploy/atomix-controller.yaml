@@ -32,7 +32,7 @@ spec:
                 partitions:
                   type: integer
                   minimum: 1
-                  maximim: 1024
+                  maximum: 1024
                   default: 1
                 storageClass:
                   type: object
