@@ -87,7 +87,7 @@ spec:
               properties:
                 partitionId:
                   type: integer
-                  min: 1
+                  minimum: 1
                 serviceName:
                   type: string
             status:
