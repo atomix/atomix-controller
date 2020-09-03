@@ -16,71 +16,8 @@ spec:
     - name: v1beta3
       served: true
       storage: true
-      schema:
-        openAPIV3Schema:
-          type: object
-          required:
-            - spec
-          properties:
-            spec:
-              type: object
-              required:
-                - template
-              properties:
-                clusters:
-                  type: integer
-                  minimum: 1
-                  maximum: 32
-                  default: 1
-                template:
-                  type: object
-                  required:
-                    - spec
-                  properties:
-                    spec:
-                      type: object
-                      required:
-                        - storage
-                      properties:
-                        partitions:
-                          type: integer
-                          minimum: 1
-                          maximum: 1024
-                          default: 1
-                        storage:
-                          type: object
-                          required:
-                            - group
-                            - version
-                            - name
-                          properties:
-                            group:
-                              type: string
-                            version:
-                              type: string
-                            kind:
-                              type: string
-                            namespace:
-                              type: string
-                            name:
-                              type: string
----
-apiVersion: apiextensions.k8s.io/v1
-kind: CustomResourceDefinition
-metadata:
-  name: clusters.cloud.atomix.io
-spec:
-  group: cloud.atomix.io
-  scope: Namespaced
-  names:
-    kind: Cluster
-    listKind: ClusterList
-    plural: clusters
-    singular: cluster
-  versions:
-    - name: v1beta3
-      served: true
-      storage: true
+      subresources:
+        status: {}
       schema:
         openAPIV3Schema:
           type: object
@@ -95,15 +32,15 @@ spec:
                 partitions:
                   type: integer
                   minimum: 1
-                  maximum: 1024
+                  maximim: 1024
                   default: 1
                 storageClass:
                   type: object
                   required:
-                    - group
-                    - version
                     - name
                   properties:
+                    class:
+                      type: string
                     group:
                       type: string
                     version:
@@ -114,6 +51,11 @@ spec:
                       type: string
                     name:
                       type: string
+            status:
+              type: object
+              properties:
+                readyPartitions:
+                  type: integer
 ---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
@@ -131,14 +73,28 @@ spec:
     - name: v1beta3
       served: true
       storage: true
+      subresources:
+        status: {}
       schema:
         openAPIV3Schema:
           type: object
-          required:
-            - spec
           properties:
             spec:
               type: object
+              required:
+                - partitionId
+                - serviceName
+              properties:
+                partitionId:
+                  type: integer
+                  min: 1
+                serviceName:
+                  type: string
+            status:
+              type: object
+              properties:
+                ready:
+                  type: boolean
 ---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
@@ -226,6 +182,12 @@ spec:
                 type:
                   type: string
 ---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: atomix-controller
+  namespace: kube-system
+---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -236,12 +198,7 @@ rules:
       - ""
     resources:
       - pods
-      - services
-      - endpoints
-      - persistentvolumeclaims
-      - events
       - configmaps
-      - secrets
     verbs:
       - '*'
   - apiGroups:
@@ -250,15 +207,6 @@ rules:
       - namespaces
     verbs:
       - get
-  - apiGroups:
-      - apps
-    resources:
-      - deployments
-      - daemonsets
-      - replicasets
-      - statefulsets
-    verbs:
-      - '*'
   - apiGroups:
       - policy
     resources:
@@ -286,16 +234,22 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
 ---
 apiVersion: v1
-kind: ServiceAccount
+kind: Service
 metadata:
   name: atomix-controller
-  namespace: kube-system
+  labels:
+    name: atomix-controller
+spec:
+  selector:
+    name: atomix-controller
+  ports:
+    - name: control
+      port: 5679
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: atomix-controller
-  namespace: kube-system
 spec:
   replicas: 1
   selector:
@@ -308,16 +262,13 @@ spec:
     spec:
       serviceAccountName: atomix-controller
       containers:
-        - name: atomix-controller
-          # Replace this with the built image name
-          image: atomix/kubernetes-controller:v0.2.0-beta.1
+        - name: controller
+          image: atomix/kubernetes-controller:v0.4.1
           ports:
             - containerPort: 60000
               name: metrics
             - containerPort: 5679
               name: control
-          command:
-            - atomix-controller
           imagePullPolicy: IfNotPresent
           readinessProbe:
             exec:
@@ -329,7 +280,7 @@ spec:
             failureThreshold: 1
           env:
             - name: CONTROLLER_NAME
-              value: "atomix-controller"
+              value: atomix-controller
             - name: CONTROLLER_NAMESPACE
               valueFrom:
                 fieldRef:
@@ -342,17 +293,3 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: atomix-controller
-  namespace: kube-system
-  labels:
-    name: atomix-controller
-spec:
-  selector:
-    name: atomix-controller
-  ports:
-    - name: control
-      port: 5679
