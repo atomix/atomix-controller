@@ -13,94 +13,84 @@ partition groups and partitions. For more information see [how it works](#how-it
 
 ## Deployment
 
-To deploy the controller, first build the image using the make file:
-
-```bash
-> make build
-```
-
-The build script will build an `atomix/kubernetes-controller` image with the `latest`
-tag. Once the image has been built, the controller can be deployed to k8s using the
-following command:
+To deploy the controller, use the `atomix-controller.yaml` manifest:
 
 ```bash
 > kubectl create -f https://raw.githubusercontent.com/atomix/kubernetes-controller/master/deploy/atomix-controller.yaml
-customresourcedefinition.apiextensions.k8s.io/partitionsets.k8s.atomix.io created
-customresourcedefinition.apiextensions.k8s.io/partitions.k8s.atomix.io created
+customresourcedefinition.apiextensions.k8s.io/databases.cloud.atomix.io created
+customresourcedefinition.apiextensions.k8s.io/partitions.cloud.atomix.io created
+customresourcedefinition.apiextensions.k8s.io/members.cloud.atomix.io created
+customresourcedefinition.apiextensions.k8s.io/primitives.cloud.atomix.io created
+serviceaccount/atomix-controller created
 clusterrole.rbac.authorization.k8s.io/atomix-controller created
 clusterrolebinding.rbac.authorization.k8s.io/atomix-controller created
-serviceaccount/atomix-controller created
-deployment.apps/atomix-controller created
 service/atomix-controller created
+deployment.apps/atomix-controller created
 ```
-
-The default configuration will deploy a controller named `atomix-controller` in the
-`kube-system` namespace. It will also configure the Kubernetes cluter with two custom
-resource types: `PartitionSet` and `Partition`. Once the controller has been deployed,
-it can be used to create Atomix partitions either using the Atomix client API or through
-standard Kubernetes CLI and other APIs.
 
 ## Usage
 
-The role of an Atomix controller is to manage partition groups and partitions within a
-specific environment. The Kubernetes Atomix controller manages partition groups using
-[custom resources][custom-resources]. The controller adds two custom resources to the 
-k8s cluster:
-* `PartitionSet` defines a set of partitions and the protocol they implement
-* `Partition` is used by the `PartitionSet` controller to configure a single partition
+The `kubernetes-controller` is the primary controller for deploying Atomix `Database`s in [Kubernetes]. The controller
+adds a number of custom resources to the k8s cluster:
+* `Database` is used to deploy new databases
+* `Partition` is used by clients to partition databases
+* `Member` is used by clients for peer-to-peer protocols
+* `Primitive` is used to store metadata about distributed primitives
 
-Because the k8s controller uses custom resources for partition management, partition groups
-and partitions can be managed directly through the k8s API. To add a partition group via the
-k8s API, simply define a `PartitionSet` object:
+In order to deploy a `Database`, you must first deploy a storage controller to manage a specific type of database:
+* [`atomix/raft-storage-controller`](https://github.com/atomix/raft-storage-controller) adds support for Raft primitive databases
+* [`atomix/cache-storage-controller`](https://github.com/atomix/cache-storage-controller) adds support for in-memory cache primitive databases
+* [`atomix/redis-storage-controller`](https://github.com/atomix/redis-storage-controller) adds support for Redis primitive databases
+
+Once a storage controller has been deployed, you can create a storage configuration and `Database`:
 
 ```yaml
-apiVersion: k8s.atomix.io/v1alpha1
-kind: PartitionSet
+apiVersion: storage.cloud.atomix.io/v1beta1
+kind: RaftStorageClass
+metadata:
+    name: raft
+    labels:
+      app: raft
+spec:
+  image: atomix/raft-replica:latest
+  imagePullPolicy: IfNotPresent
+  replicas: 3
+---
+apiVersion: cloud.atomix.io/v1beta2
+kind: Database
 metadata:
   name: raft
 spec:
-  partitions: 6
+  clusters: 3
   template:
     spec:
-      size: 3
-      protocol: raft
-      config: |
-        electionTimeout: 5s
-        heartbeatInterval: 1s
+      partitions: 1
+      storage:
+        group: storage.cloud.atomix.io
+        version: v1beta1
+        kind: RaftStorageClass
+        name: raft
+        namespace: kube-system
 ```
 
-The `PartitionSet` spec requires three fields:
-* `partitions` - the number of partitions to create
-* `partitionSize` - the number of pods in each partition
-* A protocol configuration
-
-The protocol configuration may be one of:
-* `raft` - the strongly consistent, persistent [Raft consensus protocol][Raft]
-* `backup` - an in-memory primary-backup replication protocol
-* `log` - a primary-backup based persistent distributed log replication protocol
-
-The above configuration defines a partition group named `raft` that deploys `6` Raft
-partitions with `3` pods in each partition. Each of the six Raft partitions is essentially
-an independent 3-node Raft cluster.
-
-To create the partitions, use `kubectl` to create the resource:
+Use `kubectl` to create the database:
 
 ```bash
 > kubectl create -f raft.yaml
-partitionset.k8s.atomix.io/raft created
+raftstorageclass.storage.cloud.atomix.io/raft created
+database.cloud.atomix.io/raft created
 ```
 
-Once the partition group has been created, you should be able to see the partition group 
-via `kubectl`:
+Once the database has been created, you should be able to see it with `kubectl`:
 
 ```bash
-> kubectl get partitionsets
+> kubectl get databases
 NAME   AGE
 raft   12s
 ```
 
-The partition group will create a number of partitions equal to the `partitions` defined
-in the partition group spec:
+The database will create a number of partitions equal to the `partitions` defined
+in the database spec:
 
 ```bash
 > kubectl get partitions
@@ -110,7 +100,7 @@ raft-2   57s
 raft-3   57s
 ```
 
-Each partition will create a `StatefulSet`:
+Each cluster will create a `StatefulSet`:
 
 ```bash
 > kubectl get statefulsets
@@ -120,7 +110,7 @@ raft-2   1/1     2m11s
 raft-3   1/1     2m11s
 ```
 
-And each `StatefulSet` contains a number of pods equal to the partition template's `size`:
+And each `StatefulSet` contains a number of pods equal to the storage class's `replicas`:
 
 ```bash
 > kubectl get pods
@@ -148,21 +138,7 @@ raft-3       ClusterIP   10.99.37.182    <none>        5678/TCP   95s
 ...
 ```
 
-And a partition group service will be created as well, allowing partitions
-to be resolved over DNS using SRV records:
-
-```bash
-> kubectl get services
-NAME         TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)    AGE
-raft         ClusterIP   10.97.241.64    <none>        5678/TCP   96s
-...
-> kubectl get endpoints
-NAME         ENDPOINTS                                                 AGE
-raft         10.109.34.146:5678,10.98.166.215:5678,10.99.37.182:5678   120s
-...
-```
-
-Once the partition group is deployed and ready, it can used to create and operate on 
+Once the database is deployed and ready, it can used to create and operate on 
 distributed primitives programmatically using any [Atomix client][atomix-go-client]:
 
 ```go
@@ -204,111 +180,17 @@ The Atomix k8s controller implements the Atomix 4 controller API and runs inside
 manage deployment of partition groups and partitions using
 [custom resource controllers][custom-resources].
 
-![Kubernetes Controller Architecture](https://i.imgur.com/krk3y00.png)
+![Kubernetes Controller Architecture](https://i.imgur.com/9YkdF3D.png)
 
-Partition groups and partitions can be managed either through the
+Databases and partitions can be managed either through the
 [Atomix client API][atomix-go-client] or using standard Kubernetes tools like `kubectl`.
 
-The Atomix controller provides two custom Kubernetes controllers for managing partition
-groups and partitions. When a partition group is created via the Atomix controller API,
-the Atomix controller creates a `PartitionSet` resource, and the remainder of the deployment
-process is managed by custom Kubernetes controllers. The `PartitionSet` controller
-creates a set of `Partition` resources from the `PartitionSet`, and the `Partition`
-controller creates `StatefulSet` resources, `Service`s, and other resources necessary to
-run the protocol specified by the `PartitionSet` configuration.
+The Atomix controller manages databases, and add-on storage controllers deploy specific types 
+of databases. When a `Database` is created, the database's storage controller is triggered to
+create the appropriate `StatefulSet`s, `Service`s, and other resources for the database and
+its partitions.
 
-![Custom Resources](https://i.imgur.com/mbiTCI6.png)
-
-### The control loop
-
-When a `PartitionSet` is created, the k8s partition group controller will create a
-`Service` for the partition group:
-
-```bash
-> kubectl get services
-NAME         TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)    AGE
-raft         ClusterIP   10.97.241.64    <none>        5678/TCP   96s
-...
-```
-
-The partition group service is a special service used to resolve the partitions in the
-group via DNS using SRV records, much like pod IPs are resolved for headless services.
-
-When a `PartitionSet` is created, the k8s partition group controller will create a
-`Partition` resource for each partition specified in the group's spec:
-
-```bash
-> kubectl get partitions
-NAME     AGE
-raft-1   57s
-raft-2   57s
-raft-3   57s
-```
-
-Partition names are prefixed with the owner group's name, and partitions are annotated
-with information about the group and the controller as well:
-
-```bash
-> kubectl describe partition raft-1
-Name:         raft-1
-Namespace:    default
-Annotations:  k8s.atomix.io/controller: kube-system.atomix-controller
-              k8s.atomix.io/group: raft
-              k8s.atomix.io/partition: 1
-              k8s.atomix.io/type: partition
-API Version:  k8s.atomix.io/v1alpha1
-Kind:         Partition
-...
-```
-
-When a `Partition` is created, the k8s partition controller will create a number of
-resources for deploying the partition pods, establishing connectivity between them,
-and accessing them from other pods in the cluster.
-
-First, the partition controller creates a `StatefulSet` for the partition:
-
-```bash
-> kubectl get statefulsets
-NAME     READY   AGE
-raft-1   1/1     2m11s
-...
-```
-
-And, of course, the `StatefulSet` controller creates `Pod`s for each node in the partition:
-
-```bash
-> kubectl get pods
-NAME       READY   STATUS    RESTARTS   AGE
-raft-1-0   1/1     Running   0          74s
-raft-1-1   1/1     Running   0          74s
-raft-1-2   1/1     Running   0          74s
-...
-```
-
-Then, the controller creates two `Service`s for the partition's `StatefulSet`: a
-headless service used by replication protocols to form a cluster, and a normal
-service used by other pods to access the partition:
-
-```bash
-> kubectl get services
-NAME         TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)    AGE
-raft-1       ClusterIP   10.98.166.215   <none>        5678/TCP   95s
-raft-1-hs    ClusterIP   None            <none>        5678/TCP   95s
-...
-```
-
-As the services for the partition are created, the parent partition group's `Service`
-is updated with `Endpoints` that resolve the service to the partition service names:
-
-```bash
-> kubectl get endpoints
-NAME         ENDPOINTS                                                 AGE
-raft         10.109.34.146:5678,10.98.166.215:5678,10.99.37.182:5678   120s
-...
-```
-
-This allows clients to resolve the partitions within a group via SRV records without
-even connecting to the Atomix controller.
+![Storage Controller](https://i.imgur.com/rrabEYY.png)
 
 [Atomix]: https://atomix.io
 [Kubernetes]: https://kubernetes.io
