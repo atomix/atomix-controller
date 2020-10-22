@@ -191,7 +191,7 @@ func (c *Controller) GetPrimitives(ctx context.Context, request *primitiveapi.Ge
 			"properties.type": string(v1beta3.GetPrimitiveType(request.Type)),
 		}
 		if request.Database.Name != "" {
-			primitivesListFields["properties.protocol"] = request.Database.Name
+			primitivesListFields["properties.database"] = request.Database.Name
 		}
 		primitivesListOpts := &client.ListOptions{
 			Namespace:     request.Database.Namespace,
@@ -234,7 +234,7 @@ func (c *Controller) GetPrimitives(ctx context.Context, request *primitiveapi.Ge
 		primitivesList := &v1beta3.PrimitiveList{}
 		primitivesListFields := map[string]string{}
 		if request.Database.Name != "" {
-			primitivesListFields["properties.protocol"] = request.Database.Name
+			primitivesListFields["properties.database"] = request.Database.Name
 		}
 		primitivesListOpts := &client.ListOptions{
 			Namespace:     request.Database.Namespace,

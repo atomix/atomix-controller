@@ -55,6 +55,13 @@ func AddController(mgr manager.Manager) error {
 		return err
 	}
 
+	if err := mgr.GetFieldIndexer().IndexField(&v1beta3.Primitive{}, "properties.database", func(rawObj runtime.Object) []string {
+		primitive := rawObj.(*v1beta3.Primitive)
+		return []string{string(primitive.Properties.Database)}
+	}); err != nil {
+		return err
+	}
+
 	if err = database.Add(mgr); err != nil {
 		return err
 	}
