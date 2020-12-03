@@ -18,7 +18,10 @@ import (
 	"fmt"
 	databaseapi "github.com/atomix/api/proto/atomix/database"
 	"github.com/atomix/kubernetes-controller/pkg/apis/cloud/v1beta3"
+	"os"
 )
+
+const clusterDomainEnv = "CLUSTER_DOMAIN"
 
 // GetDatabaseNamespace returns the Database namespace for the given database ID
 func GetDatabaseNamespace(id databaseapi.DatabaseId) string {
@@ -30,7 +33,11 @@ func GetDatabaseNamespace(id databaseapi.DatabaseId) string {
 
 // NewPartitionProto returns the partition proto message for the given Partition
 func NewPartitionProto(p *v1beta3.Partition) *databaseapi.Partition {
-	host := fmt.Sprintf("%s.%s.svc.cluster.local", p.Spec.ServiceName, p.Namespace)
+	domain := os.Getenv(clusterDomainEnv)
+	if domain == "" {
+		domain = "cluster.local"
+	}
+	host := fmt.Sprintf("%s.%s.svc.%s", p.Spec.ServiceName, p.Namespace, domain)
 	return &databaseapi.Partition{
 		PartitionID: databaseapi.PartitionId{
 			Partition: p.Spec.PartitionID,
