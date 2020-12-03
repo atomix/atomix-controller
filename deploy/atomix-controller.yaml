@@ -265,7 +265,7 @@ spec:
       serviceAccountName: atomix-controller
       containers:
         - name: controller
-          image: atomix/kubernetes-controller:v0.4.1
+          image: atomix/kubernetes-controller:v0.4.3
           ports:
             - containerPort: 60000
               name: metrics
