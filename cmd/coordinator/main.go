@@ -15,32 +15,55 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
-	"github.com/atomix/api/go/atomix/protocol"
+	driverapi "github.com/atomix/api/go/atomix/driver"
+	protocolapi "github.com/atomix/api/go/atomix/protocol"
+	proxyapi "github.com/atomix/api/go/atomix/proxy"
 	"github.com/atomix/go-framework/pkg/atomix/cluster"
 	"github.com/atomix/go-framework/pkg/atomix/coordinator"
-	"github.com/golang/protobuf/jsonpb"
-	"io/ioutil"
+	"github.com/spf13/cobra"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	"os"
 )
 
 func main() {
-	configFile := os.Args[1]
-	configBytes, err := ioutil.ReadFile(configFile)
+	cmd := &cobra.Command{
+		Use: "atomix-coordinator",
+	}
+	cmd.Flags().IntP("port", "p", 5678, "the port to which to bind the coordinator")
+	cmd.Flags().StringToIntP("drivers", "d", map[string]int{}, "a mapping of drivers to sidecar ports")
+
+	if err := cmd.Execute(); err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
+	port, err := cmd.Flags().GetInt("port")
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}
 
-	config := protocol.ProtocolConfig{}
-	if err := jsonpb.Unmarshal(bytes.NewReader(configBytes), &config); err != nil {
+	drivers, err := cmd.Flags().GetStringToInt("drivers")
+	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}
 
-	node := coordinator.NewNode(cluster.NewCluster(config))
+	node := coordinator.NewNode(cluster.NewCluster(
+		protocolapi.ProtocolConfig{},
+		cluster.WithMemberID("coordinator"),
+		cluster.WithPort(port)))
+
+	for driver, port := range drivers {
+		node.RegisterDriver(driverapi.DriverMeta{
+			Name: driver,
+			Proxy: proxyapi.ProxyMeta{
+				Port: int32(port),
+			},
+		})
+	}
+
 	if err := node.Start(); err != nil {
 		fmt.Println(err)
 		os.Exit(1)

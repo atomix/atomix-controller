@@ -17,6 +17,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/atomix/kubernetes-controller/pkg/admission/coordinator"
 	"github.com/atomix/kubernetes-controller/pkg/apis"
 	"github.com/atomix/kubernetes-controller/pkg/controller"
 	"github.com/atomix/kubernetes-controller/pkg/controller/util/leader"
@@ -89,6 +90,12 @@ func main() {
 
 	// Setup all Controllers
 	if err := controller.AddController(mgr); err != nil {
+		log.Error(err, "")
+		os.Exit(1)
+	}
+
+	// Setup all webhooks
+	if err := coordinator.RegisterWebhooks(mgr); err != nil {
 		log.Error(err, "")
 		os.Exit(1)
 	}
