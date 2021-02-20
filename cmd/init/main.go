@@ -44,15 +44,9 @@ func printVersion() {
 
 func main() {
 	namespace := k8s.GetNamespace()
-	service := k8s.GetName("atomix-controller")
-	webhookName := os.Getenv("WEBHOOK_NAME")
-	if webhookName == "" {
-		webhookName = "coordinator.cloud.atomix.io"
-	}
-	webhookPath := os.Getenv("WEBHOOK_PATH")
-	if webhookPath == "" {
-		webhookPath = "/coordinator"
-	}
+	service := k8s.GetName()
+	webhookName := k8s.GetWebhookName()
+	webhookPath := k8s.GetWebhookPath()
 
 	printVersion()
 
@@ -152,7 +146,7 @@ func main() {
 	var timeoutSeconds int32 = 30
 	webhook := &admissionregistrationv1.MutatingWebhookConfiguration{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: service,
+			Name: webhookName,
 		},
 		Webhooks: []admissionregistrationv1.MutatingWebhook{
 			{

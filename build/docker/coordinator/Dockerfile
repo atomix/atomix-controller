@@ -4,6 +4,6 @@ RUN apk upgrade --update --no-cache
 
 USER nobody
 
-ADD build/coordinator/_output/bin/kubernetes-coordinator /usr/local/bin/atomix-coordinator
+ADD bin/atomix-coordinator /usr/local/bin/atomix-coordinator
 
 ENTRYPOINT ["atomix-coordinator"]
