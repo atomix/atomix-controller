@@ -45,6 +45,14 @@ func printVersion() {
 func main() {
 	namespace := k8s.GetNamespace()
 	service := k8s.GetName("atomix-controller")
+	webhookName := os.Getenv("WEBHOOK_NAME")
+	if webhookName == "" {
+		webhookName = "coordinator.cloud.atomix.io"
+	}
+	webhookPath := os.Getenv("WEBHOOK_PATH")
+	if webhookPath == "" {
+		webhookPath = "/coordinator"
+	}
 
 	printVersion()
 
@@ -138,7 +146,6 @@ func main() {
 		log.Panic(err)
 	}
 
-	compilerPath := "/coordinator"
 	sideEffects := admissionregistrationv1.SideEffectClassNone
 	failurePolicy := admissionregistrationv1.Ignore
 	scopeNamespaced := admissionregistrationv1.NamespacedScope
@@ -149,7 +156,7 @@ func main() {
 		},
 		Webhooks: []admissionregistrationv1.MutatingWebhook{
 			{
-				Name: "coordinator.cloud.atomix.io",
+				Name: webhookName,
 				Rules: []admissionregistrationv1.RuleWithOperations{
 					{
 						Rule: admissionregistrationv1.Rule{
@@ -165,7 +172,7 @@ func main() {
 					Service: &admissionregistrationv1.ServiceReference{
 						Name:      service,
 						Namespace: namespace,
-						Path:      &compilerPath,
+						Path:      &webhookPath,
 					},
 					CABundle: caPEM.Bytes(),
 				},
