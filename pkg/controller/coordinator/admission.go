@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/atomix/go-framework/pkg/atomix/logging"
+	"github.com/atomix/kubernetes-controller/pkg/controller/util/k8s"
 	corev1 "k8s.io/api/core/v1"
 	"net/http"
 	"os"
@@ -29,28 +30,30 @@ import (
 	"strconv"
 )
 
-var log = logging.GetLogger("admission", "coordinator")
+var log = logging.GetLogger("atomix", "controller", "coordinator")
 
 const (
-	PrimitivesInjectAnnotation = "primitives.cloud.atomix.io/inject"
+	CoordinatorInjectAnnotation       = "storage.atomix.io/coordinator-inject"
+	CoordinatorInjectStatusAnnotation = "storage.atomix.io/coordinator-inject-status"
+	coordinatorInjectedStatus         = "injected"
 )
 
 const (
-	defaultImageEnv = "DEFAULT_COORDINATOR_IMAGE"
-	defaultImage    = "atomix/kubernetes-coordinator:latest"
+	defaultCoordinatorImageEnv = "DEFAULT_COORDINATOR_IMAGE"
+	defaultCoordinatorImage    = "atomix/kubernetes-coordinator:latest"
 )
 
-func getDefaultImage() string {
-	image := os.Getenv(defaultImageEnv)
+func getDefaultCoordinatorImage() string {
+	image := os.Getenv(defaultCoordinatorImageEnv)
 	if image == "" {
-		image = defaultImage
+		image = defaultCoordinatorImage
 	}
 	return image
 }
 
 // RegisterWebhooks registes admission webhooks on the given manager
 func RegisterWebhooks(mgr manager.Manager) error {
-	mgr.GetWebhookServer().Register("/coordinator", &webhook.Admission{
+	mgr.GetWebhookServer().Register(k8s.GetWebhookPath(), &webhook.Admission{
 		Handler: &CoordinatorInjector{
 			client: mgr.GetClient(),
 		},
@@ -80,24 +83,31 @@ func (i *CoordinatorInjector) Handle(ctx context.Context, request admission.Requ
 		return admission.Errored(http.StatusBadRequest, err)
 	}
 
-	injectPrimitives, ok := pod.Annotations[PrimitivesInjectAnnotation]
+	injectCoordinator, ok := pod.Annotations[CoordinatorInjectAnnotation]
 	if !ok {
-		log.Debugf("Skipping primitive injection for Pod '%s/%s': '%s' annotation not found", pod.Name, pod.Namespace, PrimitivesInjectAnnotation)
-		return admission.Allowed(fmt.Sprintf("'%s' annotation not found", PrimitivesInjectAnnotation))
+		log.Debugf("Skipping coordinator injection for Pod '%s/%s': '%s' annotation not found", pod.Name, pod.Namespace, CoordinatorInjectAnnotation)
+		return admission.Allowed(fmt.Sprintf("'%s' annotation not found", CoordinatorInjectAnnotation))
 	}
-	if inject, err := strconv.ParseBool(injectPrimitives); err != nil {
-		log.Debugf("Skipping primitive injection for Pod '%s/%s': '%s' annotation could not be parsed (%v)", pod.Name, pod.Namespace, PrimitivesInjectAnnotation, err)
-		return admission.Allowed(fmt.Sprintf("'%s' annotation could not be parsed", PrimitivesInjectAnnotation))
+	if inject, err := strconv.ParseBool(injectCoordinator); err != nil {
+		log.Debugf("Skipping coordinator injection for Pod '%s/%s': '%s' annotation could not be parsed (%v)", pod.Name, pod.Namespace, CoordinatorInjectAnnotation, err)
+		return admission.Allowed(fmt.Sprintf("'%s' annotation could not be parsed", CoordinatorInjectAnnotation))
 	} else if !inject {
-		log.Debugf("Skipping primitive injection for Pod '%s/%s': '%s' is false", pod.Name, pod.Namespace, PrimitivesInjectAnnotation)
-		return admission.Allowed(fmt.Sprintf("'%s' annotation is false", PrimitivesInjectAnnotation))
+		log.Debugf("Skipping coordinator injection for Pod '%s/%s': '%s' is false", pod.Name, pod.Namespace, CoordinatorInjectAnnotation)
+		return admission.Allowed(fmt.Sprintf("'%s' annotation is false", CoordinatorInjectAnnotation))
+	}
+
+	injectedCoordinator, ok := pod.Annotations[CoordinatorInjectStatusAnnotation]
+	if ok && injectedCoordinator == coordinatorInjectedStatus {
+		log.Debugf("Skipping coordinator injection for Pod '%s/%s': '%s' is '%s'", pod.Name, pod.Namespace, CoordinatorInjectStatusAnnotation, injectedCoordinator)
+		return admission.Allowed(fmt.Sprintf("'%s' annotation is '%s'", CoordinatorInjectStatusAnnotation, injectedCoordinator))
 	}
 
 	container := corev1.Container{
 		Name:  "atomix-coordinator",
-		Image: getDefaultImage(),
+		Image: getDefaultCoordinatorImage(),
 	}
 	pod.Spec.Containers = append(pod.Spec.Containers, container)
+	pod.Annotations[CoordinatorInjectStatusAnnotation] = coordinatorInjectedStatus
 
 	// Marshal the pod and return a patch response
 	marshaledPod, err := json.Marshal(pod)

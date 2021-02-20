@@ -14,7 +14,10 @@
 
 package k8s
 
-import "os"
+import (
+	"fmt"
+	"os"
+)
 
 // Scope :
 type Scope string
@@ -28,9 +31,11 @@ const (
 )
 
 const (
-	nameEnv      = "CONTROLLER_NAME"
-	namespaceEnv = "CONTROLLER_NAMESPACE"
-	scopeEnv     = "CONTROLLER_SCOPE"
+	nameEnv        = "CONTROLLER_NAME"
+	namespaceEnv   = "CONTROLLER_NAMESPACE"
+	scopeEnv       = "CONTROLLER_SCOPE"
+	webhookNameEnv = "WEBHOOK_NAME"
+	webhookPathEnv = "WEBHOOK_PATH"
 )
 
 const (
@@ -39,12 +44,12 @@ const (
 )
 
 // GetName :
-func GetName(def string) string {
+func GetName() string {
 	name := os.Getenv(nameEnv)
-	if name != "" {
-		return name
+	if name == "" {
+		panic(fmt.Sprintf("'%s' environment variable not defined", nameEnv))
 	}
-	return def
+	return name
 }
 
 // GetNamespace :
@@ -63,4 +68,22 @@ func GetScope() Scope {
 		return Scope(scope)
 	}
 	return defaultScope
+}
+
+// GetWebhookName :
+func GetWebhookName() string {
+	name := os.Getenv(webhookNameEnv)
+	if name == "" {
+		panic(fmt.Sprintf("'%s' environment variable not defined", webhookNameEnv))
+	}
+	return name
+}
+
+// GetWebhookPath :
+func GetWebhookPath() string {
+	path := os.Getenv(webhookPathEnv)
+	if path == "" {
+		panic(fmt.Sprintf("'%s' environment variable not defined", webhookPathEnv))
+	}
+	return path
 }

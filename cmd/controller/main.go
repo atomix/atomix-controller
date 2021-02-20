@@ -17,9 +17,9 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/atomix/kubernetes-controller/pkg/admission/coordinator"
 	"github.com/atomix/kubernetes-controller/pkg/apis"
 	"github.com/atomix/kubernetes-controller/pkg/controller"
+	"github.com/atomix/kubernetes-controller/pkg/controller/coordinator"
 	"github.com/atomix/kubernetes-controller/pkg/controller/util/leader"
 	"github.com/atomix/kubernetes-controller/pkg/controller/util/ready"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
