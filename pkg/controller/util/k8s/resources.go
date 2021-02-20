@@ -43,10 +43,6 @@ const (
 	controllerNamespaceVar = "CONTROLLER_NAMESPACE"
 )
 
-const (
-	defaultNamespace = "default"
-)
-
 // GetControllerName gets the name of the current controller from the environment
 func GetControllerName() string {
 	return os.Getenv(controllerNameVar)

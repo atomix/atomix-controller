@@ -17,6 +17,8 @@ build:
 	go build -o build/coordinator/_output/bin/kubernetes-coordinator ./cmd/coordinator
 
 images: # @HELP build kubernetes-controller Docker image
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o build/init/_output/bin/kubernetes-controller-init ./cmd/init
+	docker build . -f build/init/Dockerfile -t atomix/kubernetes-controller-init:${CONTROLLER_VERSION}
 	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o build/controller/_output/bin/kubernetes-controller ./cmd/controller
 	docker build . -f build/controller/Dockerfile -t atomix/kubernetes-controller:${CONTROLLER_VERSION}
 	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o build/coordinator/_output/bin/kubernetes-coordinator ./cmd/coordinator

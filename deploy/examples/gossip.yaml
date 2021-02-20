@@ -1,0 +1,149 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  creationTimestamp: null
+  name: raft-primitives
+rules:
+- apiGroups:
+  - primitives.k8s.atomix.io
+  resources:
+  - Map
+  verbs:
+  - read
+  - write
+---
+apiVersion: k8s.atomix.io/v1beta1
+kind: StorageClass
+metadata:
+  name: raft
+protocol: protocols.k8s.atomix.io/raft
+driver: drivers.k8s.atomix.io/dragonboat
+parameters:
+  replicas: 3
+---
+apiVersion: k8s.atomix.io/v1beta1
+kind: Store
+metadata:
+  name: raft
+spec:
+  protocol: raft
+---
+apiVersion: primitives.k8s.atomix.io/v1beta1
+kind: Map
+metadata:
+  name: onos-topo
+spec:
+  storage:
+    class: raft
+---
+apiVersion: primitives.k8s.atomix.io/v1beta1
+kind: Binding
+metadata:
+  name: onos-topo-onos-topo
+spec:
+  source:
+    selector:
+      matchLabels:
+        name: onos-topo
+  target:
+    selector:
+      matchLabels:
+        name: onos-topo
+---
+
+
+
+
+apiVersion: primitives.k8s.atomix.io/v1beta1
+kind: Map
+metadata:
+  name: onos-topo
+spec:
+  consistency:
+    writeLevel: linearizable
+    readLevel: sequential
+  persistence:
+    level: memory
+  replication:
+    factor: 3
+---
+apiVersion: primitives.k8s.atomix.io/v1beta1
+kind: Map
+metadata:
+  name: onos-topo
+spec:
+  storage:
+    protocol: raft
+    driver: dragonboat
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: foo
+  labels:
+    foo: bar
+    bar: baz
+  annotations:
+    storage.k8s.atomix.io/inject: raft
+spec:
+  image: foo:latest
+---
+apiVersion: primitives.k8s.atomix.io/v1beta1
+kind: Map
+metadata:
+  name: onos-topo
+spec:
+  storage:
+    name: raft
+  cache:
+    enabled: true
+
+
+
+---
+apiVersion: k8s.atomix.io/v1beta1
+kind: Store
+metadata:
+  name: raft
+spec:
+  replicas: 3
+  protocol: raft
+  properties: {}
+---
+apiVersion: store.k8s.atomix.io/v1beta1
+kind: RaftStore
+metadata:
+  name: raft
+spec:
+  replicas: 3
+  partitions: 10
+---
+apiVersion: primitives.k8s.atomix.io/v1beta1
+kind: Map
+metadata:
+  name: onos-topo
+spec:
+  protocol: raft
+  properties:
+    cache: true
+---
+apiVersion: primitives.k8s.atomix.io/v1beta1
+kind: Election
+metadata:
+  name: onos-config-mastership
+spec:
+  selector:
+    matchLabels:
+      foo: bar
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: foo
+  labels:
+    foo: bar
+    bar: baz
+  annotations:
+    primitives.k8s.atomix.io/inject: onos-topo
+spec:
+  image: foo:latest
