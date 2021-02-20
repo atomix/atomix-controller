@@ -294,10 +294,8 @@ spec:
               fieldPath: metadata.namespace
         volumeMounts:
         - name: config
-          mountPath: /etc/onos/config
+          mountPath: /etc/atomix/config
           readOnly: true
-        - name: plugins
-          mountPath: /etc/onos/plugins
         - name: certs
           mountPath: /etc/webhook/certs
       containers:
@@ -337,12 +335,12 @@ spec:
           mountPath: /tmp/k8s-webhook-server/serving-certs
           readOnly: true
         - name: config
-          mountPath: /etc/onos/config
+          mountPath: /etc/atomix/config
           readOnly: true
       volumes:
       - name: config
         configMap:
-          name: onos-operator-config
+          name: atomix-controller-config
 ---
 apiVersion: v1
 kind: ConfigMap
