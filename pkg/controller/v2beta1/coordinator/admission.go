@@ -19,7 +19,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/atomix/go-framework/pkg/atomix/logging"
-	"github.com/atomix/kubernetes-controller/pkg/controller/util/k8s"
+	"github.com/atomix/kubernetes-controller/pkg/controller/v2beta1/util/k8s"
 	corev1 "k8s.io/api/core/v1"
 	"net/http"
 	"os"
@@ -33,9 +33,11 @@ import (
 var log = logging.GetLogger("atomix", "controller", "coordinator")
 
 const (
-	CoordinatorInjectAnnotation       = "storage.atomix.io/coordinator-inject"
-	CoordinatorInjectStatusAnnotation = "storage.atomix.io/coordinator-inject-status"
-	coordinatorInjectedStatus         = "injected"
+	CoordinatorInjectAnnotation        = "coordinator.atomix.io/inject"
+	CoordinatorInjectStatusAnnotation  = "coordinator.atomix.io/inject-status"
+	CoordinatorContainerNameAnnotation = "coordinator.atomix.io/container-name"
+	primitivesInjectedStatus           = "injected"
+	coordinatorContainerName           = "atomix"
 )
 
 const (
@@ -51,7 +53,7 @@ func getDefaultCoordinatorImage() string {
 	return image
 }
 
-// RegisterWebhooks registes admission webhooks on the given manager
+// RegisterWebhooks registers admission webhooks on the given manager
 func RegisterWebhooks(mgr manager.Manager) error {
 	mgr.GetWebhookServer().Register(k8s.GetWebhookPath(), &webhook.Admission{
 		Handler: &CoordinatorInjector{
@@ -97,17 +99,19 @@ func (i *CoordinatorInjector) Handle(ctx context.Context, request admission.Requ
 	}
 
 	injectedCoordinator, ok := pod.Annotations[CoordinatorInjectStatusAnnotation]
-	if ok && injectedCoordinator == coordinatorInjectedStatus {
+	if ok && injectedCoordinator == primitivesInjectedStatus {
 		log.Debugf("Skipping coordinator injection for Pod '%s/%s': '%s' is '%s'", pod.Name, pod.Namespace, CoordinatorInjectStatusAnnotation, injectedCoordinator)
 		return admission.Allowed(fmt.Sprintf("'%s' annotation is '%s'", CoordinatorInjectStatusAnnotation, injectedCoordinator))
 	}
 
 	container := corev1.Container{
-		Name:  "atomix-coordinator",
-		Image: getDefaultCoordinatorImage(),
+		Name:            coordinatorContainerName,
+		Image:           getDefaultCoordinatorImage(),
+		ImagePullPolicy: corev1.PullIfNotPresent,
 	}
 	pod.Spec.Containers = append(pod.Spec.Containers, container)
-	pod.Annotations[CoordinatorInjectStatusAnnotation] = coordinatorInjectedStatus
+	pod.Annotations[CoordinatorInjectStatusAnnotation] = primitivesInjectedStatus
+	pod.Annotations[CoordinatorContainerNameAnnotation] = coordinatorContainerName
 
 	// Marshal the pod and return a patch response
 	marshaledPod, err := json.Marshal(pod)

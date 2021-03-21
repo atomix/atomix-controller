@@ -18,10 +18,9 @@ import (
 	"context"
 	"fmt"
 	"github.com/atomix/kubernetes-controller/pkg/apis"
-	"github.com/atomix/kubernetes-controller/pkg/controller"
-	"github.com/atomix/kubernetes-controller/pkg/controller/coordinator"
-	"github.com/atomix/kubernetes-controller/pkg/controller/util/leader"
-	"github.com/atomix/kubernetes-controller/pkg/controller/util/ready"
+	"github.com/atomix/kubernetes-controller/pkg/controller/v1beta3"
+	"github.com/atomix/kubernetes-controller/pkg/controller/v1beta3/util/leader"
+	"github.com/atomix/kubernetes-controller/pkg/controller/v1beta3/util/ready"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	"os"
 	"runtime"
@@ -89,13 +88,7 @@ func main() {
 	}
 
 	// Setup all Controllers
-	if err := controller.AddController(mgr); err != nil {
-		log.Error(err, "")
-		os.Exit(1)
-	}
-
-	// Setup all webhooks
-	if err := coordinator.RegisterWebhooks(mgr); err != nil {
+	if err := v1beta3.AddController(mgr); err != nil {
 		log.Error(err, "")
 		os.Exit(1)
 	}

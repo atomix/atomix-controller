@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package controller
+package v1beta3
 
 import (
 	membershipapi "github.com/atomix/api/proto/atomix/membership"
 	"github.com/atomix/kubernetes-controller/pkg/apis/cloud/v1beta3"
-	"github.com/atomix/kubernetes-controller/pkg/controller/database"
-	"github.com/atomix/kubernetes-controller/pkg/controller/member"
+	"github.com/atomix/kubernetes-controller/pkg/controller/v1beta3/database"
+	"github.com/atomix/kubernetes-controller/pkg/controller/v1beta3/member"
 	"google.golang.org/grpc"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"

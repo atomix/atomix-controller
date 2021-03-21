@@ -12,14 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package controller
+package v1beta3
 
 import (
 	"context"
 	"errors"
 	databaseapi "github.com/atomix/api/proto/atomix/database"
 	"github.com/atomix/kubernetes-controller/pkg/apis/cloud/v1beta3"
-	"github.com/atomix/kubernetes-controller/pkg/controller/util/k8s"
+	"github.com/atomix/kubernetes-controller/pkg/controller/v1beta3/util/k8s"
 	"google.golang.org/grpc"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
