@@ -17,7 +17,7 @@ package database
 import (
 	"context"
 	"github.com/atomix/kubernetes-controller/pkg/apis/cloud/v1beta3"
-	"github.com/atomix/kubernetes-controller/pkg/controller/util/k8s"
+	"github.com/atomix/kubernetes-controller/pkg/controller/v1beta3/util/k8s"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
