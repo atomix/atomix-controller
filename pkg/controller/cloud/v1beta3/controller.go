@@ -16,9 +16,7 @@ package v1beta3
 
 import (
 	membershipapi "github.com/atomix/api/proto/atomix/membership"
-	"github.com/atomix/kubernetes-controller/pkg/apis/cloud/v1beta3"
-	"github.com/atomix/kubernetes-controller/pkg/controller/v1beta3/database"
-	"github.com/atomix/kubernetes-controller/pkg/controller/v1beta3/member"
+	cloudv1beta3 "github.com/atomix/kubernetes-controller/pkg/apis/cloud/v1beta3"
 	"google.golang.org/grpc"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
@@ -31,8 +29,8 @@ import (
 
 var log = logf.Log.WithName("controller_atomix")
 
-// AddController adds the Atomix controller to the k8s controller manager
-func AddController(mgr manager.Manager) error {
+// RegisterControllers adds the Atomix controller to the k8s controller manager
+func RegisterControllers(mgr manager.Manager) error {
 	membershipCh := make(chan membershipapi.JoinGroupResponse)
 
 	c := newController(mgr.GetClient(), mgr.GetScheme(), mgr.GetConfig(), membershipCh)
@@ -41,31 +39,31 @@ func AddController(mgr manager.Manager) error {
 		return err
 	}
 
-	if err := mgr.GetFieldIndexer().IndexField(&v1beta3.Member{}, "properties.namespace", func(rawObj runtime.Object) []string {
-		member := rawObj.(*v1beta3.Member)
+	if err := mgr.GetFieldIndexer().IndexField(&cloudv1beta3.Member{}, "properties.namespace", func(rawObj runtime.Object) []string {
+		member := rawObj.(*cloudv1beta3.Member)
 		return []string{member.Properties.Namespace}
 	}); err != nil {
 		return err
 	}
 
-	if err := mgr.GetFieldIndexer().IndexField(&v1beta3.Primitive{}, "properties.type", func(rawObj runtime.Object) []string {
-		primitive := rawObj.(*v1beta3.Primitive)
+	if err := mgr.GetFieldIndexer().IndexField(&cloudv1beta3.Primitive{}, "properties.type", func(rawObj runtime.Object) []string {
+		primitive := rawObj.(*cloudv1beta3.Primitive)
 		return []string{string(primitive.Properties.Type)}
 	}); err != nil {
 		return err
 	}
 
-	if err := mgr.GetFieldIndexer().IndexField(&v1beta3.Primitive{}, "properties.database", func(rawObj runtime.Object) []string {
-		primitive := rawObj.(*v1beta3.Primitive)
+	if err := mgr.GetFieldIndexer().IndexField(&cloudv1beta3.Primitive{}, "properties.database", func(rawObj runtime.Object) []string {
+		primitive := rawObj.(*cloudv1beta3.Primitive)
 		return []string{string(primitive.Properties.Database)}
 	}); err != nil {
 		return err
 	}
 
-	if err = database.Add(mgr); err != nil {
+	if _, err = NewDatabaseController(mgr); err != nil {
 		return err
 	}
-	if err = member.Add(mgr, membershipCh); err != nil {
+	if _, err = NewMemberController(mgr, membershipCh); err != nil {
 		return err
 	}
 	return nil

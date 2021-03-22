@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package member
+package v1beta3
 
 import (
 	"context"
@@ -25,19 +25,16 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 	"sort"
 )
 
-var log = logf.Log.WithName("member_controller")
-
-// Add creates a new Database controller and adds it to the Manager. The Manager will set fields on the
+// NewMemberController creates a new Database controller and adds it to the Manager. The Manager will set fields on the
 // controller and Start it when the Manager is Started.
-func Add(mgr manager.Manager, responseCh chan<- membershipapi.JoinGroupResponse) error {
-	r := &Reconciler{
+func NewMemberController(mgr manager.Manager, responseCh chan<- membershipapi.JoinGroupResponse) (controller.Controller, error) {
+	r := &MemberReconciler{
 		client:     mgr.GetClient(),
 		scheme:     mgr.GetScheme(),
 		config:     mgr.GetConfig(),
@@ -47,21 +44,21 @@ func Add(mgr manager.Manager, responseCh chan<- membershipapi.JoinGroupResponse)
 	// Create a new controller
 	c, err := controller.New("member-controller", mgr, controller.Options{Reconciler: r})
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// Watch for changes to primary resource Member
 	err = c.Watch(&source.Kind{Type: &v1beta3.Member{}}, &handler.EnqueueRequestForObject{})
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return nil
+	return c, nil
 }
 
-var _ reconcile.Reconciler = &Reconciler{}
+var _ reconcile.Reconciler = &MemberReconciler{}
 
-// Reconciler reconciles a PartitionGroup object
-type Reconciler struct {
+// MemberReconciler reconciles a PartitionGroup object
+type MemberReconciler struct {
 	client     client.Client
 	scheme     *runtime.Scheme
 	config     *rest.Config
@@ -69,7 +66,7 @@ type Reconciler struct {
 }
 
 // Reconcile reconciles a member request
-func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, error) {
+func (r *MemberReconciler) Reconcile(request reconcile.Request) (reconcile.Result, error) {
 	logger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
 	logger.Info("Reconciling Member")
 

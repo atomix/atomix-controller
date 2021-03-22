@@ -285,9 +285,9 @@ spec:
             fieldRef:
               fieldPath: metadata.namespace
         - name: WEBHOOK_NAME
-          value: coordinator.cloud.atomix.io
+          value: broker.cloud.atomix.io
         - name: WEBHOOK_PATH
-          value: /inject-coordinator
+          value: /inject-broker
         - name: POD_NAME
           valueFrom:
             fieldRef:
@@ -325,9 +325,9 @@ spec:
             fieldRef:
               fieldPath: metadata.namespace
         - name: WEBHOOK_NAME
-          value: coordinator.cloud.atomix.io
+          value: broker.cloud.atomix.io
         - name: WEBHOOK_PATH
-          value: /inject-coordinator
+          value: /inject-broker
         - name: POD_NAME
           valueFrom:
             fieldRef:

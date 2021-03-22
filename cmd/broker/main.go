@@ -16,11 +16,9 @@ package main
 
 import (
 	"fmt"
-	driverapi "github.com/atomix/api/go/atomix/driver"
 	protocolapi "github.com/atomix/api/go/atomix/protocol"
-	proxyapi "github.com/atomix/api/go/atomix/proxy"
+	"github.com/atomix/go-framework/pkg/atomix/broker"
 	"github.com/atomix/go-framework/pkg/atomix/cluster"
-	"github.com/atomix/go-framework/pkg/atomix/coordinator"
 	"github.com/spf13/cobra"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	"os"
@@ -28,10 +26,9 @@ import (
 
 func main() {
 	cmd := &cobra.Command{
-		Use: "atomix-coordinator",
+		Use: "atomix-broker",
 	}
-	cmd.Flags().IntP("port", "p", 5678, "the port to which to bind the coordinator")
-	cmd.Flags().StringToIntP("drivers", "d", map[string]int{}, "a mapping of drivers to sidecar ports")
+	cmd.Flags().IntP("port", "p", 5678, "the port to which to bind the broker")
 
 	if err := cmd.Execute(); err != nil {
 		fmt.Println(err)
@@ -44,25 +41,10 @@ func main() {
 		os.Exit(1)
 	}
 
-	drivers, err := cmd.Flags().GetStringToInt("drivers")
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-
-	node := coordinator.NewNode(cluster.NewCluster(
+	node := broker.NewNode(cluster.NewCluster(
 		protocolapi.ProtocolConfig{},
-		cluster.WithMemberID("coordinator"),
+		cluster.WithMemberID("broker"),
 		cluster.WithPort(port)))
-
-	for driver, port := range drivers {
-		node.RegisterDriver(driverapi.DriverMeta{
-			Name: driver,
-			Proxy: proxyapi.ProxyMeta{
-				Port: int32(port),
-			},
-		})
-	}
 
 	if err := node.Start(); err != nil {
 		fmt.Println(err)

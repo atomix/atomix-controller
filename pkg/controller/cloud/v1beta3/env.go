@@ -12,22 +12,35 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package k8s
+package v1beta3
 
 import (
 	"fmt"
 	"os"
 )
 
+// Scope :
+type Scope string
+
+const (
+	// ClusterScope :
+	ClusterScope Scope = "cluster"
+
+	// NamespaceScope :
+	NamespaceScope Scope = "namespace"
+)
+
 const (
 	nameEnv        = "CONTROLLER_NAME"
 	namespaceEnv   = "CONTROLLER_NAMESPACE"
+	scopeEnv       = "CONTROLLER_SCOPE"
 	webhookNameEnv = "WEBHOOK_NAME"
 	webhookPathEnv = "WEBHOOK_PATH"
 )
 
 const (
 	defaultNamespace = "kube-system"
+	defaultScope     = ClusterScope
 )
 
 // GetName :
@@ -46,6 +59,15 @@ func GetNamespace() string {
 		return namespace
 	}
 	return defaultNamespace
+}
+
+// GetScope :
+func GetScope() Scope {
+	scope := os.Getenv(scopeEnv)
+	if scope != "" {
+		return Scope(scope)
+	}
+	return defaultScope
 }
 
 // GetWebhookName :

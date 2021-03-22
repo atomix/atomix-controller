@@ -18,9 +18,9 @@ import (
 	"context"
 	"fmt"
 	"github.com/atomix/kubernetes-controller/pkg/apis"
-	"github.com/atomix/kubernetes-controller/pkg/controller/v1beta3"
-	"github.com/atomix/kubernetes-controller/pkg/controller/v1beta3/util/leader"
-	"github.com/atomix/kubernetes-controller/pkg/controller/v1beta3/util/ready"
+	ctrlv1beta3 "github.com/atomix/kubernetes-controller/pkg/controller/cloud/v1beta3"
+	"github.com/atomix/kubernetes-controller/pkg/controller/util/leader"
+	"github.com/atomix/kubernetes-controller/pkg/controller/util/ready"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	"os"
 	"runtime"
@@ -88,7 +88,7 @@ func main() {
 	}
 
 	// Setup all Controllers
-	if err := v1beta3.AddController(mgr); err != nil {
+	if err := ctrlv1beta3.RegisterControllers(mgr); err != nil {
 		log.Error(err, "")
 		os.Exit(1)
 	}
