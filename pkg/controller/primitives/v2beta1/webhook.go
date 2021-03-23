@@ -74,7 +74,7 @@ func (i *BrokerInjector) InjectDecoder(decoder *admission.Decoder) error {
 
 // Handle :
 func (i *BrokerInjector) Handle(ctx context.Context, request admission.Request) admission.Response {
-	log.Infof("Received admission request for Pod '%s/%s'", request.Name, request.Namespace)
+	log.Info("Received admission request", "Namespace", request.Namespace, "Name", request.Name)
 
 	// Decode the pod
 	pod := &corev1.Pod{}
@@ -84,20 +84,20 @@ func (i *BrokerInjector) Handle(ctx context.Context, request admission.Request) 
 
 	injectBroker, ok := pod.Annotations[injectAnnotation]
 	if !ok {
-		log.Debugf("Skipping broker injection for Pod '%s/%s': '%s' annotation not found", pod.Name, pod.Namespace, injectAnnotation)
+		log.Info("Skipping broker injection", "Namespace", request.Namespace, "Name", request.Name)
 		return admission.Allowed(fmt.Sprintf("'%s' annotation not found", injectAnnotation))
 	}
 	if inject, err := strconv.ParseBool(injectBroker); err != nil {
-		log.Debugf("Skipping broker injection for Pod '%s/%s': '%s' annotation could not be parsed (%v)", pod.Name, pod.Namespace, injectAnnotation, err)
+		log.Error(err, "Broker injection failed", "Namespace", request.Namespace, "Name", request.Name)
 		return admission.Allowed(fmt.Sprintf("'%s' annotation could not be parsed", injectAnnotation))
 	} else if !inject {
-		log.Debugf("Skipping broker injection for Pod '%s/%s': '%s' is false", pod.Name, pod.Namespace, injectAnnotation)
+		log.Info("Skipping broker injection", "Namespace", request.Namespace, "Name", request.Name)
 		return admission.Allowed(fmt.Sprintf("'%s' annotation is false", injectAnnotation))
 	}
 
 	injectedBroker, ok := pod.Annotations[injectStatusAnnotation]
 	if ok && injectedBroker == injectedStatus {
-		log.Debugf("Skipping broker injection for Pod '%s/%s': '%s' is '%s'", pod.Name, pod.Namespace, injectStatusAnnotation, injectedBroker)
+		log.Info("Skipping broker injection", "Namespace", request.Namespace, "Name", request.Name)
 		return admission.Allowed(fmt.Sprintf("'%s' annotation is '%s'", injectStatusAnnotation, injectedBroker))
 	}
 
@@ -113,7 +113,7 @@ func (i *BrokerInjector) Handle(ctx context.Context, request admission.Request) 
 	// Marshal the pod and return a patch response
 	marshaledPod, err := json.Marshal(pod)
 	if err != nil {
-		log.Errorf("Failed to inject models into Pod '%s/%s': %s", pod.Name, pod.Namespace, err)
+		log.Error(err, "Broker injection failed", "Namespace", request.Namespace, "Name", request.Name)
 		return admission.Errored(http.StatusInternalServerError, err)
 	}
 	return admission.PatchResponseFromRaw(request.Object.Raw, marshaledPod)

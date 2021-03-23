@@ -228,18 +228,15 @@ spec:
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
-  name: leaderelections.primitives.k8s.atomix.io
+  name: elections.primitives.k8s.atomix.io
 spec:
   group: primitives.k8s.atomix.io
   scope: Namespaced
   names:
-    kind: LeaderElection
-    listKind: LeaderElectionList
-    plural: leaderelections
-    singular: leaderelection
-    shortNames:
-    - elections
-    - election
+    kind: Election
+    listKind: ElectionList
+    plural: elections
+    singular: election
   versions:
   - name: v2beta1
     served: true
@@ -589,7 +586,7 @@ spec:
             fieldRef:
               fieldPath: metadata.namespace
         - name: WEBHOOK_NAME
-          value: broker.cloud.atomix.io
+          value: broker-injector.k8s.atomix.io
         - name: WEBHOOK_PATH
           value: /inject-broker
         - name: POD_NAME
@@ -609,10 +606,13 @@ spec:
       containers:
       - name: controller
         image: atomix/kubernetes-controller:latest
-        ports:
-        - containerPort: 60000
-          name: metrics
         imagePullPolicy: IfNotPresent
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsUser: 0
+        ports:
+        - containerPort: 443
+          name: webhook-server
         readinessProbe:
           exec:
             command:
@@ -629,7 +629,7 @@ spec:
             fieldRef:
               fieldPath: metadata.namespace
         - name: WEBHOOK_NAME
-          value: broker.cloud.atomix.io
+          value: broker-injector.k8s.atomix.io
         - name: WEBHOOK_PATH
           value: /inject-broker
         - name: POD_NAME
@@ -657,7 +657,7 @@ spec:
 apiVersion: admissionregistration.k8s.io/v1
 kind: MutatingWebhookConfiguration
 metadata:
-  name: atomix-controller-broker-injector
+  name: atomix-controller
 webhooks:
 - name: broker-injector.k8s.atomix.io
   rules:

@@ -24,8 +24,6 @@ import (
 	"fmt"
 	"github.com/atomix/go-framework/pkg/atomix/logging"
 	"github.com/atomix/kubernetes-controller/pkg/controller/util/k8s"
-	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"math/big"
@@ -45,8 +43,6 @@ func printVersion() {
 func main() {
 	namespace := k8s.GetNamespace()
 	service := k8s.GetName()
-	webhookName := k8s.GetWebhookName()
-	webhookPath := k8s.GetWebhookPath()
 
 	printVersion()
 
@@ -140,48 +136,18 @@ func main() {
 		log.Panic(err)
 	}
 
-	sideEffects := admissionregistrationv1.SideEffectClassNone
-	failurePolicy := admissionregistrationv1.Ignore
-	scopeNamespaced := admissionregistrationv1.NamespacedScope
-	var timeoutSeconds int32 = 30
-	webhook := &admissionregistrationv1.MutatingWebhookConfiguration{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: webhookName,
-		},
-		Webhooks: []admissionregistrationv1.MutatingWebhook{
-			{
-				Name: webhookName,
-				Rules: []admissionregistrationv1.RuleWithOperations{
-					{
-						Rule: admissionregistrationv1.Rule{
-							APIGroups:   []string{""},
-							APIVersions: []string{"v1"},
-							Resources:   []string{"pods"},
-							Scope:       &scopeNamespaced,
-						},
-						Operations: []admissionregistrationv1.OperationType{admissionregistrationv1.Create},
-					},
-				},
-				ClientConfig: admissionregistrationv1.WebhookClientConfig{
-					Service: &admissionregistrationv1.ServiceReference{
-						Name:      service,
-						Namespace: namespace,
-						Path:      &webhookPath,
-					},
-					CABundle: caPEM.Bytes(),
-				},
-				AdmissionReviewVersions: []string{"v1beta1"},
-				SideEffects:             &sideEffects,
-				FailurePolicy:           &failurePolicy,
-				TimeoutSeconds:          &timeoutSeconds,
-			},
-		},
+	webhook, err := client.AdmissionregistrationV1().MutatingWebhookConfigurations().Get(service, metav1.GetOptions{})
+	if err != nil {
+		log.Panic(err)
 	}
 
-	if _, err := client.AdmissionregistrationV1().MutatingWebhookConfigurations().Create(webhook); err != nil {
-		if !errors.IsAlreadyExists(err) {
-			log.Panic(err)
-		}
+	for i, wh := range webhook.Webhooks {
+		wh.ClientConfig.CABundle = caPEM.Bytes()
+		webhook.Webhooks[i] = wh
+	}
+
+	if _, err := client.AdmissionregistrationV1().MutatingWebhookConfigurations().Update(webhook); err != nil {
+		log.Panic(err)
 	}
 }
 

@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"github.com/atomix/kubernetes-controller/pkg/apis"
 	ctrlv1beta3 "github.com/atomix/kubernetes-controller/pkg/controller/cloud/v1beta3"
+	ctrlv2beta1 "github.com/atomix/kubernetes-controller/pkg/controller/primitives/v2beta1"
 	"github.com/atomix/kubernetes-controller/pkg/controller/util/leader"
 	"github.com/atomix/kubernetes-controller/pkg/controller/util/ready"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
@@ -89,6 +90,12 @@ func main() {
 
 	// Setup all Controllers
 	if err := ctrlv1beta3.RegisterControllers(mgr); err != nil {
+		log.Error(err, "")
+		os.Exit(1)
+	}
+
+	// Setup all webhooks
+	if err := ctrlv2beta1.RegisterWebhooks(mgr); err != nil {
 		log.Error(err, "")
 		os.Exit(1)
 	}

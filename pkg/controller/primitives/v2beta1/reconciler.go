@@ -18,7 +18,6 @@ import (
 	"context"
 	"fmt"
 	"github.com/atomix/api/go/atomix/management/broker"
-	"github.com/atomix/go-framework/pkg/atomix/logging"
 	"github.com/atomix/kubernetes-controller/pkg/apis/primitives/v2beta1"
 	"google.golang.org/grpc"
 	corev1 "k8s.io/api/core/v1"
@@ -33,6 +32,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
@@ -41,7 +41,7 @@ import (
 	"time"
 )
 
-var log = logging.GetLogger("controller", "primitives")
+var log = logf.Log.WithName("primitives_controller")
 
 const (
 	verbRead  = "read"
@@ -229,7 +229,7 @@ type Reconciler struct {
 // Reconcile reads that state of the cluster for a Pod object and makes changes based on the state
 // of the Pod, primitives, and RBAC controls
 func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, error) {
-	log.Infof("Reconciling Pod %s", request)
+	log.Info("Reconciling Pod", "Namespace", request.Namespace, "Name", request.Name)
 
 	// Fetch the Pod instance
 	pod := &corev1.Pod{}
@@ -526,28 +526,43 @@ func (r *Reconciler) addPrimitive(pod *corev1.Pod, primitive broker.PrimitiveCon
 }
 
 func (r *Reconciler) listPrimitives(t primitiveType) ([]broker.PrimitiveConfig, error) {
-	primitives, err := r.scheme.New(t.list.GetObjectKind().GroupVersionKind())
+	listKinds, _, err := r.scheme.ObjectKinds(t.list)
+	if err != nil {
+		return nil, err
+	} else if len(listKinds) == 0 {
+		return nil, nil
+	}
+	listKind := listKinds[0]
+
+	primitives, err := r.scheme.New(listKind)
 	if err != nil {
 		return nil, err
 	}
 	if err := r.client.List(context.TODO(), primitives); err != nil {
 		return nil, err
 	}
-	value := reflect.ValueOf(primitives)
-	field := value.FieldByName("Items")
-	slice := field.Elem()
+
+	storageKinds, _, err := r.scheme.ObjectKinds(r.storageType)
+	if err != nil {
+		return nil, err
+	} else if len(storageKinds) == 0 {
+		return nil, nil
+	}
+	storageKind := storageKinds[0]
+
+	value := reflect.ValueOf(primitives).Elem()
+	slice := value.FieldByName("Items")
 	names := make([]broker.PrimitiveConfig, 0, slice.Len())
 	for i := 0; i < slice.Len(); i++ {
-		value := slice.Index(i)
-		primitive := value.Elem()
+		primitive := slice.Index(i)
 		spec := primitive.FieldByName("Spec")
 		storage := spec.FieldByName("Storage")
 		apiVersion := storage.FieldByName("APIVersion").String()
-		if apiVersion != r.storageType.GetObjectKind().GroupVersionKind().GroupVersion().Identifier() {
+		if apiVersion != storageKind.GroupVersion().Identifier() {
 			continue
 		}
 		kind := storage.FieldByName("Kind").String()
-		if kind != r.storageType.GetObjectKind().GroupVersionKind().Kind {
+		if kind != storageKind.Kind {
 			continue
 		}
 		storageNamespace := storage.FieldByName("Namespace").String()
@@ -562,7 +577,7 @@ func (r *Reconciler) listPrimitives(t primitiveType) ([]broker.PrimitiveConfig, 
 			Driver: broker.DriverId{
 				Namespace: storageNamespace,
 				Name:      storageName,
-				Type:      r.storageType.GetObjectKind().GroupVersionKind().Kind,
+				Type:      "SomeCluster",
 			},
 		}
 		names = append(names, config)
@@ -579,7 +594,12 @@ func (r *Reconciler) getPrimitivesForPod(pod *corev1.Pod) ([]broker.PrimitiveCon
 		if err != nil {
 			return nil, err
 		}
-		primitiveTypeNames[t.object.GetObjectKind().GroupVersionKind()] = primitiveNames
+		kinds, _, err := r.scheme.ObjectKinds(t.object)
+		if err != nil {
+			return nil, err
+		} else if len(kinds) > 0 {
+			primitiveTypeNames[kinds[0]] = primitiveNames
+		}
 	}
 
 	roleBindings := &rbacv1.RoleBindingList{}
@@ -673,6 +693,15 @@ func mergePrimitives(primitives map[broker.PrimitiveId]broker.PrimitiveConfig, u
 		if !ok {
 			primitive = update
 		} else {
+			if update.Driver.Type != "" {
+				primitive.Driver.Type = update.Driver.Type
+			}
+			if update.Driver.Namespace != "" {
+				primitive.Driver.Namespace = update.Driver.Namespace
+			}
+			if update.Driver.Name != "" {
+				primitive.Driver.Name = update.Driver.Name
+			}
 			if update.Proxy.Read {
 				primitive.Proxy.Read = true
 			}
