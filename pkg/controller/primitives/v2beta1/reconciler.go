@@ -17,7 +17,7 @@ package v2beta1
 import (
 	"context"
 	"fmt"
-	"github.com/atomix/api/go/atomix/management/coordinator"
+	"github.com/atomix/api/go/atomix/management/broker"
 	"github.com/atomix/go-framework/pkg/atomix/logging"
 	"github.com/atomix/kubernetes-controller/pkg/apis/primitives/v2beta1"
 	"google.golang.org/grpc"
@@ -43,8 +43,18 @@ import (
 
 var log = logging.GetLogger("controller", "primitives")
 
-const VerbRead = "read"
-const VerbWrite = "write"
+const (
+	verbRead  = "read"
+	verbWrite = "write"
+)
+
+const (
+	driverTypeEnv      = "ATOMIX_DRIVER_TYPE"
+	driverNodeEnv      = "ATOMIX_DRIVER_NODE"
+	driverNamespaceEnv = "ATOMIX_DRIVER_NAMESPACE"
+	driverNameEnv      = "ATOMIX_DRIVER_NAME"
+	driverPortEnv      = "ATOMIX_DRIVER_PORT"
+)
 
 type primitiveType struct {
 	object runtime.Object
@@ -58,13 +68,19 @@ func NewBuilder() *Builder {
 
 // Builder is a Kubernetes controller builder
 type Builder struct {
-	storageType runtime.Object
-	driverImage string
-	primitives  []primitiveType
+	storageType   runtime.Object
+	driverImage   string
+	driverEnvFunc func(driverID broker.DriverId) []corev1.EnvVar
+	primitives    []primitiveType
 }
 
 func (b *Builder) WithDriverImage(image string) *Builder {
 	b.driverImage = image
+	return b
+}
+
+func (b *Builder) WithDriverEnv(f func(driverID broker.DriverId) []corev1.EnvVar) *Builder {
+	b.driverEnvFunc = f
 	return b
 }
 
@@ -86,6 +102,8 @@ func (b *Builder) Build(mgr manager.Manager) (controller.Controller, error) {
 		client:         mgr.GetClient(),
 		scheme:         mgr.GetScheme(),
 		config:         mgr.GetConfig(),
+		driverImage:    b.driverImage,
+		driverEnvFunc:  b.driverEnvFunc,
 		storageType:    b.storageType,
 		primitiveTypes: b.primitives,
 	}
@@ -203,6 +221,7 @@ type Reconciler struct {
 	scheme         *runtime.Scheme
 	config         *rest.Config
 	driverImage    string
+	driverEnvFunc  func(driverID broker.DriverId) []corev1.EnvVar
 	storageType    runtime.Object
 	primitiveTypes []primitiveType
 }
@@ -245,19 +264,19 @@ func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, err
 	return reconcile.Result{}, nil
 }
 
-func (r *Reconciler) getDrivers(primitives []coordinator.PrimitiveConfig) []coordinator.DriverId {
-	driversSet := make(map[coordinator.DriverId]bool)
+func (r *Reconciler) getDrivers(primitives []broker.PrimitiveConfig) []broker.DriverId {
+	driversSet := make(map[broker.DriverId]bool)
 	for _, primitive := range primitives {
 		driversSet[primitive.Driver] = true
 	}
-	drivers := make([]coordinator.DriverId, 0, len(driversSet))
+	drivers := make([]broker.DriverId, 0, len(driversSet))
 	for driver := range driversSet {
 		drivers = append(drivers, driver)
 	}
 	return drivers
 }
 
-func (r *Reconciler) addDrivers(pod *corev1.Pod, drivers []coordinator.DriverId) (bool, error) {
+func (r *Reconciler) addDrivers(pod *corev1.Pod, drivers []broker.DriverId) (bool, error) {
 	for _, driver := range drivers {
 		if ok, err := r.addDriverCondition(pod, driver); err != nil {
 			return false, err
@@ -282,7 +301,7 @@ func (r *Reconciler) addDrivers(pod *corev1.Pod, drivers []coordinator.DriverId)
 	return false, nil
 }
 
-func (r *Reconciler) getDriverPort(pod *corev1.Pod, driver coordinator.DriverId) (int, bool, ) {
+func (r *Reconciler) getDriverPort(pod *corev1.Pod, driver broker.DriverId) (int, bool, ) {
 	conditionTypePrefix := fmt.Sprintf("%s.%s.storage.atomix.io", driver.Name, driver.Namespace)
 	nextPort := 55680
 while:
@@ -308,7 +327,7 @@ while:
 	}
 }
 
-func (r *Reconciler) addDriverCondition(pod *corev1.Pod, driver coordinator.DriverId) (bool, error) {
+func (r *Reconciler) addDriverCondition(pod *corev1.Pod, driver broker.DriverId) (bool, error) {
 	port, ok := r.getDriverPort(pod, driver)
 	if ok {
 		return false, nil
@@ -329,7 +348,7 @@ func (r *Reconciler) addDriverCondition(pod *corev1.Pod, driver coordinator.Driv
 	return true, nil
 }
 
-func (r *Reconciler) addDriver(pod *corev1.Pod, driver coordinator.DriverId) (bool, error) {
+func (r *Reconciler) addDriver(pod *corev1.Pod, driver broker.DriverId) (bool, error) {
 	containers := &corev1.EphemeralContainers{}
 	name := types.NamespacedName{
 		Namespace: pod.Namespace,
@@ -344,20 +363,60 @@ func (r *Reconciler) addDriver(pod *corev1.Pod, driver coordinator.DriverId) (bo
 			return false, nil
 		}
 	}
-	containers.EphemeralContainers = append(containers.EphemeralContainers, corev1.EphemeralContainer{
+
+	port, ok := r.getDriverPort(pod, driver)
+	if ok {
+		return false, nil
+	}
+
+	env := []corev1.EnvVar{
+		{
+			Name:  driverTypeEnv,
+			Value: driver.Type,
+		},
+		{
+			Name:  driverNamespaceEnv,
+			Value: driver.Namespace,
+		},
+		{
+			Name:  driverNameEnv,
+			Value: driver.Name,
+		},
+		{
+			Name:  driverPortEnv,
+			Value: fmt.Sprint(port),
+		},
+		{
+			Name: driverNodeEnv,
+			ValueFrom: &corev1.EnvVarSource{
+				FieldRef: &corev1.ObjectFieldSelector{
+					FieldPath: "spec.nodeName",
+				},
+			},
+		},
+	}
+
+	if r.driverEnvFunc != nil {
+		env = append(env, r.driverEnvFunc(driver)...)
+	}
+
+	container := corev1.EphemeralContainer{
 		EphemeralContainerCommon: corev1.EphemeralContainerCommon{
 			Name:            containerName,
 			Image:           r.driverImage,
 			ImagePullPolicy: corev1.PullIfNotPresent,
+			Env:             env,
 		},
-	})
+	}
+
+	containers.EphemeralContainers = append(containers.EphemeralContainers, container)
 	if err := r.client.Update(context.TODO(), containers); err != nil {
 		return false, err
 	}
 	return true, nil
 }
 
-func (r *Reconciler) setDriverCondition(pod *corev1.Pod, driver coordinator.DriverId) (bool, error) {
+func (r *Reconciler) setDriverCondition(pod *corev1.Pod, driver broker.DriverId) (bool, error) {
 	port, ok := r.getDriverPort(pod, driver)
 	if !ok {
 		return false, nil
@@ -368,9 +427,9 @@ func (r *Reconciler) setDriverCondition(pod *corev1.Pod, driver coordinator.Driv
 		return false, err
 	}
 	defer conn.Close()
-	client := coordinator.NewDriverManagementServiceClient(conn)
-	request := &coordinator.AddDriverRequest{
-		Driver: coordinator.DriverConfig{
+	client := broker.NewDriverManagementServiceClient(conn)
+	request := &broker.AddDriverRequest{
+		Driver: broker.DriverConfig{
 			ID:   driver,
 			Host: "127.0.0.1",
 			Port: int32(port),
@@ -396,7 +455,7 @@ func (r *Reconciler) setDriverCondition(pod *corev1.Pod, driver coordinator.Driv
 	return false, nil
 }
 
-func (r *Reconciler) addPrimitives(pod *corev1.Pod, primitives []coordinator.PrimitiveConfig) (bool, error) {
+func (r *Reconciler) addPrimitives(pod *corev1.Pod, primitives []broker.PrimitiveConfig) (bool, error) {
 	for _, primitive := range primitives {
 		if ok, err := r.addPrimitiveCondition(pod, primitive); err != nil {
 			return false, err
@@ -414,7 +473,7 @@ func (r *Reconciler) addPrimitives(pod *corev1.Pod, primitives []coordinator.Pri
 	return false, nil
 }
 
-func (r *Reconciler) addPrimitiveCondition(pod *corev1.Pod, primitive coordinator.PrimitiveConfig) (bool, error) {
+func (r *Reconciler) addPrimitiveCondition(pod *corev1.Pod, primitive broker.PrimitiveConfig) (bool, error) {
 	conditionType := corev1.PodConditionType(fmt.Sprintf("%s.primitive.atomix.io/%s", primitive.ID.Namespace, primitive.ID.Name))
 	for _, gate := range pod.Spec.ReadinessGates {
 		if gate.ConditionType == conditionType {
@@ -436,14 +495,14 @@ func (r *Reconciler) addPrimitiveCondition(pod *corev1.Pod, primitive coordinato
 	return true, nil
 }
 
-func (r *Reconciler) addPrimitive(pod *corev1.Pod, primitive coordinator.PrimitiveConfig) (bool, error) {
+func (r *Reconciler) addPrimitive(pod *corev1.Pod, primitive broker.PrimitiveConfig) (bool, error) {
 	conn, err := grpc.Dial(fmt.Sprintf("%s:5151", pod.Status.PodIP), grpc.WithInsecure())
 	if err != nil {
 		return false, err
 	}
 	defer conn.Close()
-	client := coordinator.NewPrimitiveManagementServiceClient(conn)
-	request := &coordinator.AddPrimitiveRequest{
+	client := broker.NewPrimitiveManagementServiceClient(conn)
+	request := &broker.AddPrimitiveRequest{
 		Primitive: primitive,
 	}
 	_, err = client.AddPrimitive(context.TODO(), request)
@@ -466,7 +525,7 @@ func (r *Reconciler) addPrimitive(pod *corev1.Pod, primitive coordinator.Primiti
 	return false, nil
 }
 
-func (r *Reconciler) listPrimitives(t primitiveType) ([]coordinator.PrimitiveConfig, error) {
+func (r *Reconciler) listPrimitives(t primitiveType) ([]broker.PrimitiveConfig, error) {
 	primitives, err := r.scheme.New(t.list.GetObjectKind().GroupVersionKind())
 	if err != nil {
 		return nil, err
@@ -477,7 +536,7 @@ func (r *Reconciler) listPrimitives(t primitiveType) ([]coordinator.PrimitiveCon
 	value := reflect.ValueOf(primitives)
 	field := value.FieldByName("Items")
 	slice := field.Elem()
-	names := make([]coordinator.PrimitiveConfig, 0, slice.Len())
+	names := make([]broker.PrimitiveConfig, 0, slice.Len())
 	for i := 0; i < slice.Len(); i++ {
 		value := slice.Index(i)
 		primitive := value.Elem()
@@ -495,12 +554,12 @@ func (r *Reconciler) listPrimitives(t primitiveType) ([]coordinator.PrimitiveCon
 		storageName := storage.FieldByName("Name").String()
 		primitiveNamespace := primitive.FieldByName("Namespace").String()
 		primitiveName := primitive.FieldByName("Name").String()
-		config := coordinator.PrimitiveConfig{
-			ID: coordinator.PrimitiveId{
+		config := broker.PrimitiveConfig{
+			ID: broker.PrimitiveId{
 				Namespace: primitiveNamespace,
 				Name:      primitiveName,
 			},
-			Driver: coordinator.DriverId{
+			Driver: broker.DriverId{
 				Namespace: storageNamespace,
 				Name:      storageName,
 				Type:      r.storageType.GetObjectKind().GroupVersionKind().Kind,
@@ -511,10 +570,10 @@ func (r *Reconciler) listPrimitives(t primitiveType) ([]coordinator.PrimitiveCon
 	return names, nil
 }
 
-func (r *Reconciler) getPrimitivesForPod(pod *corev1.Pod) ([]coordinator.PrimitiveConfig, error) {
-	primitivesSet := make(map[coordinator.PrimitiveId]coordinator.PrimitiveConfig)
+func (r *Reconciler) getPrimitivesForPod(pod *corev1.Pod) ([]broker.PrimitiveConfig, error) {
+	primitivesSet := make(map[broker.PrimitiveId]broker.PrimitiveConfig)
 
-	primitiveTypeNames := make(map[schema.GroupVersionKind][]coordinator.PrimitiveConfig)
+	primitiveTypeNames := make(map[schema.GroupVersionKind][]broker.PrimitiveConfig)
 	for _, t := range r.primitiveTypes {
 		primitiveNames, err := r.listPrimitives(t)
 		if err != nil {
@@ -601,14 +660,14 @@ func (r *Reconciler) getPrimitivesForPod(pod *corev1.Pod) ([]coordinator.Primiti
 		}
 	}
 
-	primitives := make([]coordinator.PrimitiveConfig, 0, len(primitivesSet))
+	primitives := make([]broker.PrimitiveConfig, 0, len(primitivesSet))
 	for _, primitive := range primitivesSet {
 		primitives = append(primitives, primitive)
 	}
 	return primitives, nil
 }
 
-func mergePrimitives(primitives map[coordinator.PrimitiveId]coordinator.PrimitiveConfig, updates map[coordinator.PrimitiveId]coordinator.PrimitiveConfig) map[coordinator.PrimitiveId]coordinator.PrimitiveConfig {
+func mergePrimitives(primitives map[broker.PrimitiveId]broker.PrimitiveConfig, updates map[broker.PrimitiveId]broker.PrimitiveConfig) map[broker.PrimitiveId]broker.PrimitiveConfig {
 	for resource, update := range updates {
 		primitive, ok := primitives[resource]
 		if !ok {
@@ -626,24 +685,24 @@ func mergePrimitives(primitives map[coordinator.PrimitiveId]coordinator.Primitiv
 	return primitives
 }
 
-func getPrimitivesForRole(role *rbacv1.Role, primitiveType schema.GroupVersionKind, resources []coordinator.PrimitiveConfig) map[coordinator.PrimitiveId]coordinator.PrimitiveConfig {
-	primitives := make(map[coordinator.PrimitiveId]coordinator.PrimitiveConfig)
+func getPrimitivesForRole(role *rbacv1.Role, primitiveType schema.GroupVersionKind, resources []broker.PrimitiveConfig) map[broker.PrimitiveId]broker.PrimitiveConfig {
+	primitives := make(map[broker.PrimitiveId]broker.PrimitiveConfig)
 	for _, rule := range role.Rules {
 		primitives = mergePrimitives(primitives, getPrimitivesForPolicyRule(rule, primitiveType, resources))
 	}
 	return primitives
 }
 
-func getPrimitivesForClusterRole(clusterRole *rbacv1.ClusterRole, primitiveType schema.GroupVersionKind, resources []coordinator.PrimitiveConfig) map[coordinator.PrimitiveId]coordinator.PrimitiveConfig {
-	primitives := make(map[coordinator.PrimitiveId]coordinator.PrimitiveConfig)
+func getPrimitivesForClusterRole(clusterRole *rbacv1.ClusterRole, primitiveType schema.GroupVersionKind, resources []broker.PrimitiveConfig) map[broker.PrimitiveId]broker.PrimitiveConfig {
+	primitives := make(map[broker.PrimitiveId]broker.PrimitiveConfig)
 	for _, rule := range clusterRole.Rules {
 		primitives = mergePrimitives(primitives, getPrimitivesForPolicyRule(rule, primitiveType, resources))
 	}
 	return primitives
 }
 
-func getPrimitivesForPolicyRule(rule rbacv1.PolicyRule, primitiveType schema.GroupVersionKind, resources []coordinator.PrimitiveConfig) map[coordinator.PrimitiveId]coordinator.PrimitiveConfig {
-	primitives := make(map[coordinator.PrimitiveId]coordinator.PrimitiveConfig)
+func getPrimitivesForPolicyRule(rule rbacv1.PolicyRule, primitiveType schema.GroupVersionKind, resources []broker.PrimitiveConfig) map[broker.PrimitiveId]broker.PrimitiveConfig {
+	primitives := make(map[broker.PrimitiveId]broker.PrimitiveConfig)
 	if !isPrimitiveGroupRule(rule, primitiveType) {
 		return primitives
 	}
@@ -655,8 +714,8 @@ func getPrimitivesForPolicyRule(rule rbacv1.PolicyRule, primitiveType schema.Gro
 		if isPrimitiveRule(rule, resource) {
 			primitive, ok := primitives[resource.ID]
 			if !ok {
-				primitive = coordinator.PrimitiveConfig{
-					ID: coordinator.PrimitiveId{
+				primitive = broker.PrimitiveConfig{
+					ID: broker.PrimitiveId{
 						Type:      primitiveType.Kind,
 						Namespace: resource.ID.Namespace,
 						Name:      resource.ID.Name,
@@ -693,7 +752,7 @@ func isPrimitiveTypeRule(rule rbacv1.PolicyRule, primitiveType schema.GroupVersi
 	return false
 }
 
-func isPrimitiveRule(rule rbacv1.PolicyRule, name coordinator.PrimitiveConfig) bool {
+func isPrimitiveRule(rule rbacv1.PolicyRule, name broker.PrimitiveConfig) bool {
 	if len(rule.ResourceNames) == 0 {
 		return true
 	}
@@ -707,7 +766,7 @@ func isPrimitiveRule(rule rbacv1.PolicyRule, name coordinator.PrimitiveConfig) b
 
 func isPrimitiveReadRule(rule rbacv1.PolicyRule) bool {
 	for _, verb := range rule.Verbs {
-		if verb == rbacv1.VerbAll || verb == VerbRead {
+		if verb == rbacv1.VerbAll || verb == verbRead {
 			return true
 		}
 	}
@@ -716,7 +775,7 @@ func isPrimitiveReadRule(rule rbacv1.PolicyRule) bool {
 
 func isPrimitiveWriteRule(rule rbacv1.PolicyRule) bool {
 	for _, verb := range rule.Verbs {
-		if verb == rbacv1.VerbAll || verb == VerbWrite {
+		if verb == rbacv1.VerbAll || verb == verbWrite {
 			return true
 		}
 	}
