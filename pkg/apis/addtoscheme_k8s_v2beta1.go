@@ -16,11 +16,9 @@ package apis
 
 import (
 	primitivesv2beta1 "github.com/atomix/kubernetes-controller/pkg/apis/primitives/v2beta1"
-	storagev2beta1 "github.com/atomix/kubernetes-controller/pkg/apis/storage/v2beta1"
 )
 
 func init() {
 	// register the types with the Scheme so the components can map objects to GroupVersionKinds and back
 	AddToSchemes = append(AddToSchemes, primitivesv2beta1.SchemeBuilder.AddToScheme)
-	AddToSchemes = append(AddToSchemes, storagev2beta1.SchemeBuilder.AddToScheme)
 }
