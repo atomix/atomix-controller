@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"github.com/atomix/kubernetes-controller/pkg/controller/util/k8s"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"net/http"
 	"os"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -27,14 +28,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 	"strconv"
-)
-
-const (
-	injectAnnotation        = "broker.atomix.io/inject"
-	injectStatusAnnotation  = "broker.atomix.io/inject-status"
-	containerNameAnnotation = "broker.atomix.io/container-name"
-	injectedStatus          = "injected"
-	defaultContainerName    = "atomix-broker"
 )
 
 const (
@@ -53,28 +46,32 @@ func getDefaultBrokerImage() string {
 // RegisterWebhooks registers admission webhooks on the given manager
 func RegisterWebhooks(mgr manager.Manager) error {
 	mgr.GetWebhookServer().Register(k8s.GetWebhookPath(), &webhook.Admission{
-		Handler: &BrokerInjector{
+		Handler: &BrokerWebhook{
 			client: mgr.GetClient(),
 		},
 	})
 	return nil
 }
 
-// BrokerInjector is a mutating webhook for injecting the broker container into pods
-type BrokerInjector struct {
+// BrokerWebhook is a mutating webhook for injecting the broker container into pods
+type BrokerWebhook struct {
 	client  client.Client
 	decoder *admission.Decoder
 }
 
 // InjectDecoder :
-func (i *BrokerInjector) InjectDecoder(decoder *admission.Decoder) error {
+func (i *BrokerWebhook) InjectDecoder(decoder *admission.Decoder) error {
 	i.decoder = decoder
 	return nil
 }
 
 // Handle :
-func (i *BrokerInjector) Handle(ctx context.Context, request admission.Request) admission.Response {
-	log.Info("Received admission request", "Namespace", request.Namespace, "Name", request.Name)
+func (i *BrokerWebhook) Handle(ctx context.Context, request admission.Request) admission.Response {
+	podNamespacedName := types.NamespacedName{
+		Namespace: request.Namespace,
+		Name:      request.Name,
+	}
+	log.Infof("Received admission request for Pod '%s'", podNamespacedName)
 
 	// Decode the pod
 	pod := &corev1.Pod{}
@@ -82,41 +79,40 @@ func (i *BrokerInjector) Handle(ctx context.Context, request admission.Request) 
 		return admission.Errored(http.StatusBadRequest, err)
 	}
 
-	injectBroker, ok := pod.Annotations[injectAnnotation]
+	injectBroker, ok := pod.Annotations[brokerInjectAnnotation]
 	if !ok {
-		log.Info("Skipping broker injection", "Namespace", request.Namespace, "Name", request.Name)
-		return admission.Allowed(fmt.Sprintf("'%s' annotation not found", injectAnnotation))
+		log.Infof("Skipping broker injection for Pod '%s'", podNamespacedName)
+		return admission.Allowed(fmt.Sprintf("'%s' annotation not found", brokerInjectAnnotation))
 	}
 	if inject, err := strconv.ParseBool(injectBroker); err != nil {
-		log.Error(err, "Broker injection failed", "Namespace", request.Namespace, "Name", request.Name)
-		return admission.Allowed(fmt.Sprintf("'%s' annotation could not be parsed", injectAnnotation))
+		log.Errorf("Broker injection failed for Pod '%s'", podNamespacedName, err)
+		return admission.Allowed(fmt.Sprintf("'%s' annotation could not be parsed", brokerInjectAnnotation))
 	} else if !inject {
-		log.Info("Skipping broker injection", "Namespace", request.Namespace, "Name", request.Name)
-		return admission.Allowed(fmt.Sprintf("'%s' annotation is false", injectAnnotation))
+		log.Infof("Skipping broker injection for Pod '%s'", podNamespacedName)
+		return admission.Allowed(fmt.Sprintf("'%s' annotation is false", brokerInjectAnnotation))
 	}
 
-	injectedBroker, ok := pod.Annotations[injectStatusAnnotation]
+	injectedBroker, ok := pod.Annotations[brokerInjectStatusAnnotation]
 	if ok && injectedBroker == injectedStatus {
-		log.Info("Skipping broker injection", "Namespace", request.Namespace, "Name", request.Name)
-		return admission.Allowed(fmt.Sprintf("'%s' annotation is '%s'", injectStatusAnnotation, injectedBroker))
+		log.Infof("Skipping broker injection for Pod '%s'", podNamespacedName)
+		return admission.Allowed(fmt.Sprintf("'%s' annotation is '%s'", brokerInjectStatusAnnotation, injectedBroker))
 	}
 
 	container := corev1.Container{
-		Name:            defaultContainerName,
+		Name:            "atomix-broker",
 		Image:           getDefaultBrokerImage(),
 		ImagePullPolicy: corev1.PullIfNotPresent,
 	}
 	pod.Spec.Containers = append(pod.Spec.Containers, container)
-	pod.Annotations[injectStatusAnnotation] = injectedStatus
-	pod.Annotations[containerNameAnnotation] = defaultContainerName
+	pod.Annotations[brokerInjectStatusAnnotation] = injectedStatus
 
 	// Marshal the pod and return a patch response
 	marshaledPod, err := json.Marshal(pod)
 	if err != nil {
-		log.Error(err, "Broker injection failed", "Namespace", request.Namespace, "Name", request.Name)
+		log.Errorf("Broker injection failed for Pod '%s'", podNamespacedName, err)
 		return admission.Errored(http.StatusInternalServerError, err)
 	}
 	return admission.PatchResponseFromRaw(request.Object.Raw, marshaledPod)
 }
 
-var _ admission.Handler = &BrokerInjector{}
+var _ admission.Handler = &BrokerWebhook{}

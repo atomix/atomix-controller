@@ -12,7 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package v2beta1 contains API Schema definitions for the cloud v2beta1 API group
-// +k8s:deepcopy-gen=package,register
-// +groupName=atomix.io
-package v2beta1
+package apis
+
+import (
+	storagev2beta1 "github.com/atomix/kubernetes-controller/pkg/apis/storage/v2beta1"
+)
+
+func init() {
+	// register the types with the Scheme so the components can map objects to GroupVersionKinds and back
+	AddToSchemes = append(AddToSchemes, storagev2beta1.SchemeBuilder.AddToScheme)
+}

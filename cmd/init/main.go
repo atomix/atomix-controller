@@ -41,6 +41,8 @@ func printVersion() {
 }
 
 func main() {
+	logging.SetLevel(logging.DebugLevel)
+
 	namespace := k8s.GetNamespace()
 	service := k8s.GetName()
 

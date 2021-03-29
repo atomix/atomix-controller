@@ -1,0 +1,6 @@
+apiVersion: storage.atomix.io/v2beta1
+kind: DynamoProtocol
+metadata:
+  name: dynamo
+spec:
+  partitions: 30

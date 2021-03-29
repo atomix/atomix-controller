@@ -16,37 +16,42 @@ package main
 
 import (
 	"fmt"
-	protocolapi "github.com/atomix/api/go/atomix/protocol"
 	"github.com/atomix/go-framework/pkg/atomix/broker"
-	"github.com/atomix/go-framework/pkg/atomix/cluster"
+	"github.com/atomix/go-framework/pkg/atomix/logging"
 	"github.com/spf13/cobra"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	"os"
+	"os/signal"
 )
 
 func main() {
+	logging.SetLevel(logging.DebugLevel)
+
 	cmd := &cobra.Command{
 		Use: "atomix-broker",
 	}
-	cmd.Flags().IntP("port", "p", 5678, "the port to which to bind the broker")
 
 	if err := cmd.Execute(); err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}
 
-	port, err := cmd.Flags().GetInt("port")
-	if err != nil {
+	// Create a new broker node
+	node := broker.NewNode()
+
+	// Start the node
+	if err := node.Start(); err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}
 
-	node := broker.NewNode(cluster.NewCluster(
-		protocolapi.ProtocolConfig{},
-		cluster.WithMemberID("broker"),
-		cluster.WithPort(port)))
+	// Wait for an interrupt signal
+	ch := make(chan os.Signal, 1)
+	signal.Notify(ch, os.Interrupt)
+	<-ch
 
-	if err := node.Start(); err != nil {
+	// Stop the node after an interrupt
+	if err := node.Stop(); err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}

@@ -1,0 +1,29 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: primitives
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  creationTimestamp: null
+  name: primitives
+rules:
+- apiGroups:
+  - atomix.io
+  resources:
+  - '*'
+  verbs:
+  - '*'
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: primitives
+subjects:
+- kind: ServiceAccount
+  name: primitives
+roleRef:
+  kind: Role
+  name: primitives
+  apiGroup: rbac.authorization.k8s.io

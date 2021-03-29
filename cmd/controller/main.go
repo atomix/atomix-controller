@@ -17,6 +17,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/atomix/go-framework/pkg/atomix/logging"
 	"github.com/atomix/kubernetes-controller/pkg/apis"
 	ctrlv1beta3 "github.com/atomix/kubernetes-controller/pkg/controller/cloud/v1beta3"
 	ctrlv2beta1 "github.com/atomix/kubernetes-controller/pkg/controller/primitives/v2beta1"
@@ -40,6 +41,8 @@ func printVersion() {
 }
 
 func main() {
+	logging.SetLevel(logging.DebugLevel)
+
 	var namespace string
 	if len(os.Args) > 1 {
 		namespace = os.Args[1]

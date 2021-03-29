@@ -43,7 +43,7 @@ func (m *podMapper) Map(object handler.MapObject) []reconcile.Request {
 
 	requests := make([]reconcile.Request, 0, len(pods.Items))
 	for _, pod := range pods.Items {
-		if injectPrimitives, err := strconv.ParseBool(pod.Annotations[injectAnnotation]); err == nil && injectPrimitives {
+		if injectPrimitives, err := strconv.ParseBool(pod.Annotations[brokerInjectAnnotation]); err == nil && injectPrimitives {
 			requests = append(requests, reconcile.Request{
 				NamespacedName: types.NamespacedName{
 					Namespace: pod.Namespace,
