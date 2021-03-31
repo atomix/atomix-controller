@@ -76,6 +76,7 @@ func (i *BrokerWebhook) Handle(ctx context.Context, request admission.Request) a
 	// Decode the pod
 	pod := &corev1.Pod{}
 	if err := i.decoder.Decode(request, pod); err != nil {
+		log.Errorf("Could not decode Pod '%s'", podNamespacedName, err)
 		return admission.Errored(http.StatusBadRequest, err)
 	}
 

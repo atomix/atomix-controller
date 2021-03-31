@@ -61,6 +61,7 @@ func (w *DriverWebhook) Handle(ctx context.Context, request admission.Request) a
 	// Decode the pod
 	pod := &corev1.Pod{}
 	if err := w.decoder.Decode(request, pod); err != nil {
+		log.Errorf("Could not decode Pod '%s'", podNamespacedName, err)
 		return admission.Errored(http.StatusBadRequest, err)
 	}
 
@@ -79,11 +80,11 @@ func (w *DriverWebhook) Handle(ctx context.Context, request admission.Request) a
 	}
 
 	// If the broker inject annotation is present, determine whether the storage instances have already been injected
-	injectStatusAnnotation := getStorageStatusAnnotation(w.storageType)
-	injectedStatus, ok := pod.Annotations[injectStatusAnnotation]
+	storageStatusAnnotation := getStorageStatusAnnotation(w.storageType)
+	storageStatus, ok := pod.Annotations[storageStatusAnnotation]
 	injectedDrivers := make(map[string]bool)
 	if ok {
-		for _, injectedDriver := range strings.Split(injectedStatus, ",") {
+		for _, injectedDriver := range strings.Split(storageStatus, ",") {
 			if injectedDriver != "" {
 				injectedDrivers[injectedDriver] = true
 			}
@@ -105,6 +106,7 @@ func (w *DriverWebhook) Handle(ctx context.Context, request admission.Request) a
 				log.Errorf("Could not find annotated StorageProfile '%s' for Pod '%s'", profileNamespacedName, podNamespacedName, err)
 				return admission.Denied(fmt.Sprintf("annotated profile '%s' not found", profileNamespacedName))
 			}
+			log.Error(err)
 			return admission.Errored(http.StatusInternalServerError, err)
 		}
 
@@ -204,7 +206,7 @@ func (w *DriverWebhook) Handle(ctx context.Context, request admission.Request) a
 	for injectedDriver := range injectedDrivers {
 		injectedDriverNames = append(injectedDriverNames, injectedDriver)
 	}
-	pod.Annotations[injectStatusAnnotation] = strings.Join(injectedDriverNames, ",")
+	pod.Annotations[storageStatusAnnotation] = strings.Join(injectedDriverNames, ",")
 
 	// Marshal the pod and return a patch response
 	marshaledPod, err := json.Marshal(pod)

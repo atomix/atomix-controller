@@ -24,7 +24,7 @@ spec:
         app: test
       annotations:
         broker.atomix.io/inject: "true"
-        storage.atomix.io/profile: "default"
+        storage.atomix.io/profile: "raft"
     spec:
       serviceAccountName: primitives
       containers:
