@@ -29,32 +29,32 @@ import (
 
 var log = logging.GetLogger("atomix", "controller", "primitives")
 
-func RegisterControllers(mgr manager.Manager) error {
-	if err := RegisterController(mgr, &primitivesv2beta1.Counter{}); err != nil {
+func AddControllers(mgr manager.Manager) error {
+	if err := addController(mgr, &primitivesv2beta1.Counter{}); err != nil {
 		return err
 	}
-	if err := RegisterController(mgr, &primitivesv2beta1.Election{}); err != nil {
+	if err := addController(mgr, &primitivesv2beta1.Election{}); err != nil {
 		return err
 	}
-	if err := RegisterController(mgr, &primitivesv2beta1.List{}); err != nil {
+	if err := addController(mgr, &primitivesv2beta1.List{}); err != nil {
 		return err
 	}
-	if err := RegisterController(mgr, &primitivesv2beta1.Lock{}); err != nil {
+	if err := addController(mgr, &primitivesv2beta1.Lock{}); err != nil {
 		return err
 	}
-	if err := RegisterController(mgr, &primitivesv2beta1.Map{}); err != nil {
+	if err := addController(mgr, &primitivesv2beta1.Map{}); err != nil {
 		return err
 	}
-	if err := RegisterController(mgr, &primitivesv2beta1.Set{}); err != nil {
+	if err := addController(mgr, &primitivesv2beta1.Set{}); err != nil {
 		return err
 	}
-	if err := RegisterController(mgr, &primitivesv2beta1.Value{}); err != nil {
+	if err := addController(mgr, &primitivesv2beta1.Value{}); err != nil {
 		return err
 	}
 	return nil
 }
 
-func RegisterController(mgr manager.Manager, object runtime.Object) error {
+func addController(mgr manager.Manager, object runtime.Object) error {
 	kinds, _, err := mgr.GetScheme().ObjectKinds(object)
 	if err != nil {
 		return err
@@ -81,7 +81,10 @@ func RegisterController(mgr manager.Manager, object runtime.Object) error {
 	}
 
 	// Watch for changes to secondary resource
-	err = c.Watch(&source.Kind{Type: &v2beta1.Primitive{}}, &handler.EnqueueRequestForOwner{IsController: true})
+	err = c.Watch(&source.Kind{Type: &v2beta1.Primitive{}}, &handler.EnqueueRequestForOwner{
+		OwnerType:    object,
+		IsController: true,
+	})
 	if err != nil {
 		return err
 	}

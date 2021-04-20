@@ -10,7 +10,7 @@ metadata:
   name: primitives
 rules:
 - apiGroups:
-  - atomix.io
+  - primitives.atomix.io
   resources:
   - '*'
   verbs:

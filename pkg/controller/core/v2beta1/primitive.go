@@ -97,6 +97,11 @@ func (r *PrimitiveReconciler) Reconcile(request reconcile.Request) (reconcile.Re
 		return reconcile.Result{}, err
 	}
 
+	injected := pod.Annotations[brokerInjectStatusAnnotation]
+	if injected != injectedStatus {
+		return reconcile.Result{}, nil
+	}
+
 	err = r.prepareStatus(pod)
 	if err != nil {
 		return reconcile.Result{}, err

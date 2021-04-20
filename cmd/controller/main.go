@@ -101,7 +101,7 @@ func main() {
 		log.Error(err, "")
 		os.Exit(1)
 	}
-	if err := primitivesv2beta1.RegisterControllers(mgr); err != nil {
+	if err := primitivesv2beta1.AddControllers(mgr); err != nil {
 		log.Error(err, "")
 		os.Exit(1)
 	}
