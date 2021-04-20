@@ -37,10 +37,10 @@ func main() {
 	}
 
 	// Create a new broker node
-	node := broker.NewNode()
+	broker := broker.NewBroker()
 
 	// Start the node
-	if err := node.Start(); err != nil {
+	if err := broker.Start(); err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}
@@ -51,7 +51,7 @@ func main() {
 	<-ch
 
 	// Stop the node after an interrupt
-	if err := node.Stop(); err != nil {
+	if err := broker.Stop(); err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}

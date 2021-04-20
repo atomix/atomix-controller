@@ -185,18 +185,15 @@ spec:
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
-  name: profiles.storage.atomix.io
+  name: protocols.atomix.io
 spec:
-  group: storage.atomix.io
+  group: atomix.io
   scope: Namespaced
   names:
-    kind: StorageProfile
-    listKind: StorageProfileList
-    plural: profiles
-    singular: profile
-    shortNames:
-    - storageprofile
-    - storageprofiles
+    kind: Protocol
+    listKind: ProtocolList
+    plural: protocols
+    singular: protocol
   versions:
   - name: v2beta1
     served: true
@@ -205,25 +202,86 @@ spec:
       openAPIV3Schema:
         type: object
         required:
-        - stores
+        - driver
+        - config
         properties:
-          stores:
-            type: array
-            items:
-              type: object
-              required:
-              - apiVersion
-              - kind
-              - name
-              properties:
-                apiVersion:
-                  type: string
-                kind:
-                  type: string
-                namespace:
-                  type: string
-                name:
-                  type: string
+          driver:
+            type: object
+            required:
+            - name
+            properties:
+              name:
+                type: string
+          config:
+            type: object
+            required:
+            - replicas
+            - partitions
+            properties:
+              replicas:
+                type: array
+                items:
+                  type: object
+                  required:
+                  - id
+                  - host
+                  - port
+                  properties:
+                    id:
+                      type: string
+                    nodeId:
+                      type: string
+                    host:
+                      type: string
+                    port:
+                      type: integer
+                    extraPorts:
+                      type: object
+                      additionalProperties:
+                        type: integer
+              partitions:
+                type: array
+                items:
+                  type: object
+                  required:
+                  - id
+                  - replicas
+                  properties:
+                    id:
+                      type: integer
+                      minimum: 1
+                    replicas:
+                      type: string
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: primitives.atomix.io
+spec:
+  group: atomix.io
+  scope: Namespaced
+  names:
+    kind: Primitive
+    listKind: PrimitiveList
+    plural: primitives
+    singular: primitive
+  versions:
+  - name: v2beta1
+    served: true
+    storage: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        required:
+        - spec
+        properties:
+          spec:
+            type: object
+            required:
+            - protocol
+            properties:
+              protocol:
+                type: string
 ---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
@@ -698,6 +756,28 @@ spec:
           name: atomix-controller-config
 ---
 apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: atomix-controller
+webhooks:
+- name: validator.drivers.atomix.io
+  rules:
+  - operations: ["CREATE"]
+    apiGroups: [""]
+    apiVersions: ["v1"]
+    resources: ["pods"]
+    scope: Namespaced
+  clientConfig:
+    service:
+      name: atomix-controller
+      namespace: kube-system
+      path: /validate-drivers
+  admissionReviewVersions: ["v1beta1"]
+  sideEffects: None
+  failurePolicy: Ignore
+  timeoutSeconds: 10
+---
+apiVersion: admissionregistration.k8s.io/v1
 kind: MutatingWebhookConfiguration
 metadata:
   name: atomix-controller
@@ -714,6 +794,22 @@ webhooks:
       name: atomix-controller
       namespace: kube-system
       path: /inject-broker
+  admissionReviewVersions: ["v1beta1"]
+  sideEffects: None
+  failurePolicy: Ignore
+  timeoutSeconds: 10
+- name: injector.drivers.atomix.io
+  rules:
+  - operations: ["CREATE"]
+    apiGroups: [""]
+    apiVersions: ["v1"]
+    resources: ["pods"]
+    scope: Namespaced
+  clientConfig:
+    service:
+      name: atomix-controller
+      namespace: kube-system
+      path: /inject-drivers
   admissionReviewVersions: ["v1beta1"]
   sideEffects: None
   failurePolicy: Ignore

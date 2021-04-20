@@ -16,11 +16,11 @@ package v2beta1
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"github.com/atomix/kubernetes-controller/pkg/controller/util/k8s"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/json"
 	"net/http"
 	"os"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -28,6 +28,14 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 	"strconv"
+)
+
+const (
+	brokerInjectPath             = "/inject-broker"
+	brokerInjectAnnotation       = "broker.atomix.io/inject"
+	brokerInjectStatusAnnotation = "broker.atomix.io/status"
+	brokerReadyCondition         = "broker.atomix.io/ready"
+	injectedStatus               = "injected"
 )
 
 const (
@@ -43,30 +51,28 @@ func getDefaultBrokerImage() string {
 	return image
 }
 
-// RegisterWebhooks registers admission webhooks on the given manager
-func RegisterWebhooks(mgr manager.Manager) error {
-	mgr.GetWebhookServer().Register(k8s.GetWebhookPath(), &webhook.Admission{
-		Handler: &BrokerWebhook{
+func addBrokerController(mgr manager.Manager) error {
+	mgr.GetWebhookServer().Register(brokerInjectPath, &webhook.Admission{
+		Handler: &BrokerInjector{
 			client: mgr.GetClient(),
+			scheme: mgr.GetScheme(),
 		},
 	})
 	return nil
 }
 
-// BrokerWebhook is a mutating webhook for injecting the broker container into pods
-type BrokerWebhook struct {
+type BrokerInjector struct {
 	client  client.Client
+	scheme  *runtime.Scheme
 	decoder *admission.Decoder
 }
 
-// InjectDecoder :
-func (i *BrokerWebhook) InjectDecoder(decoder *admission.Decoder) error {
+func (i *BrokerInjector) InjectDecoder(decoder *admission.Decoder) error {
 	i.decoder = decoder
 	return nil
 }
 
-// Handle :
-func (i *BrokerWebhook) Handle(ctx context.Context, request admission.Request) admission.Response {
+func (i *BrokerInjector) Handle(ctx context.Context, request admission.Request) admission.Response {
 	podNamespacedName := types.NamespacedName{
 		Namespace: request.Namespace,
 		Name:      request.Name,
@@ -99,12 +105,14 @@ func (i *BrokerWebhook) Handle(ctx context.Context, request admission.Request) a
 		return admission.Allowed(fmt.Sprintf("'%s' annotation is '%s'", brokerInjectStatusAnnotation, injectedBroker))
 	}
 
-	container := corev1.Container{
+	pod.Spec.Containers = append(pod.Spec.Containers, corev1.Container{
 		Name:            "atomix-broker",
 		Image:           getDefaultBrokerImage(),
 		ImagePullPolicy: corev1.PullIfNotPresent,
-	}
-	pod.Spec.Containers = append(pod.Spec.Containers, container)
+	})
+	pod.Spec.ReadinessGates = append(pod.Spec.ReadinessGates, corev1.PodReadinessGate{
+		ConditionType: brokerReadyCondition,
+	})
 	pod.Annotations[brokerInjectStatusAnnotation] = injectedStatus
 
 	// Marshal the pod and return a patch response
@@ -116,4 +124,4 @@ func (i *BrokerWebhook) Handle(ctx context.Context, request admission.Request) a
 	return admission.PatchResponseFromRaw(request.Object.Raw, marshaledPod)
 }
 
-var _ admission.Handler = &BrokerWebhook{}
+var _ admission.Handler = &BrokerInjector{}

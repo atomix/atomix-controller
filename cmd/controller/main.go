@@ -19,8 +19,9 @@ import (
 	"fmt"
 	"github.com/atomix/go-framework/pkg/atomix/logging"
 	"github.com/atomix/kubernetes-controller/pkg/apis"
-	ctrlv1beta3 "github.com/atomix/kubernetes-controller/pkg/controller/cloud/v1beta3"
-	ctrlv2beta1 "github.com/atomix/kubernetes-controller/pkg/controller/primitives/v2beta1"
+	cloudv1beta3 "github.com/atomix/kubernetes-controller/pkg/controller/cloud/v1beta3"
+	corev2beta1 "github.com/atomix/kubernetes-controller/pkg/controller/core/v2beta1"
+	primitivesv2beta1 "github.com/atomix/kubernetes-controller/pkg/controller/primitives/v2beta1"
 	"github.com/atomix/kubernetes-controller/pkg/controller/util/leader"
 	"github.com/atomix/kubernetes-controller/pkg/controller/util/ready"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
@@ -92,13 +93,15 @@ func main() {
 	}
 
 	// Setup all Controllers
-	if err := ctrlv1beta3.RegisterControllers(mgr); err != nil {
+	if err := cloudv1beta3.RegisterControllers(mgr); err != nil {
 		log.Error(err, "")
 		os.Exit(1)
 	}
-
-	// Setup all webhooks
-	if err := ctrlv2beta1.RegisterWebhooks(mgr); err != nil {
+	if err := corev2beta1.AddControllers(mgr); err != nil {
+		log.Error(err, "")
+		os.Exit(1)
+	}
+	if err := primitivesv2beta1.RegisterControllers(mgr); err != nil {
 		log.Error(err, "")
 		os.Exit(1)
 	}
