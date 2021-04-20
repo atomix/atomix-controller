@@ -202,22 +202,22 @@ spec:
       openAPIV3Schema:
         type: object
         required:
-        - driver
-        - config
+        - spec
         properties:
-          driver:
+          spec:
             type: object
             required:
-            - name
-            properties:
-              name:
-                type: string
-          config:
-            type: object
-            required:
+            - driver
             - replicas
             - partitions
             properties:
+              driver:
+                type: object
+                required:
+                - name
+                properties:
+                  name:
+                    type: string
               replicas:
                 type: array
                 items:

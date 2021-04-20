@@ -17,6 +17,7 @@ package v2beta1
 import (
 	"context"
 	"fmt"
+	brokerapi "github.com/atomix/api/go/atomix/management/broker"
 	driverapi "github.com/atomix/api/go/atomix/management/driver"
 	primitiveapi "github.com/atomix/api/go/atomix/primitive"
 	"github.com/atomix/kubernetes-controller/pkg/apis/core/v2beta1"
@@ -194,19 +195,30 @@ func (r *PrimitiveReconciler) reconcilePrimitive(pod *corev1.Pod, primitive v2be
 		return err
 	}
 
-	address := fmt.Sprintf("%s:%d", pod.Status.PodIP, protocolCond.GetPort())
-	log.Info("Dial %s", address)
-	conn, err := grpc.Dial(address, grpc.WithInsecure())
+	agentPort := protocolCond.GetPort()
+	agentAddress := fmt.Sprintf("%s:%d", pod.Status.PodIP, agentPort)
+	log.Info("Dial %s", agentAddress)
+	agentConn, err := grpc.Dial(agentAddress, grpc.WithInsecure())
 	if err != nil {
-		log.Warn("Dial %s failed", address, err)
+		log.Warn("Dial %s failed", agentAddress, err)
 		return err
 	}
-	defer conn.Close()
-	client := driverapi.NewAgentClient(conn)
+	defer agentConn.Close()
+	agentClient := driverapi.NewAgentClient(agentConn)
+
+	brokerAddress := fmt.Sprintf("%s:%d", pod.Status.PodIP, 5678)
+	log.Info("Dial %s", brokerAddress)
+	brokerConn, err := grpc.Dial(brokerAddress, grpc.WithInsecure())
+	if err != nil {
+		log.Warn("Dial %s failed", brokerAddress, err)
+		return err
+	}
+	defer brokerConn.Close()
+	brokerClient := brokerapi.NewBrokerClient(brokerConn)
 
 	// If the agent status is False, start the agent and update the pod status
 	if primitiveCond.GetReady() == corev1.ConditionFalse {
-		request := &driverapi.CreateProxyRequest{
+		createRequest := &driverapi.CreateProxyRequest{
 			ProxyID: driverapi.ProxyId{
 				PrimitiveId: primitiveapi.PrimitiveId{
 					Namespace: primitive.Namespace,
@@ -218,10 +230,28 @@ func (r *PrimitiveReconciler) reconcilePrimitive(pod *corev1.Pod, primitive v2be
 				Write: write,
 			},
 		}
-		_, err := client.CreateProxy(context.TODO(), request)
+		_, err := agentClient.CreateProxy(context.TODO(), createRequest)
 		if err != nil {
 			return err
 		}
+
+		registerRequest := &brokerapi.RegisterPrimitiveRequest{
+			PrimitiveID: brokerapi.PrimitiveId{
+				PrimitiveId: primitiveapi.PrimitiveId{
+					Namespace: primitive.Namespace,
+					Name:      primitive.Name,
+				},
+			},
+			Address: brokerapi.PrimitiveAddress{
+				Host: "127.0.0.1",
+				Port: int32(agentPort),
+			},
+		}
+		_, err = brokerClient.RegisterPrimitive(context.TODO(), registerRequest)
+		if err != nil {
+			return err
+		}
+
 		pod.Status.Conditions = primitiveCond.SetReady(corev1.ConditionTrue)
 		err = r.client.Status().Update(context.TODO(), pod)
 		if err != nil {
