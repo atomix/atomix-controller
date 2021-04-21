@@ -16,9 +16,11 @@ package v2beta1
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	driverapi "github.com/atomix/api/go/atomix/management/driver"
 	protocolapi "github.com/atomix/api/go/atomix/protocol"
+	"github.com/atomix/go-framework/pkg/atomix/logging"
 	"github.com/atomix/kubernetes-controller/pkg/apis/core/v2beta1"
 	storagev2beta1 "github.com/atomix/kubernetes-controller/pkg/controller/storage/v2beta1"
 	"google.golang.org/grpc"
@@ -26,6 +28,7 @@ import (
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -34,11 +37,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 	"strings"
-)
-
-const (
-	protocolConditionFormat = "%s.protocol.atomix.io/%s"
-	protocolReadyCondition  = "ready"
 )
 
 const (
@@ -101,25 +99,34 @@ func (r *ProtocolReconciler) Reconcile(request reconcile.Request) (reconcile.Res
 		return reconcile.Result{}, nil
 	}
 
-	err = r.prepareStatus(pod)
+	ok, err := r.prepareStatus(pod)
 	if err != nil {
 		return reconcile.Result{}, err
+	} else if ok {
+		return reconcile.Result{}, nil
 	}
-	err = r.reconcileProtocols(pod)
+
+	ok, err = r.reconcileProtocols(pod)
 	if err != nil {
 		return reconcile.Result{}, err
+	} else if ok {
+		return reconcile.Result{}, nil
 	}
-	err = r.updateStatus(pod)
+
+	ok, err = r.updateStatus(pod)
 	if err != nil {
 		return reconcile.Result{}, err
+	} else if ok {
+		return reconcile.Result{}, nil
 	}
 	return reconcile.Result{}, nil
 }
 
-func (r *ProtocolReconciler) prepareStatus(pod *corev1.Pod) error {
+func (r *ProtocolReconciler) prepareStatus(pod *corev1.Pod) (bool, error) {
+	log := newPodLogger(*pod)
 	for _, condition := range pod.Status.Conditions {
 		if condition.Type == brokerReadyCondition {
-			return nil
+			return false, nil
 		}
 	}
 
@@ -128,54 +135,197 @@ func (r *ProtocolReconciler) prepareStatus(pod *corev1.Pod) error {
 		Status:             corev1.ConditionFalse,
 		LastTransitionTime: metav1.Now(),
 	})
-	return r.client.Status().Update(context.TODO(), pod)
+
+	log.Info("Initializing pod readiness condition")
+	err := r.client.Status().Update(context.TODO(), pod)
+	if err != nil {
+		log.Error(err, "Initializing pod readiness condition")
+		return false, err
+	}
+	return true, nil
 }
 
-func (r *ProtocolReconciler) updateStatus(pod *corev1.Pod) error {
+func (r *ProtocolReconciler) updateStatus(pod *corev1.Pod) (bool, error) {
 	for _, condition := range pod.Status.Conditions {
 		if isProtocolReadyCondition(condition.Type) && condition.Status != corev1.ConditionTrue {
-			return nil
+			return false, nil
 		}
 		if isPrimitiveReadyCondition(condition.Type) && condition.Status != corev1.ConditionTrue {
-			return nil
+			return false, nil
 		}
 	}
 
 	for i, condition := range pod.Status.Conditions {
 		if condition.Type == brokerReadyCondition && condition.Status != corev1.ConditionTrue {
+			log.Info("Updating pod readiness condition")
 			condition.Status = corev1.ConditionTrue
 			condition.LastTransitionTime = metav1.Now()
 			pod.Status.Conditions[i] = condition
-			return r.client.Status().Update(context.TODO(), pod)
+			err := r.client.Status().Update(context.TODO(), pod)
+			if err != nil {
+				log.Error(err, "Updating pod readiness condition")
+				return false, err
+			}
+			return true, nil
 		}
 	}
-	return nil
+	return true, nil
 }
 
-func (r *ProtocolReconciler) reconcileProtocols(pod *corev1.Pod) error {
+func (r *ProtocolReconciler) reconcileProtocols(pod *corev1.Pod) (bool, error) {
 	protocols := &v2beta1.ProtocolList{}
 	err := r.client.List(context.TODO(), protocols, &client.ListOptions{Namespace: pod.Namespace})
 	if err != nil {
-		return err
+		log.Errorf("Listing Protocol resources failed: %s", err)
+		return false, err
 	}
 	for _, protocol := range protocols.Items {
-		err := r.reconcileProtocol(pod, protocol)
-		if err != nil {
-			return err
+		if ok, err := r.reconcileProtocol(pod, protocol, newProtocolLogger(*pod, protocol)); err != nil {
+			return false, err
+		} else if ok {
+			return true, nil
 		}
 	}
-	return nil
+	return false, nil
 }
 
-func (r *ProtocolReconciler) reconcileProtocol(pod *corev1.Pod, protocol v2beta1.Protocol) error {
+func (r *ProtocolReconciler) reconcileProtocol(pod *corev1.Pod, protocol v2beta1.Protocol, log logging.Logger) (bool, error) {
+	if ok, err := r.prepareAgent(pod, protocol, log); err != nil {
+		return false, err
+	} else if ok {
+		return true, nil
+	}
+	if ok, err := r.updateAgent(pod, protocol, log); err != nil {
+		return false, err
+	} else if ok {
+		return true, nil
+	}
+	return false, nil
+}
+
+func (r *ProtocolReconciler) prepareAgent(pod *corev1.Pod, protocol v2beta1.Protocol, log logging.Logger) (bool, error) {
 	conditions := NewProtocolConditions(protocol.Name, pod.Status.Conditions)
 
 	// If the agent status is Unknown, add the status to the pod
-	if conditions.GetReady() == corev1.ConditionUnknown {
+	switch conditions.GetReady() {
+	case corev1.ConditionUnknown:
+		log.Info("Initializing agent ready condition")
 		pod.Status.Conditions = conditions.SetReady(corev1.ConditionFalse)
-		return r.client.Status().Update(context.TODO(), pod)
+		err := r.client.Status().Update(context.TODO(), pod)
+		if err != nil {
+			log.Error(err, "Initializing agent ready condition")
+			return false, err
+		}
+		return true, nil
+	case corev1.ConditionFalse:
+		log.Info("Connecting to protocol driver")
+		conn, err := r.connectDriver(pod, protocol)
+		if err != nil {
+			log.Error(err, "Connecting to protocol driver")
+			return false, err
+		}
+		defer conn.Close()
+		client := driverapi.NewDriverClient(conn)
+
+		log.Info("Starting protocol agent")
+		request := &driverapi.StartAgentRequest{
+			AgentID: driverapi.AgentId{
+				Namespace: protocol.Namespace,
+				Name:      protocol.Name,
+			},
+			Address: driverapi.AgentAddress{
+				Port: int32(conditions.GetPort()),
+			},
+			Config: driverapi.AgentConfig{
+				Protocol: r.getProtocolConfig(protocol),
+			},
+		}
+		_, err = client.StartAgent(context.TODO(), request)
+		if err != nil {
+			log.Error(err, "Starting protocol agent")
+			return false, err
+		}
+
+		log.Info("Updating agent ready condition")
+		pod.Status.Conditions = conditions.SetReady(corev1.ConditionTrue)
+		err = r.client.Status().Update(context.TODO(), pod)
+		if err != nil {
+			log.Error(err, "Updating agent ready condition")
+			return false, err
+		}
+		return true, nil
+	default:
+		return false, nil
+	}
+}
+
+func (r *ProtocolReconciler) updateAgent(pod *corev1.Pod, protocol v2beta1.Protocol, log logging.Logger) (bool, error) {
+	conditions := NewProtocolConditions(protocol.Name, pod.Status.Conditions)
+
+	// If the generation status is Unknown, add the status to the pod
+	switch conditions.GetGeneration(protocol.Generation) {
+	case corev1.ConditionUnknown:
+		log.Info("Initializing configuration change condition")
+		pod.Status.Conditions = conditions.SetReady(corev1.ConditionFalse)
+		err := r.client.Status().Update(context.TODO(), pod)
+		if err != nil {
+			log.Error(err, "Initializing configuration change condition")
+			return false, err
+		}
+		return true, nil
+	case corev1.ConditionFalse:
+		log.Info("Connecting to protocol driver")
+		conn, err := r.connectDriver(pod, protocol)
+		if err != nil {
+			log.Error(err, "Connecting to protocol driver")
+			return false, err
+		}
+		defer conn.Close()
+		client := driverapi.NewDriverClient(conn)
+
+		log.Info("Reconfiguring protocol agent")
+		request := &driverapi.ConfigureAgentRequest{
+			AgentID: driverapi.AgentId{
+				Namespace: protocol.Namespace,
+				Name:      protocol.Name,
+			},
+			Config: driverapi.AgentConfig{
+				Protocol: r.getProtocolConfig(protocol),
+			},
+		}
+		_, err = client.ConfigureAgent(context.TODO(), request)
+		if err != nil {
+			log.Error(err, "Reconfiguring protocol agent")
+			return false, err
+		}
+
+		log.Info("Updating configuration change condition")
+		pod.Status.Conditions = conditions.SetGeneration(protocol.Generation, corev1.ConditionTrue)
+		err = r.client.Status().Update(context.TODO(), pod)
+		if err != nil {
+			log.Error(err, "Updating configuration change condition")
+			return false, err
+		}
+		return true, nil
+	default:
+		return false, nil
+	}
+}
+
+func (r *ProtocolReconciler) connectDriver(pod *corev1.Pod, protocol v2beta1.Protocol) (*grpc.ClientConn, error) {
+	annotations := storagev2beta1.NewAnnotations(protocol.Spec.Driver.Name, pod.Annotations)
+	port, err := annotations.GetDriverPort()
+	if err != nil {
+		return nil, err
+	} else if port == nil {
+		return nil, errors.New("no driver port found")
 	}
 
+	address := fmt.Sprintf("%s:%d", pod.Status.PodIP, *port)
+	return grpc.Dial(address, grpc.WithInsecure())
+}
+
+func (r *ProtocolReconciler) getProtocolConfig(protocol v2beta1.Protocol) protocolapi.ProtocolConfig {
 	replicas := make([]protocolapi.ProtocolReplica, len(protocol.Spec.Replicas))
 	for i, replica := range protocol.Spec.Replicas {
 		var host string
@@ -203,66 +353,10 @@ func (r *ProtocolReconciler) reconcileProtocol(pod *corev1.Pod, protocol v2beta1
 		}
 	}
 
-	config := protocolapi.ProtocolConfig{
+	return protocolapi.ProtocolConfig{
 		Replicas:   replicas,
 		Partitions: partitions,
 	}
-
-	annotations := storagev2beta1.NewAnnotations(protocol.Spec.Driver.Name, pod.Annotations)
-	port, err := annotations.GetDriverPort()
-	if err != nil {
-		return err
-	}
-
-	address := fmt.Sprintf("%s:%d", pod.Status.PodIP, port)
-	log.Info("Dial %s", address)
-	conn, err := grpc.Dial(address, grpc.WithInsecure())
-	if err != nil {
-		log.Warn("Dial %s failed", address, err)
-		return err
-	}
-	defer conn.Close()
-	client := driverapi.NewDriverClient(conn)
-
-	// If the agent status is False, start the agent and update the pod status
-	if conditions.GetReady() == corev1.ConditionFalse {
-		request := &driverapi.StartAgentRequest{
-			AgentID: driverapi.AgentId{
-				Namespace: protocol.Namespace,
-				Name:      protocol.Name,
-			},
-			Address: driverapi.AgentAddress{
-				Port: int32(conditions.GetPort()),
-			},
-			Config: driverapi.AgentConfig{
-				Protocol: config,
-			},
-		}
-		_, err := client.StartAgent(context.TODO(), request)
-		if err != nil {
-			return err
-		}
-		pod.Status.Conditions = conditions.SetReady(corev1.ConditionTrue)
-		err = r.client.Status().Update(context.TODO(), pod)
-		if err != nil {
-			return err
-		}
-	} else {
-		request := &driverapi.ConfigureAgentRequest{
-			AgentID: driverapi.AgentId{
-				Namespace: protocol.Namespace,
-				Name:      protocol.Name,
-			},
-			Config: driverapi.AgentConfig{
-				Protocol: config,
-			},
-		}
-		_, err := client.ConfigureAgent(context.TODO(), request)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 var _ reconcile.Reconciler = &ProtocolReconciler{}
@@ -285,13 +379,17 @@ type ProtocolConditions struct {
 	Conditions []corev1.PodCondition
 }
 
-func (d ProtocolConditions) getConditionType(name string) corev1.PodConditionType {
-	return corev1.PodConditionType(fmt.Sprintf(protocolConditionFormat, d.Protocol, name))
+func (d ProtocolConditions) getReadyType() corev1.PodConditionType {
+	return corev1.PodConditionType(fmt.Sprintf("protocols.atomix.io/%s", d.Protocol))
 }
 
-func (d ProtocolConditions) getConditionStatus(name string) corev1.ConditionStatus {
+func (d ProtocolConditions) getGenerationType(generation int64) corev1.PodConditionType {
+	return corev1.PodConditionType(fmt.Sprintf("%s.protocols.atomix.io/%d", d.Protocol, generation))
+}
+
+func (d ProtocolConditions) getConditionStatus(conditionType corev1.PodConditionType) corev1.ConditionStatus {
 	for _, condition := range d.Conditions {
-		if condition.Type == d.getConditionType(name) {
+		if condition.Type == conditionType {
 			return condition.Status
 		}
 	}
@@ -312,12 +410,24 @@ func (d ProtocolConditions) setCondition(condition corev1.PodCondition) []corev1
 }
 
 func (d ProtocolConditions) GetReady() corev1.ConditionStatus {
-	return d.getConditionStatus(protocolReadyCondition)
+	return d.getConditionStatus(d.getReadyType())
 }
 
 func (d ProtocolConditions) SetReady(status corev1.ConditionStatus) []corev1.PodCondition {
 	return d.setCondition(corev1.PodCondition{
-		Type:               d.getConditionType(protocolReadyCondition),
+		Type:               d.getReadyType(),
+		Status:             status,
+		LastTransitionTime: metav1.Now(),
+	})
+}
+
+func (d ProtocolConditions) GetGeneration(generation int64) corev1.ConditionStatus {
+	return d.getConditionStatus(d.getGenerationType(generation))
+}
+
+func (d ProtocolConditions) SetGeneration(generation int64, status corev1.ConditionStatus) []corev1.PodCondition {
+	return d.setCondition(corev1.PodCondition{
+		Type:               d.getGenerationType(generation),
 		Status:             status,
 		LastTransitionTime: metav1.Now(),
 	})
@@ -325,9 +435,18 @@ func (d ProtocolConditions) SetReady(status corev1.ConditionStatus) []corev1.Pod
 
 func (d ProtocolConditions) GetPort() int {
 	for i, c := range d.Conditions {
-		if c.Type == d.getConditionType(protocolReadyCondition) {
+		if c.Type == d.getReadyType() {
 			return baseProtocolPort + i
 		}
 	}
 	return baseProtocolPort + len(d.Conditions)
+}
+
+func newProtocolLogger(pod corev1.Pod, protocol v2beta1.Protocol) logging.Logger {
+	fields := []logging.Field{
+		logging.String("pod", types.NamespacedName{pod.Namespace, pod.Name}.String()),
+		logging.String("protocol", types.NamespacedName{protocol.Namespace, protocol.Name}.String()),
+		logging.String("driver", protocol.Spec.Driver.Name),
+	}
+	return log.WithFields(fields...)
 }

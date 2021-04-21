@@ -1,12 +1,3 @@
-apiVersion: storage.atomix.io/v2beta1
-kind: StorageProfile
-metadata:
-  name: raft
-stores:
-- apiVersion: storage.atomix.io/v2beta1
-  kind: RaftProtocol
-  name: raft
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -24,7 +15,7 @@ spec:
         app: test
       annotations:
         broker.atomix.io/inject: "true"
-        storage.atomix.io/profile: "raft"
+        raft.storage.atomix.io/inject: "true"
     spec:
       serviceAccountName: primitives
       containers:

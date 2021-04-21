@@ -20,8 +20,11 @@ import (
 	brokerapi "github.com/atomix/api/go/atomix/management/broker"
 	driverapi "github.com/atomix/api/go/atomix/management/driver"
 	primitiveapi "github.com/atomix/api/go/atomix/primitive"
+	"github.com/atomix/go-framework/pkg/atomix/logging"
 	"github.com/atomix/kubernetes-controller/pkg/apis/core/v2beta1"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -37,11 +40,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 	"strings"
-)
-
-const (
-	primitiveConditionFormat = "%s.primitive.atomix.io/%s"
-	primitiveReadyCondition  = "ready"
 )
 
 const (
@@ -102,25 +100,34 @@ func (r *PrimitiveReconciler) Reconcile(request reconcile.Request) (reconcile.Re
 		return reconcile.Result{}, nil
 	}
 
-	err = r.prepareStatus(pod)
+	ok, err := r.prepareStatus(pod)
 	if err != nil {
 		return reconcile.Result{}, err
+	} else if ok {
+		return reconcile.Result{}, nil
 	}
-	err = r.reconcilePrimitives(pod)
+
+	ok, err = r.reconcilePrimitives(pod)
 	if err != nil {
 		return reconcile.Result{}, err
+	} else if ok {
+		return reconcile.Result{}, nil
 	}
-	err = r.updateStatus(pod)
+
+	ok, err = r.updateStatus(pod)
 	if err != nil {
 		return reconcile.Result{}, err
+	} else if ok {
+		return reconcile.Result{}, nil
 	}
 	return reconcile.Result{}, nil
 }
 
-func (r *PrimitiveReconciler) prepareStatus(pod *corev1.Pod) error {
+func (r *PrimitiveReconciler) prepareStatus(pod *corev1.Pod) (bool, error) {
+	log := newPodLogger(*pod)
 	for _, condition := range pod.Status.Conditions {
 		if condition.Type == brokerReadyCondition {
-			return nil
+			return false, nil
 		}
 	}
 
@@ -129,143 +136,335 @@ func (r *PrimitiveReconciler) prepareStatus(pod *corev1.Pod) error {
 		Status:             corev1.ConditionFalse,
 		LastTransitionTime: metav1.Now(),
 	})
-	return r.client.Status().Update(context.TODO(), pod)
+
+	log.Info("Initializing pod readiness condition")
+	err := r.client.Status().Update(context.TODO(), pod)
+	if err != nil {
+		log.Error(err, "Initializing pod readiness condition")
+		return false, err
+	}
+	return true, nil
 }
 
-func (r *PrimitiveReconciler) updateStatus(pod *corev1.Pod) error {
+func (r *PrimitiveReconciler) updateStatus(pod *corev1.Pod) (bool, error) {
 	for _, condition := range pod.Status.Conditions {
 		if isProtocolReadyCondition(condition.Type) && condition.Status != corev1.ConditionTrue {
-			return nil
+			return false, nil
 		}
 		if isPrimitiveReadyCondition(condition.Type) && condition.Status != corev1.ConditionTrue {
-			return nil
+			return false, nil
 		}
 	}
 
 	for i, condition := range pod.Status.Conditions {
 		if condition.Type == brokerReadyCondition && condition.Status != corev1.ConditionTrue {
+			log.Info("Updating pod readiness condition")
 			condition.Status = corev1.ConditionTrue
 			condition.LastTransitionTime = metav1.Now()
 			pod.Status.Conditions[i] = condition
-			return r.client.Status().Update(context.TODO(), pod)
+			err := r.client.Status().Update(context.TODO(), pod)
+			if err != nil {
+				log.Error(err, "Updating pod readiness condition")
+				return false, err
+			}
+			return true, nil
 		}
 	}
-	return nil
+	return true, nil
 }
 
-func (r *PrimitiveReconciler) reconcilePrimitives(pod *corev1.Pod) error {
+func (r *PrimitiveReconciler) reconcilePrimitives(pod *corev1.Pod) (bool, error) {
 	primitives := &v2beta1.PrimitiveList{}
 	err := r.client.List(context.TODO(), primitives, &client.ListOptions{Namespace: pod.Namespace})
 	if err != nil {
-		return err
+		return false, err
 	}
 	for _, primitive := range primitives.Items {
-		err := r.reconcilePrimitive(pod, primitive)
-		if err != nil {
-			return err
+		if ok, err := r.reconcilePrimitive(pod, primitive); err != nil {
+			return false, err
+		} else if ok {
+			return true, nil
 		}
 	}
-	return nil
+	return false, nil
 }
 
-func (r *PrimitiveReconciler) reconcilePrimitive(pod *corev1.Pod, primitive v2beta1.Primitive) error {
-	protocol := &v2beta1.Protocol{}
-	protocolName := types.NamespacedName{
-		Namespace: primitive.Namespace,
-		Name:      primitive.Spec.Protocol,
-	}
-	err := r.client.Get(context.TODO(), protocolName, protocol)
-	if err != nil {
-		if k8serrors.IsNotFound(err) {
-			return nil
-		}
-		return err
-	}
-	protocolCond := NewProtocolConditions(protocol.Name, pod.Status.Conditions)
-	if protocolCond.GetReady() != corev1.ConditionTrue {
-		return nil
+func (r *PrimitiveReconciler) reconcilePrimitive(pod *corev1.Pod, primitive v2beta1.Primitive) (bool, error) {
+	log := newPrimitiveLogger(*pod, primitive)
+	conditions := NewProtocolConditions(primitive.Spec.Protocol, pod.Status.Conditions)
+	if conditions.GetReady() != corev1.ConditionTrue {
+		log.Warn("Protocol is not ready")
+		return false, nil
 	}
 
-	primitiveCond := NewPrimitiveConditions(primitive.Name, pod.Status.Conditions)
-
-	// If the primitive status is Unknown, add the status to the pod
-	if primitiveCond.GetReady() == corev1.ConditionUnknown {
-		pod.Status.Conditions = primitiveCond.SetReady(corev1.ConditionFalse)
-		return r.client.Status().Update(context.TODO(), pod)
-	}
-
-	// Determine the primitive permissions from RBAC
-	read, write, err := r.getPermissions(pod, primitive)
-	if err != nil {
-		return err
-	}
-
-	agentPort := protocolCond.GetPort()
-	agentAddress := fmt.Sprintf("%s:%d", pod.Status.PodIP, agentPort)
-	log.Info("Dial %s", agentAddress)
-	agentConn, err := grpc.Dial(agentAddress, grpc.WithInsecure())
-	if err != nil {
-		log.Warn("Dial %s failed", agentAddress, err)
-		return err
-	}
-	defer agentConn.Close()
-	agentClient := driverapi.NewAgentClient(agentConn)
-
-	brokerAddress := fmt.Sprintf("%s:%d", pod.Status.PodIP, 5678)
-	log.Info("Dial %s", brokerAddress)
-	brokerConn, err := grpc.Dial(brokerAddress, grpc.WithInsecure())
-	if err != nil {
-		log.Warn("Dial %s failed", brokerAddress, err)
-		return err
-	}
-	defer brokerConn.Close()
-	brokerClient := brokerapi.NewBrokerClient(brokerConn)
-
-	// If the agent status is False, start the agent and update the pod status
-	if primitiveCond.GetReady() == corev1.ConditionFalse {
-		createRequest := &driverapi.CreateProxyRequest{
-			ProxyID: driverapi.ProxyId{
-				PrimitiveId: primitiveapi.PrimitiveId{
-					Namespace: primitive.Namespace,
-					Name:      primitive.Name,
-				},
-			},
-			Options: driverapi.ProxyOptions{
-				Read:  read,
-				Write: write,
-			},
-		}
-		_, err := agentClient.CreateProxy(context.TODO(), createRequest)
-		if err != nil {
-			return err
-		}
-
-		registerRequest := &brokerapi.RegisterPrimitiveRequest{
-			PrimitiveID: brokerapi.PrimitiveId{
-				PrimitiveId: primitiveapi.PrimitiveId{
-					Namespace: primitive.Namespace,
-					Name:      primitive.Name,
-				},
-			},
-			Address: brokerapi.PrimitiveAddress{
-				Host: "127.0.0.1",
-				Port: int32(agentPort),
-			},
-		}
-		_, err = brokerClient.RegisterPrimitive(context.TODO(), registerRequest)
-		if err != nil {
-			return err
-		}
-
-		pod.Status.Conditions = primitiveCond.SetReady(corev1.ConditionTrue)
-		err = r.client.Status().Update(context.TODO(), pod)
-		if err != nil {
-			return err
+	if primitive.DeletionTimestamp == nil {
+		log.Info("Updating primitive proxy")
+		if ok, err := r.updatePrimitive(pod, primitive, log); err != nil {
+			return false, err
+		} else if ok {
+			return true, nil
 		}
 	} else {
-		// TODO: Handle primitive deletes
+		log.Info("Deleting primitive proxy")
+		if ok, err := r.deletePrimitive(pod, primitive, log); err != nil {
+			return false, err
+		} else if ok {
+			return true, nil
+		}
 	}
-	return nil
+	return false, nil
+}
+
+func (r *PrimitiveReconciler) updatePrimitive(pod *corev1.Pod, primitive v2beta1.Primitive, log logging.Logger) (bool, error) {
+	// Update the proxy based on the status of primitive conditions
+	conditions := NewPrimitiveConditions(primitive.Name, pod.Status.Conditions)
+	switch conditions.GetReady() {
+	case corev1.ConditionUnknown:
+		// If the primitive ready condition is Unknown, ensure the proxy is deleted and set the
+		// ready condition to False so it can be recreated
+		if _, err := r.deleteProxy(pod, primitive, log); err != nil {
+			return false, err
+		}
+		log.Info("Updating primitive conditions")
+		pod.Status.Conditions = conditions.SetReady(corev1.ConditionFalse)
+		err := r.client.Status().Update(context.TODO(), pod)
+		if err != nil {
+			log.Error(err, "Updating primitive conditions")
+			return false, err
+		}
+		return true, nil
+	case corev1.ConditionFalse:
+		// If the primitive ready condition is False, ensure the proxy is created and set the
+		// ready condition to True
+		if _, err := r.createProxy(pod, primitive, log); err != nil {
+			return false, err
+		}
+		if _, err := r.registerPrimitive(pod, primitive, log); err != nil {
+			return false, err
+		}
+		log.Info("Updating primitive conditions")
+		pod.Status.Conditions = conditions.SetReady(corev1.ConditionTrue)
+		err := r.client.Status().Update(context.TODO(), pod)
+		if err != nil {
+			log.Error(err, "Updating primitive conditions")
+			return false, err
+		}
+		return true, nil
+	case corev1.ConditionTrue:
+		// If the primitive ready condition is True, check whether the permissions have been changed and the proxy
+		// needs to be updated
+		if ok, err := r.updatePermissions(pod, primitive, log); err != nil {
+			return false, err
+		} else if ok {
+			log.Info("Primitive permissions have changed")
+			log.Info("Updating primitive conditions")
+			pod.Status.Conditions = conditions.SetReady(corev1.ConditionUnknown)
+			err := r.client.Status().Update(context.TODO(), pod)
+			if err != nil {
+				log.Error(err, "Updating primitive conditions")
+				return false, err
+			}
+			return true, nil
+		}
+		return false, nil
+	}
+	return false, nil
+}
+
+func (r *PrimitiveReconciler) updatePermissions(pod *corev1.Pod, primitive v2beta1.Primitive, log logging.Logger) (bool, error) {
+	conditions := NewPrimitiveConditions(primitive.Name, pod.Status.Conditions)
+	read, write, err := r.getPermissions(pod, primitive)
+	if err != nil {
+		return false, err
+	}
+
+	updated := false
+	if read && conditions.GetReadAccess() != corev1.ConditionTrue {
+		log.Info("Read permission changed")
+		pod.Status.Conditions = conditions.SetReadAccess(corev1.ConditionTrue)
+		updated = true
+	} else if !read && conditions.GetReadAccess() != corev1.ConditionFalse {
+		log.Info("Read permission changed")
+		pod.Status.Conditions = conditions.SetReadAccess(corev1.ConditionFalse)
+		updated = true
+	}
+
+	if write && conditions.GetWriteAccess() != corev1.ConditionTrue {
+		log.Info("Write permission changed")
+		pod.Status.Conditions = conditions.SetWriteAccess(corev1.ConditionTrue)
+		updated = true
+	} else if !write && conditions.GetWriteAccess() != corev1.ConditionFalse {
+		log.Info("Write permission changed")
+		pod.Status.Conditions = conditions.SetWriteAccess(corev1.ConditionFalse)
+		updated = true
+	}
+	return updated, nil
+}
+
+func (r *PrimitiveReconciler) createProxy(pod *corev1.Pod, primitive v2beta1.Primitive, log logging.Logger) (bool, error) {
+	conditions := NewPrimitiveConditions(primitive.Name, pod.Status.Conditions)
+
+	log.Info("Connecting to protocol agent")
+	conn, err := r.connectAgent(pod, primitive)
+	if err != nil {
+		log.Error(err, "Connecting to protocol agent")
+		return false, err
+	}
+	defer conn.Close()
+	client := driverapi.NewAgentClient(conn)
+
+	log.Info("Creating primitive proxy")
+	request := &driverapi.CreateProxyRequest{
+		ProxyID: driverapi.ProxyId{
+			PrimitiveId: primitiveapi.PrimitiveId{
+				Namespace: primitive.Namespace,
+				Name:      primitive.Name,
+			},
+		},
+		Options: driverapi.ProxyOptions{
+			Read:  conditions.GetReadAccess() == corev1.ConditionTrue,
+			Write: conditions.GetWriteAccess() == corev1.ConditionTrue,
+		},
+	}
+	_, err = client.CreateProxy(context.TODO(), request)
+	if err != nil {
+		if status.Code(err) == codes.AlreadyExists {
+			return false, nil
+		}
+		log.Error(err, "Creating primitive proxy")
+		return false, err
+	}
+	return true, nil
+}
+
+func (r *PrimitiveReconciler) registerPrimitive(pod *corev1.Pod, primitive v2beta1.Primitive, log logging.Logger) (bool, error) {
+	log.Info("Connecting to broker")
+	conn, err := r.connectBroker(pod)
+	if err != nil {
+		log.Error(err, "Connecting to broker")
+		return false, err
+	}
+	defer conn.Close()
+	client := brokerapi.NewBrokerClient(conn)
+
+	log.Info("Registering primitive with broker")
+	conditions := NewProtocolConditions(primitive.Spec.Protocol, pod.Status.Conditions)
+	request := &brokerapi.RegisterPrimitiveRequest{
+		PrimitiveID: brokerapi.PrimitiveId{
+			PrimitiveId: primitiveapi.PrimitiveId{
+				Namespace: primitive.Namespace,
+				Name:      primitive.Name,
+			},
+		},
+		Address: brokerapi.PrimitiveAddress{
+			Host: "127.0.0.1",
+			Port: int32(conditions.GetPort()),
+		},
+	}
+	_, err = client.RegisterPrimitive(context.TODO(), request)
+	if err != nil {
+		if status.Code(err) == codes.NotFound {
+			return false, nil
+		}
+		log.Error(err, "Registering primitive with broker")
+		return false, err
+	}
+	return true, nil
+}
+
+func (r *PrimitiveReconciler) deletePrimitive(pod *corev1.Pod, primitive v2beta1.Primitive, log logging.Logger) (bool, error) {
+	conditions := NewPrimitiveConditions(primitive.Name, pod.Status.Conditions)
+	if conditions.GetReady() == corev1.ConditionUnknown {
+		return false, nil
+	}
+
+	if _, err := r.unregisterPrimitive(pod, primitive, log); err != nil {
+		return false, err
+	}
+	if _, err := r.deleteProxy(pod, primitive, log); err != nil {
+		return false, err
+	}
+
+	log.Info("Updating primitive ready condition")
+	pod.Status.Conditions = conditions.SetReady(corev1.ConditionUnknown)
+	err := r.client.Status().Update(context.TODO(), pod)
+	if err != nil {
+		log.Error(err, "Updating primitive ready condition")
+		return false, err
+	}
+	return true, nil
+}
+
+func (r *PrimitiveReconciler) deleteProxy(pod *corev1.Pod, primitive v2beta1.Primitive, log logging.Logger) (bool, error) {
+	log.Info("Connecting to protocol agent")
+	conn, err := r.connectAgent(pod, primitive)
+	if err != nil {
+		log.Error(err, "Connecting to protocol agent")
+		return false, err
+	}
+	defer conn.Close()
+	client := driverapi.NewAgentClient(conn)
+
+	log.Info("Destroying primitive proxy")
+	request := &driverapi.DestroyProxyRequest{
+		ProxyID: driverapi.ProxyId{
+			PrimitiveId: primitiveapi.PrimitiveId{
+				Namespace: primitive.Namespace,
+				Name:      primitive.Name,
+			},
+		},
+	}
+	_, err = client.DestroyProxy(context.TODO(), request)
+	if err != nil {
+		if status.Code(err) == codes.NotFound {
+			return false, nil
+		}
+		log.Error(err, "Destroying primitive proxy")
+		return false, err
+	}
+	return true, nil
+}
+
+func (r *PrimitiveReconciler) unregisterPrimitive(pod *corev1.Pod, primitive v2beta1.Primitive, log logging.Logger) (bool, error) {
+	log.Info("Connecting to broker")
+	conn, err := r.connectBroker(pod)
+	if err != nil {
+		log.Error(err, "Connecting to broker")
+		return false, err
+	}
+	defer conn.Close()
+	client := brokerapi.NewBrokerClient(conn)
+
+	log.Info("Unregistering primitive with broker")
+	request := &brokerapi.UnregisterPrimitiveRequest{
+		PrimitiveID: brokerapi.PrimitiveId{
+			PrimitiveId: primitiveapi.PrimitiveId{
+				Namespace: primitive.Namespace,
+				Name:      primitive.Name,
+			},
+		},
+	}
+	_, err = client.UnregisterPrimitive(context.TODO(), request)
+	if err != nil {
+		if status.Code(err) == codes.NotFound {
+			return false, nil
+		}
+		log.Error(err, "Unregistering primitive with broker")
+		return false, err
+	}
+	return true, nil
+}
+
+func (r *PrimitiveReconciler) connectAgent(pod *corev1.Pod, primitive v2beta1.Primitive) (*grpc.ClientConn, error) {
+	conditions := NewProtocolConditions(primitive.Spec.Protocol, pod.Status.Conditions)
+	port := conditions.GetPort()
+	address := fmt.Sprintf("%s:%d", pod.Status.PodIP, port)
+	return grpc.Dial(address, grpc.WithInsecure())
+}
+
+func (r *PrimitiveReconciler) connectBroker(pod *corev1.Pod) (*grpc.ClientConn, error) {
+	address := fmt.Sprintf("%s:5678", pod.Status.PodIP)
+	return grpc.Dial(address, grpc.WithInsecure())
 }
 
 func (r *PrimitiveReconciler) getPermissions(pod *corev1.Pod, primitive v2beta1.Primitive) (read bool, write bool, err error) {
@@ -488,13 +687,21 @@ type PrimitiveConditions struct {
 	Conditions []corev1.PodCondition
 }
 
-func (d PrimitiveConditions) getConditionType(name string) corev1.PodConditionType {
-	return corev1.PodConditionType(fmt.Sprintf(primitiveConditionFormat, d.Primitive, name))
+func (d PrimitiveConditions) getReadyType() corev1.PodConditionType {
+	return corev1.PodConditionType(fmt.Sprintf("primitives.atomix.io/%s", d.Primitive))
 }
 
-func (d PrimitiveConditions) getConditionStatus(name string) corev1.ConditionStatus {
+func (d PrimitiveConditions) getReadAccessType() corev1.PodConditionType {
+	return corev1.PodConditionType(fmt.Sprintf("%s.primitives.atomix.io/read-access", d.Primitive))
+}
+
+func (d PrimitiveConditions) getWriteAccessType() corev1.PodConditionType {
+	return corev1.PodConditionType(fmt.Sprintf("%s.primitives.atomix.io/write-access", d.Primitive))
+}
+
+func (d PrimitiveConditions) getConditionStatus(conditionType corev1.PodConditionType) corev1.ConditionStatus {
 	for _, condition := range d.Conditions {
-		if condition.Type == d.getConditionType(name) {
+		if condition.Type == conditionType {
 			return condition.Status
 		}
 	}
@@ -515,13 +722,54 @@ func (d PrimitiveConditions) setCondition(condition corev1.PodCondition) []corev
 }
 
 func (d PrimitiveConditions) GetReady() corev1.ConditionStatus {
-	return d.getConditionStatus(primitiveReadyCondition)
+	return d.getConditionStatus(d.getReadyType())
 }
 
 func (d PrimitiveConditions) SetReady(status corev1.ConditionStatus) []corev1.PodCondition {
 	return d.setCondition(corev1.PodCondition{
-		Type:               d.getConditionType(primitiveReadyCondition),
+		Type:               d.getReadyType(),
 		Status:             status,
 		LastTransitionTime: metav1.Now(),
 	})
+}
+
+func (d PrimitiveConditions) GetReadAccess() corev1.ConditionStatus {
+	return d.getConditionStatus(d.getReadAccessType())
+}
+
+func (d PrimitiveConditions) SetReadAccess(status corev1.ConditionStatus) []corev1.PodCondition {
+	return d.setCondition(corev1.PodCondition{
+		Type:               d.getReadAccessType(),
+		Status:             status,
+		LastTransitionTime: metav1.Now(),
+	})
+}
+
+func (d PrimitiveConditions) GetWriteAccess() corev1.ConditionStatus {
+	return d.getConditionStatus(d.getWriteAccessType())
+}
+
+func (d PrimitiveConditions) SetWriteAccess(status corev1.ConditionStatus) []corev1.PodCondition {
+	return d.setCondition(corev1.PodCondition{
+		Type:               d.getWriteAccessType(),
+		Status:             status,
+		LastTransitionTime: metav1.Now(),
+	})
+}
+
+func newPodLogger(pod corev1.Pod) logging.Logger {
+	fields := []logging.Field{
+		logging.String("pod", types.NamespacedName{pod.Namespace, pod.Name}.String()),
+	}
+	return log.WithFields(fields...)
+}
+
+func newPrimitiveLogger(pod corev1.Pod, primitive v2beta1.Primitive) logging.Logger {
+	fields := []logging.Field{
+		logging.String("pod", types.NamespacedName{pod.Namespace, pod.Name}.String()),
+		logging.String("primitive", types.NamespacedName{primitive.Namespace, primitive.Name}.String()),
+		logging.String("type", primitive.OwnerReferences[0].Kind),
+		logging.String("protocol", primitive.Spec.Protocol),
+	}
+	return log.WithFields(fields...)
 }

@@ -251,7 +251,9 @@ spec:
                       type: integer
                       minimum: 1
                     replicas:
-                      type: string
+                      type: array
+                      items:
+                        type: string
 ---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
@@ -601,12 +603,12 @@ rules:
   resources:
   - pods
   - pods/status
+  - configmaps
   verbs:
   - '*'
 - apiGroups:
   - ""
   resources:
-  - configmaps
   - serviceaccounts
   verbs:
   - get
