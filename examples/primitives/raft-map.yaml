@@ -1,9 +1,7 @@
-apiVersion: atomix.io/v2beta1
+apiVersion: primitives.atomix.io/v2beta1
 kind: Map
 metadata:
   name: raft-map
 spec:
-  storage:
-    apiVersion: storage.atomix.io/v2beta1
-    kind: RaftProtocol
-    name: raft
+  store:
+    name: data-store

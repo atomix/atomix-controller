@@ -16,22 +16,21 @@ package v2beta1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 )
 
-// ProtocolSpec is a storage protocol specification
-type ProtocolSpec struct {
-	Driver     DriverSpec      `json:"driver,omitempty"`
-	Replicas   []ReplicaSpec   `json:"replicas,omitempty"`
-	Partitions []PartitionSpec `json:"partitions,omitempty"`
+// StoreSpec is a storage protocol specification
+type StoreSpec struct {
+	Protocol runtime.RawExtension `json:"protocol,omitempty"`
 }
 
-// DriverSpec is a storage driver specification
-type DriverSpec struct {
+// DriverStatus is a storage driver status
+type DriverStatus struct {
 	Name string `json:"name,omitempty"`
 }
 
-// ReplicaSpec is a storage replica specification
-type ReplicaSpec struct {
+// ReplicaStatus is a storage replica status
+type ReplicaStatus struct {
 	ID         string           `json:"id,omitempty"`
 	NodeID     string           `json:"nodeId,omitempty"`
 	Host       *string          `json:"host,omitempty"`
@@ -39,34 +38,47 @@ type ReplicaSpec struct {
 	ExtraPorts map[string]int32 `json:"extraPorts,omitempty"`
 }
 
-// PartitionSpec is a storage partition specification
-type PartitionSpec struct {
+// PartitionStatus is a storage partition status
+type PartitionStatus struct {
 	ID       uint32   `json:"id,omitempty"`
 	Replicas []string `json:"replicas,omitempty"`
+}
+
+// StoreStatus is a store status
+type StoreStatus struct {
+	Protocol ProtocolStatus `json:"protocol,omitempty"`
+}
+
+// ProtocolStatus is a protocol status
+type ProtocolStatus struct {
+	Driver     *DriverStatus      `json:"driver,omitempty"`
+	Replicas   []ReplicaStatus   `json:"replicas,omitempty"`
+	Partitions []PartitionStatus `json:"partitions,omitempty"`
 }
 
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// Protocol is the Schema for the Protocol API
+// Store is the Schema for the Store API
 // +k8s:openapi-gen=true
-type Protocol struct {
+type Store struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
-	Spec              ProtocolSpec `json:"spec,omitempty"`
+	Spec              StoreSpec   `json:"spec,omitempty"`
+	Status            StoreStatus `json:"status,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// ProtocolList contains a list of Protocol
-type ProtocolList struct {
+// StoreList contains a list of Store
+type StoreList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 
-	// Items is the list of Protocol items in the list
-	Items []Protocol `json:"items"`
+	// Items is the list of Store items in the list
+	Items []Store `json:"items"`
 }
 
 func init() {
-	SchemeBuilder.Register(&Protocol{}, &ProtocolList{})
+	SchemeBuilder.Register(&Store{}, &StoreList{})
 }
