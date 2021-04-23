@@ -266,7 +266,7 @@ func (r *ProtocolReconciler) updateAgent(pod *corev1.Pod, protocol v2beta1.Proto
 	switch conditions.GetGeneration(protocol.Generation) {
 	case corev1.ConditionUnknown:
 		log.Info("Initializing configuration change condition")
-		pod.Status.Conditions = conditions.SetReady(corev1.ConditionFalse)
+		pod.Status.Conditions = conditions.SetGeneration(protocol.Generation, corev1.ConditionFalse)
 		err := r.client.Status().Update(context.TODO(), pod)
 		if err != nil {
 			log.Error(err, "Initializing configuration change condition")
