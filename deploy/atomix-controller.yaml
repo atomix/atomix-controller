@@ -264,13 +264,6 @@ spec:
               protocol:
                 type: object
                 properties:
-                  driver:
-                    type: object
-                    required:
-                    - name
-                    properties:
-                      name:
-                        type: string
                   replicas:
                     type: array
                     items:

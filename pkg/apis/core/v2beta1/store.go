@@ -51,7 +51,6 @@ type StoreStatus struct {
 
 // ProtocolStatus is a protocol status
 type ProtocolStatus struct {
-	Driver     *DriverStatus      `json:"driver,omitempty"`
 	Replicas   []ReplicaStatus   `json:"replicas,omitempty"`
 	Partitions []PartitionStatus `json:"partitions,omitempty"`
 }
