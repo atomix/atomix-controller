@@ -191,9 +191,6 @@ func (r *ProtocolReconciler) reconcileStores(pod *corev1.Pod) (bool, error) {
 }
 
 func (r *ProtocolReconciler) reconcileStore(pod *corev1.Pod, store v2beta1.Store, log logging.Logger) (bool, error) {
-	if store.Status.Protocol.Driver == nil {
-		return false, nil
-	}
 	if ok, err := r.prepareAgent(pod, store, log); err != nil {
 		return false, err
 	} else if ok {
@@ -331,7 +328,7 @@ func (r *ProtocolReconciler) getDriverPort(pod *corev1.Pod, store v2beta1.Store)
 	}
 
 	for _, plugin := range plugins.Items {
-		if plugin.Spec.Group == gvc.Group && plugin.Kind == gvc.Kind {
+		if plugin.Spec.Group == gvc.Group && plugin.Spec.Kind == gvc.Kind {
 			for _, version := range plugin.Spec.Versions {
 				if version.Name == gvc.Version {
 					portAnnotation := fmt.Sprintf("%s.%s/port", version.Name, plugin.Name)
