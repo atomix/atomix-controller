@@ -261,9 +261,13 @@ spec:
           status:
             type: object
             properties:
+              ready:
+                type: boolean
               protocol:
                 type: object
                 properties:
+                  revision:
+                    type: integer
                   replicas:
                     type: array
                     items:

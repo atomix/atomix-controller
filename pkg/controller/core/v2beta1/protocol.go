@@ -191,6 +191,12 @@ func (r *ProtocolReconciler) reconcileStores(pod *corev1.Pod) (bool, error) {
 }
 
 func (r *ProtocolReconciler) reconcileStore(pod *corev1.Pod, store v2beta1.Store, log logging.Logger) (bool, error) {
+	if !store.Status.Ready {
+		return false, nil
+	}
+	if store.Status.Protocol == nil {
+		return false, errors.New("store is ready, but no protocol configuration provided by plugin")
+	}
 	if ok, err := r.prepareAgent(pod, store, log); err != nil {
 		return false, err
 	} else if ok {
@@ -260,14 +266,14 @@ func (r *ProtocolReconciler) prepareAgent(pod *corev1.Pod, store v2beta1.Store, 
 	}
 }
 
-func (r *ProtocolReconciler) updateAgent(pod *corev1.Pod, protocol v2beta1.Store, log logging.Logger) (bool, error) {
-	conditions := NewProtocolConditions(protocol.Name, pod.Status.Conditions)
+func (r *ProtocolReconciler) updateAgent(pod *corev1.Pod, store v2beta1.Store, log logging.Logger) (bool, error) {
+	conditions := NewProtocolConditions(store.Name, pod.Status.Conditions)
 
 	// If the generation status is Unknown, add the status to the pod
-	switch conditions.GetGeneration(protocol.Generation) {
+	switch conditions.GetRevision(store.Status.Protocol.Revision) {
 	case corev1.ConditionUnknown:
 		log.Info("Initializing configuration change condition")
-		pod.Status.Conditions = conditions.SetGeneration(protocol.Generation, corev1.ConditionFalse)
+		pod.Status.Conditions = conditions.SetRevision(store.Status.Protocol.Revision, corev1.ConditionFalse)
 		err := r.client.Status().Update(context.TODO(), pod)
 		if err != nil {
 			log.Error(err, "Initializing configuration change condition")
@@ -276,7 +282,7 @@ func (r *ProtocolReconciler) updateAgent(pod *corev1.Pod, protocol v2beta1.Store
 		return true, nil
 	case corev1.ConditionFalse:
 		log.Info("Connecting to protocol driver")
-		conn, err := r.connectDriver(pod, protocol)
+		conn, err := r.connectDriver(pod, store)
 		if err != nil {
 			log.Error(err, "Connecting to protocol driver")
 			return false, err
@@ -287,11 +293,11 @@ func (r *ProtocolReconciler) updateAgent(pod *corev1.Pod, protocol v2beta1.Store
 		log.Info("Reconfiguring protocol agent")
 		request := &driverapi.ConfigureAgentRequest{
 			AgentID: driverapi.AgentId{
-				Namespace: protocol.Namespace,
-				Name:      protocol.Name,
+				Namespace: store.Namespace,
+				Name:      store.Name,
 			},
 			Config: driverapi.AgentConfig{
-				Protocol: r.getProtocolConfig(protocol),
+				Protocol: r.getProtocolConfig(store),
 			},
 		}
 		_, err = client.ConfigureAgent(context.TODO(), request)
@@ -301,7 +307,7 @@ func (r *ProtocolReconciler) updateAgent(pod *corev1.Pod, protocol v2beta1.Store
 		}
 
 		log.Info("Updating configuration change condition")
-		pod.Status.Conditions = conditions.SetGeneration(protocol.Generation, corev1.ConditionTrue)
+		pod.Status.Conditions = conditions.SetRevision(store.Status.Protocol.Revision, corev1.ConditionTrue)
 		err = r.client.Status().Update(context.TODO(), pod)
 		if err != nil {
 			log.Error(err, "Updating configuration change condition")
@@ -412,7 +418,7 @@ func (d ProtocolConditions) getReadyType() corev1.PodConditionType {
 	return corev1.PodConditionType(fmt.Sprintf("protocols.atomix.io/%s", d.Protocol))
 }
 
-func (d ProtocolConditions) getGenerationType(generation int64) corev1.PodConditionType {
+func (d ProtocolConditions) getRevisionType(generation int64) corev1.PodConditionType {
 	return corev1.PodConditionType(fmt.Sprintf("%s.protocols.atomix.io/%d", d.Protocol, generation))
 }
 
@@ -450,13 +456,13 @@ func (d ProtocolConditions) SetReady(status corev1.ConditionStatus) []corev1.Pod
 	})
 }
 
-func (d ProtocolConditions) GetGeneration(generation int64) corev1.ConditionStatus {
-	return d.getConditionStatus(d.getGenerationType(generation))
+func (d ProtocolConditions) GetRevision(revision int64) corev1.ConditionStatus {
+	return d.getConditionStatus(d.getRevisionType(revision))
 }
 
-func (d ProtocolConditions) SetGeneration(generation int64, status corev1.ConditionStatus) []corev1.PodCondition {
+func (d ProtocolConditions) SetRevision(revision int64, status corev1.ConditionStatus) []corev1.PodCondition {
 	return d.setCondition(corev1.PodCondition{
-		Type:               d.getGenerationType(generation),
+		Type:               d.getRevisionType(revision),
 		Status:             status,
 		LastTransitionTime: metav1.Now(),
 	})

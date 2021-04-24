@@ -46,11 +46,13 @@ type PartitionStatus struct {
 
 // StoreStatus is a store status
 type StoreStatus struct {
-	Protocol ProtocolStatus `json:"protocol,omitempty"`
+	Ready    bool            `json:"ready,omitempty"`
+	Protocol *ProtocolStatus `json:"protocol,omitempty"`
 }
 
 // ProtocolStatus is a protocol status
 type ProtocolStatus struct {
+	Revision   int64             `json:"revision,omitempty"`
 	Replicas   []ReplicaStatus   `json:"replicas,omitempty"`
 	Partitions []PartitionStatus `json:"partitions,omitempty"`
 }
