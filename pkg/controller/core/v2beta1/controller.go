@@ -28,6 +28,9 @@ func AddControllers(mgr manager.Manager) error {
 	if err := addDriverController(mgr); err != nil {
 		return err
 	}
+	if err := addStoreController(mgr); err != nil {
+		return err
+	}
 	if err := addPrimitiveController(mgr); err != nil {
 		return err
 	}

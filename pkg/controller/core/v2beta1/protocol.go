@@ -22,11 +22,11 @@ import (
 	protocolapi "github.com/atomix/api/go/atomix/protocol"
 	"github.com/atomix/go-framework/pkg/atomix/logging"
 	"github.com/atomix/kubernetes-controller/pkg/apis/core/v2beta1"
-	storagev2beta1 "github.com/atomix/kubernetes-controller/pkg/controller/storage/v2beta1"
 	"google.golang.org/grpc"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
@@ -36,6 +36,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
+	"strconv"
 	"strings"
 )
 
@@ -173,13 +174,13 @@ func (r *ProtocolReconciler) updateStatus(pod *corev1.Pod) (bool, error) {
 }
 
 func (r *ProtocolReconciler) reconcileStores(pod *corev1.Pod) (bool, error) {
-	protocols := &v2beta1.StoreList{}
-	err := r.client.List(context.TODO(), protocols, &client.ListOptions{Namespace: pod.Namespace})
+	stores := &v2beta1.StoreList{}
+	err := r.client.List(context.TODO(), stores, &client.ListOptions{Namespace: pod.Namespace})
 	if err != nil {
 		log.Errorf("Listing Store resources failed: %s", err)
 		return false, err
 	}
-	for _, protocol := range protocols.Items {
+	for _, protocol := range stores.Items {
 		if ok, err := r.reconcileStore(pod, protocol, newStoreLogger(*pod, protocol)); err != nil {
 			return false, err
 		} else if ok {
@@ -189,13 +190,16 @@ func (r *ProtocolReconciler) reconcileStores(pod *corev1.Pod) (bool, error) {
 	return false, nil
 }
 
-func (r *ProtocolReconciler) reconcileStore(pod *corev1.Pod, protocol v2beta1.Store, log logging.Logger) (bool, error) {
-	if ok, err := r.prepareAgent(pod, protocol, log); err != nil {
+func (r *ProtocolReconciler) reconcileStore(pod *corev1.Pod, store v2beta1.Store, log logging.Logger) (bool, error) {
+	if store.Status.Protocol.Driver == nil {
+		return false, nil
+	}
+	if ok, err := r.prepareAgent(pod, store, log); err != nil {
 		return false, err
 	} else if ok {
 		return true, nil
 	}
-	if ok, err := r.updateAgent(pod, protocol, log); err != nil {
+	if ok, err := r.updateAgent(pod, store, log); err != nil {
 		return false, err
 	} else if ok {
 		return true, nil
@@ -312,16 +316,44 @@ func (r *ProtocolReconciler) updateAgent(pod *corev1.Pod, protocol v2beta1.Store
 	}
 }
 
-func (r *ProtocolReconciler) connectDriver(pod *corev1.Pod, protocol v2beta1.Store) (*grpc.ClientConn, error) {
-	annotations := storagev2beta1.NewAnnotations(protocol.Status.Protocol.Driver.Name, pod.Annotations)
-	port, err := annotations.GetDriverPort()
+func (r *ProtocolReconciler) getDriverPort(pod *corev1.Pod, store v2beta1.Store) (int, error) {
+	object, err := runtime.Decode(unstructured.UnstructuredJSONScheme, store.Spec.Protocol.Raw)
 	if err != nil {
-		return nil, err
-	} else if port == nil {
-		return nil, errors.New("no driver port found")
+		return 0, err
+	}
+	protocol := object.(*unstructured.Unstructured)
+	gvc := protocol.GroupVersionKind()
+
+	plugins := &v2beta1.StoragePluginList{}
+	err = r.client.List(context.TODO(), plugins)
+	if err != nil {
+		return 0, err
 	}
 
-	address := fmt.Sprintf("%s:%d", pod.Status.PodIP, *port)
+	for _, plugin := range plugins.Items {
+		if plugin.Spec.Group == gvc.Group && plugin.Kind == gvc.Kind {
+			for _, version := range plugin.Spec.Versions {
+				if version.Name == gvc.Version {
+					portAnnotation := fmt.Sprintf("%s.%s/port", version.Name, plugin.Name)
+					portValue := pod.Annotations[portAnnotation]
+					if portValue == "" {
+						return 0, errors.New("port annotation not found")
+					}
+					return strconv.Atoi(portValue)
+				}
+			}
+			return 0, errors.New("protocol version not found")
+		}
+	}
+	return 0, errors.New("protocol plugin not found")
+}
+
+func (r *ProtocolReconciler) connectDriver(pod *corev1.Pod, store v2beta1.Store) (*grpc.ClientConn, error) {
+	port, err := r.getDriverPort(pod, store)
+	if err != nil {
+		return nil, err
+	}
+	address := fmt.Sprintf("%s:%d", pod.Status.PodIP, port)
 	return grpc.Dial(address, grpc.WithInsecure())
 }
 

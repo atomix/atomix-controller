@@ -108,6 +108,9 @@ func (r *StoreReconciler) Reconcile(request reconcile.Request) (reconcile.Result
 		BlockOwnerDeletion: pointer.BoolPtr(true),
 		Controller:         pointer.BoolPtr(true),
 	}
+
+	protocol.SetNamespace(store.Namespace)
+	protocol.SetName(store.Name)
 	protocol.SetOwnerReferences([]metav1.OwnerReference{ownerRef})
 
 	err = r.client.Create(context.TODO(), protocol)
