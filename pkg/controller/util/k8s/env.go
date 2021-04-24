@@ -19,28 +19,13 @@ import (
 	"os"
 )
 
-// Scope :
-type Scope string
-
 const (
-	// ClusterScope :
-	ClusterScope Scope = "cluster"
-
-	// NamespaceScope :
-	NamespaceScope Scope = "namespace"
-)
-
-const (
-	nameEnv        = "CONTROLLER_NAME"
-	namespaceEnv   = "CONTROLLER_NAMESPACE"
-	scopeEnv       = "CONTROLLER_SCOPE"
-	webhookNameEnv = "WEBHOOK_NAME"
-	webhookPathEnv = "WEBHOOK_PATH"
+	nameEnv      = "CONTROLLER_NAME"
+	namespaceEnv = "CONTROLLER_NAMESPACE"
 )
 
 const (
 	defaultNamespace = "kube-system"
-	defaultScope     = ClusterScope
 )
 
 // GetName :
@@ -59,31 +44,4 @@ func GetNamespace() string {
 		return namespace
 	}
 	return defaultNamespace
-}
-
-// GetScope :
-func GetScope() Scope {
-	scope := os.Getenv(scopeEnv)
-	if scope != "" {
-		return Scope(scope)
-	}
-	return defaultScope
-}
-
-// GetWebhookName :
-func GetWebhookName() string {
-	name := os.Getenv(webhookNameEnv)
-	if name == "" {
-		panic(fmt.Sprintf("'%s' environment variable not defined", webhookNameEnv))
-	}
-	return name
-}
-
-// GetWebhookPath :
-func GetWebhookPath() string {
-	path := os.Getenv(webhookPathEnv)
-	if path == "" {
-		panic(fmt.Sprintf("'%s' environment variable not defined", webhookPathEnv))
-	}
-	return path
 }

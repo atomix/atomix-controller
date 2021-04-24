@@ -43,8 +43,8 @@ const (
 	baseProtocolPort = 55680
 )
 
-func addStoreController(mgr manager.Manager) error {
-	r := &StoreReconciler{
+func addProtocolController(mgr manager.Manager) error {
+	r := &ProtocolReconciler{
 		client: mgr.GetClient(),
 		scheme: mgr.GetScheme(),
 		config: mgr.GetConfig(),
@@ -72,14 +72,14 @@ func addStoreController(mgr manager.Manager) error {
 	return nil
 }
 
-// StoreReconciler is a Reconciler for Store resources
-type StoreReconciler struct {
+// ProtocolReconciler is a Reconciler for protocols
+type ProtocolReconciler struct {
 	client client.Client
 	scheme *runtime.Scheme
 	config *rest.Config
 }
 
-func (r *StoreReconciler) Reconcile(request reconcile.Request) (reconcile.Result, error) {
+func (r *ProtocolReconciler) Reconcile(request reconcile.Request) (reconcile.Result, error) {
 	log.Infof("Reconciling Pod '%s'", request.NamespacedName)
 	pod := &corev1.Pod{}
 	err := r.client.Get(context.TODO(), request.NamespacedName, pod)
@@ -122,7 +122,7 @@ func (r *StoreReconciler) Reconcile(request reconcile.Request) (reconcile.Result
 	return reconcile.Result{}, nil
 }
 
-func (r *StoreReconciler) prepareStatus(pod *corev1.Pod) (bool, error) {
+func (r *ProtocolReconciler) prepareStatus(pod *corev1.Pod) (bool, error) {
 	log := newPodLogger(*pod)
 	for _, condition := range pod.Status.Conditions {
 		if condition.Type == brokerReadyCondition {
@@ -145,7 +145,7 @@ func (r *StoreReconciler) prepareStatus(pod *corev1.Pod) (bool, error) {
 	return true, nil
 }
 
-func (r *StoreReconciler) updateStatus(pod *corev1.Pod) (bool, error) {
+func (r *ProtocolReconciler) updateStatus(pod *corev1.Pod) (bool, error) {
 	for _, condition := range pod.Status.Conditions {
 		if isProtocolReadyCondition(condition.Type) && condition.Status != corev1.ConditionTrue {
 			return false, nil
@@ -172,7 +172,7 @@ func (r *StoreReconciler) updateStatus(pod *corev1.Pod) (bool, error) {
 	return true, nil
 }
 
-func (r *StoreReconciler) reconcileStores(pod *corev1.Pod) (bool, error) {
+func (r *ProtocolReconciler) reconcileStores(pod *corev1.Pod) (bool, error) {
 	protocols := &v2beta1.StoreList{}
 	err := r.client.List(context.TODO(), protocols, &client.ListOptions{Namespace: pod.Namespace})
 	if err != nil {
@@ -189,7 +189,7 @@ func (r *StoreReconciler) reconcileStores(pod *corev1.Pod) (bool, error) {
 	return false, nil
 }
 
-func (r *StoreReconciler) reconcileStore(pod *corev1.Pod, protocol v2beta1.Store, log logging.Logger) (bool, error) {
+func (r *ProtocolReconciler) reconcileStore(pod *corev1.Pod, protocol v2beta1.Store, log logging.Logger) (bool, error) {
 	if ok, err := r.prepareAgent(pod, protocol, log); err != nil {
 		return false, err
 	} else if ok {
@@ -203,7 +203,7 @@ func (r *StoreReconciler) reconcileStore(pod *corev1.Pod, protocol v2beta1.Store
 	return false, nil
 }
 
-func (r *StoreReconciler) prepareAgent(pod *corev1.Pod, store v2beta1.Store, log logging.Logger) (bool, error) {
+func (r *ProtocolReconciler) prepareAgent(pod *corev1.Pod, store v2beta1.Store, log logging.Logger) (bool, error) {
 	conditions := NewProtocolConditions(store.Name, pod.Status.Conditions)
 
 	// If the agent status is Unknown, add the status to the pod
@@ -259,7 +259,7 @@ func (r *StoreReconciler) prepareAgent(pod *corev1.Pod, store v2beta1.Store, log
 	}
 }
 
-func (r *StoreReconciler) updateAgent(pod *corev1.Pod, protocol v2beta1.Store, log logging.Logger) (bool, error) {
+func (r *ProtocolReconciler) updateAgent(pod *corev1.Pod, protocol v2beta1.Store, log logging.Logger) (bool, error) {
 	conditions := NewProtocolConditions(protocol.Name, pod.Status.Conditions)
 
 	// If the generation status is Unknown, add the status to the pod
@@ -312,7 +312,7 @@ func (r *StoreReconciler) updateAgent(pod *corev1.Pod, protocol v2beta1.Store, l
 	}
 }
 
-func (r *StoreReconciler) connectDriver(pod *corev1.Pod, protocol v2beta1.Store) (*grpc.ClientConn, error) {
+func (r *ProtocolReconciler) connectDriver(pod *corev1.Pod, protocol v2beta1.Store) (*grpc.ClientConn, error) {
 	annotations := storagev2beta1.NewAnnotations(protocol.Status.Protocol.Driver.Name, pod.Annotations)
 	port, err := annotations.GetDriverPort()
 	if err != nil {
@@ -325,7 +325,7 @@ func (r *StoreReconciler) connectDriver(pod *corev1.Pod, protocol v2beta1.Store)
 	return grpc.Dial(address, grpc.WithInsecure())
 }
 
-func (r *StoreReconciler) getProtocolConfig(protocol v2beta1.Store) protocolapi.ProtocolConfig {
+func (r *ProtocolReconciler) getProtocolConfig(protocol v2beta1.Store) protocolapi.ProtocolConfig {
 	replicas := make([]protocolapi.ProtocolReplica, len(protocol.Status.Protocol.Replicas))
 	for i, replica := range protocol.Status.Protocol.Replicas {
 		var host string
@@ -359,7 +359,7 @@ func (r *StoreReconciler) getProtocolConfig(protocol v2beta1.Store) protocolapi.
 	}
 }
 
-var _ reconcile.Reconciler = &StoreReconciler{}
+var _ reconcile.Reconciler = &ProtocolReconciler{}
 
 func isProtocolReadyCondition(condition corev1.PodConditionType) bool {
 	return strings.HasSuffix(string(condition), ".protocol.atomix.io/ready")

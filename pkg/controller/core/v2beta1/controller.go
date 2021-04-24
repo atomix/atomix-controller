@@ -25,10 +25,13 @@ func AddControllers(mgr manager.Manager) error {
 	if err := addBrokerController(mgr); err != nil {
 		return err
 	}
+	if err := addDriverController(mgr); err != nil {
+		return err
+	}
 	if err := addPrimitiveController(mgr); err != nil {
 		return err
 	}
-	if err := addStoreController(mgr); err != nil {
+	if err := addProtocolController(mgr); err != nil {
 		return err
 	}
 	return nil
