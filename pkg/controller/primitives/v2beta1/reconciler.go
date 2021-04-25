@@ -28,10 +28,11 @@ import (
 )
 
 type PrimitiveReconciler struct {
-	client client.Client
-	scheme *runtime.Scheme
-	config *rest.Config
-	kind   schema.GroupVersionKind
+	client         client.Client
+	scheme         *runtime.Scheme
+	config         *rest.Config
+	kind           schema.GroupVersionKind
+	protocolGetter func(object runtime.Object) string
 }
 
 // Reconcile reads that state of the cluster for a primitive object and makes changes based on the pod's annotations
@@ -61,6 +62,10 @@ func (r *PrimitiveReconciler) Reconcile(request reconcile.Request) (reconcile.Re
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: request.Namespace,
 				Name:      request.Name,
+			},
+			Spec: v2beta1.PrimitiveSpec{
+				Type:     r.kind.Kind,
+				Protocol: r.protocolGetter(object),
 			},
 		}
 		if err := controllerutil.SetOwnerReference(object.(metav1.Object), primitive, r.scheme); err != nil {

@@ -330,8 +330,11 @@ spec:
           spec:
             type: object
             required:
+            - type
             - protocol
             properties:
+              type:
+                type: string
               protocol:
                 type: string
 ---
@@ -603,15 +606,12 @@ rules:
 - apiGroups:
   - ""
   resources:
+  - namespaces
   - serviceaccounts
   verbs:
   - get
-- apiGroups:
-  - ""
-  resources:
-  - namespaces
-  verbs:
-  - get
+  - list
+  - watch
 - apiGroups:
   - policy
   resources:
@@ -627,6 +627,8 @@ rules:
   - clusterrolebindings
   verbs:
   - get
+  - list
+  - watch
 - apiGroups:
   - atomix.io
   - storage.atomix.io

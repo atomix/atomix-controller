@@ -401,8 +401,8 @@ func isProtocolReadyCondition(condition corev1.PodConditionType) bool {
 }
 
 // NewProtocolConditions returns new conditions helper for the given driver with the given conditions
-func NewProtocolConditions(protocol string, conditions []corev1.PodCondition) ProtocolConditions {
-	return ProtocolConditions{
+func NewProtocolConditions(protocol string, conditions []corev1.PodCondition) *ProtocolConditions {
+	return &ProtocolConditions{
 		Protocol:   protocol,
 		Conditions: conditions,
 	}
@@ -414,15 +414,15 @@ type ProtocolConditions struct {
 	Conditions []corev1.PodCondition
 }
 
-func (d ProtocolConditions) getReadyType() corev1.PodConditionType {
+func (d *ProtocolConditions) getReadyType() corev1.PodConditionType {
 	return corev1.PodConditionType(fmt.Sprintf("protocols.atomix.io/%s", d.Protocol))
 }
 
-func (d ProtocolConditions) getRevisionType(generation int64) corev1.PodConditionType {
+func (d *ProtocolConditions) getRevisionType(generation int64) corev1.PodConditionType {
 	return corev1.PodConditionType(fmt.Sprintf("%s.protocols.atomix.io/%d", d.Protocol, generation))
 }
 
-func (d ProtocolConditions) getConditionStatus(conditionType corev1.PodConditionType) corev1.ConditionStatus {
+func (d *ProtocolConditions) getConditionStatus(conditionType corev1.PodConditionType) corev1.ConditionStatus {
 	for _, condition := range d.Conditions {
 		if condition.Type == conditionType {
 			return condition.Status
@@ -431,7 +431,7 @@ func (d ProtocolConditions) getConditionStatus(conditionType corev1.PodCondition
 	return corev1.ConditionUnknown
 }
 
-func (d ProtocolConditions) setCondition(condition corev1.PodCondition) []corev1.PodCondition {
+func (d *ProtocolConditions) setCondition(condition corev1.PodCondition) []corev1.PodCondition {
 	for i, c := range d.Conditions {
 		if c.Type == condition.Type {
 			if c.Status != condition.Status {
@@ -444,11 +444,11 @@ func (d ProtocolConditions) setCondition(condition corev1.PodCondition) []corev1
 	return d.Conditions
 }
 
-func (d ProtocolConditions) GetReady() corev1.ConditionStatus {
+func (d *ProtocolConditions) GetReady() corev1.ConditionStatus {
 	return d.getConditionStatus(d.getReadyType())
 }
 
-func (d ProtocolConditions) SetReady(status corev1.ConditionStatus) []corev1.PodCondition {
+func (d *ProtocolConditions) SetReady(status corev1.ConditionStatus) []corev1.PodCondition {
 	return d.setCondition(corev1.PodCondition{
 		Type:               d.getReadyType(),
 		Status:             status,
@@ -456,11 +456,11 @@ func (d ProtocolConditions) SetReady(status corev1.ConditionStatus) []corev1.Pod
 	})
 }
 
-func (d ProtocolConditions) GetRevision(revision int64) corev1.ConditionStatus {
+func (d *ProtocolConditions) GetRevision(revision int64) corev1.ConditionStatus {
 	return d.getConditionStatus(d.getRevisionType(revision))
 }
 
-func (d ProtocolConditions) SetRevision(revision int64, status corev1.ConditionStatus) []corev1.PodCondition {
+func (d *ProtocolConditions) SetRevision(revision int64, status corev1.ConditionStatus) []corev1.PodCondition {
 	return d.setCondition(corev1.PodCondition{
 		Type:               d.getRevisionType(revision),
 		Status:             status,
@@ -468,7 +468,7 @@ func (d ProtocolConditions) SetRevision(revision int64, status corev1.ConditionS
 	})
 }
 
-func (d ProtocolConditions) GetPort() int {
+func (d *ProtocolConditions) GetPort() int {
 	for i, c := range d.Conditions {
 		if c.Type == d.getReadyType() {
 			return baseProtocolPort + i

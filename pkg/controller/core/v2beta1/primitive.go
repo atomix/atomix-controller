@@ -253,10 +253,33 @@ func (r *PrimitiveReconciler) updatePrimitive(pod *corev1.Pod, primitive v2beta1
 	case corev1.ConditionTrue:
 		// If the primitive ready condition is True, check whether the permissions have been changed and the proxy
 		// needs to be updated
-		if ok, err := r.updatePermissions(pod, primitive, log); err != nil {
+		read, write, err := r.getPermissions(pod, primitive)
+		if err != nil {
 			return false, err
-		} else if ok {
-			log.Info("Primitive permissions have changed")
+		}
+
+		changed := false
+		if read && conditions.GetReadAccess() != corev1.ConditionTrue {
+			log.Info("Read permission changed")
+			pod.Status.Conditions = conditions.SetReadAccess(corev1.ConditionTrue)
+			changed = true
+		} else if !read && conditions.GetReadAccess() != corev1.ConditionFalse {
+			log.Info("Read permission changed")
+			pod.Status.Conditions = conditions.SetReadAccess(corev1.ConditionFalse)
+			changed = true
+		}
+
+		if write && conditions.GetWriteAccess() != corev1.ConditionTrue {
+			log.Info("Write permission changed")
+			pod.Status.Conditions = conditions.SetWriteAccess(corev1.ConditionTrue)
+			changed = true
+		} else if !write && conditions.GetWriteAccess() != corev1.ConditionFalse {
+			log.Info("Write permission changed")
+			pod.Status.Conditions = conditions.SetWriteAccess(corev1.ConditionFalse)
+			changed = true
+		}
+
+		if changed {
 			log.Info("Updating primitive conditions")
 			pod.Status.Conditions = conditions.SetReady(corev1.ConditionUnknown)
 			err := r.client.Status().Update(context.TODO(), pod)
@@ -269,36 +292,6 @@ func (r *PrimitiveReconciler) updatePrimitive(pod *corev1.Pod, primitive v2beta1
 		return false, nil
 	}
 	return false, nil
-}
-
-func (r *PrimitiveReconciler) updatePermissions(pod *corev1.Pod, primitive v2beta1.Primitive, log logging.Logger) (bool, error) {
-	conditions := NewPrimitiveConditions(primitive.Name, pod.Status.Conditions)
-	read, write, err := r.getPermissions(pod, primitive)
-	if err != nil {
-		return false, err
-	}
-
-	updated := false
-	if read && conditions.GetReadAccess() != corev1.ConditionTrue {
-		log.Info("Read permission changed")
-		pod.Status.Conditions = conditions.SetReadAccess(corev1.ConditionTrue)
-		updated = true
-	} else if !read && conditions.GetReadAccess() != corev1.ConditionFalse {
-		log.Info("Read permission changed")
-		pod.Status.Conditions = conditions.SetReadAccess(corev1.ConditionFalse)
-		updated = true
-	}
-
-	if write && conditions.GetWriteAccess() != corev1.ConditionTrue {
-		log.Info("Write permission changed")
-		pod.Status.Conditions = conditions.SetWriteAccess(corev1.ConditionTrue)
-		updated = true
-	} else if !write && conditions.GetWriteAccess() != corev1.ConditionFalse {
-		log.Info("Write permission changed")
-		pod.Status.Conditions = conditions.SetWriteAccess(corev1.ConditionFalse)
-		updated = true
-	}
-	return updated, nil
 }
 
 func (r *PrimitiveReconciler) createProxy(pod *corev1.Pod, primitive v2beta1.Primitive, log logging.Logger) (bool, error) {
@@ -317,6 +310,7 @@ func (r *PrimitiveReconciler) createProxy(pod *corev1.Pod, primitive v2beta1.Pri
 	request := &driverapi.CreateProxyRequest{
 		ProxyID: driverapi.ProxyId{
 			PrimitiveId: primitiveapi.PrimitiveId{
+				Type:      primitive.Spec.Type,
 				Namespace: primitive.Namespace,
 				Name:      primitive.Name,
 			},
@@ -352,6 +346,7 @@ func (r *PrimitiveReconciler) registerPrimitive(pod *corev1.Pod, primitive v2bet
 	request := &brokerapi.RegisterPrimitiveRequest{
 		PrimitiveID: brokerapi.PrimitiveId{
 			PrimitiveId: primitiveapi.PrimitiveId{
+				Type:      primitive.Spec.Type,
 				Namespace: primitive.Namespace,
 				Name:      primitive.Name,
 			},
@@ -409,6 +404,7 @@ func (r *PrimitiveReconciler) deleteProxy(pod *corev1.Pod, primitive v2beta1.Pri
 	request := &driverapi.DestroyProxyRequest{
 		ProxyID: driverapi.ProxyId{
 			PrimitiveId: primitiveapi.PrimitiveId{
+				Type:      primitive.Spec.Type,
 				Namespace: primitive.Namespace,
 				Name:      primitive.Name,
 			},
@@ -439,6 +435,7 @@ func (r *PrimitiveReconciler) unregisterPrimitive(pod *corev1.Pod, primitive v2b
 	request := &brokerapi.UnregisterPrimitiveRequest{
 		PrimitiveID: brokerapi.PrimitiveId{
 			PrimitiveId: primitiveapi.PrimitiveId{
+				Type:      primitive.Spec.Type,
 				Namespace: primitive.Namespace,
 				Name:      primitive.Name,
 			},
@@ -674,8 +671,8 @@ func isPrimitiveReadyCondition(condition corev1.PodConditionType) bool {
 }
 
 // NewPrimitiveConditions returns new conditions helper for the given driver with the given conditions
-func NewPrimitiveConditions(primitive string, conditions []corev1.PodCondition) PrimitiveConditions {
-	return PrimitiveConditions{
+func NewPrimitiveConditions(primitive string, conditions []corev1.PodCondition) *PrimitiveConditions {
+	return &PrimitiveConditions{
 		Primitive:  primitive,
 		Conditions: conditions,
 	}
@@ -687,19 +684,19 @@ type PrimitiveConditions struct {
 	Conditions []corev1.PodCondition
 }
 
-func (d PrimitiveConditions) getReadyType() corev1.PodConditionType {
+func (d *PrimitiveConditions) getReadyType() corev1.PodConditionType {
 	return corev1.PodConditionType(fmt.Sprintf("primitives.atomix.io/%s", d.Primitive))
 }
 
-func (d PrimitiveConditions) getReadAccessType() corev1.PodConditionType {
+func (d *PrimitiveConditions) getReadAccessType() corev1.PodConditionType {
 	return corev1.PodConditionType(fmt.Sprintf("%s.primitives.atomix.io/read-access", d.Primitive))
 }
 
-func (d PrimitiveConditions) getWriteAccessType() corev1.PodConditionType {
+func (d *PrimitiveConditions) getWriteAccessType() corev1.PodConditionType {
 	return corev1.PodConditionType(fmt.Sprintf("%s.primitives.atomix.io/write-access", d.Primitive))
 }
 
-func (d PrimitiveConditions) getConditionStatus(conditionType corev1.PodConditionType) corev1.ConditionStatus {
+func (d *PrimitiveConditions) getConditionStatus(conditionType corev1.PodConditionType) corev1.ConditionStatus {
 	for _, condition := range d.Conditions {
 		if condition.Type == conditionType {
 			return condition.Status
@@ -708,7 +705,7 @@ func (d PrimitiveConditions) getConditionStatus(conditionType corev1.PodConditio
 	return corev1.ConditionUnknown
 }
 
-func (d PrimitiveConditions) setCondition(condition corev1.PodCondition) []corev1.PodCondition {
+func (d *PrimitiveConditions) setCondition(condition corev1.PodCondition) []corev1.PodCondition {
 	for i, c := range d.Conditions {
 		if c.Type == condition.Type {
 			if c.Status != condition.Status {
@@ -721,11 +718,11 @@ func (d PrimitiveConditions) setCondition(condition corev1.PodCondition) []corev
 	return d.Conditions
 }
 
-func (d PrimitiveConditions) GetReady() corev1.ConditionStatus {
+func (d *PrimitiveConditions) GetReady() corev1.ConditionStatus {
 	return d.getConditionStatus(d.getReadyType())
 }
 
-func (d PrimitiveConditions) SetReady(status corev1.ConditionStatus) []corev1.PodCondition {
+func (d *PrimitiveConditions) SetReady(status corev1.ConditionStatus) []corev1.PodCondition {
 	return d.setCondition(corev1.PodCondition{
 		Type:               d.getReadyType(),
 		Status:             status,
@@ -733,11 +730,11 @@ func (d PrimitiveConditions) SetReady(status corev1.ConditionStatus) []corev1.Po
 	})
 }
 
-func (d PrimitiveConditions) GetReadAccess() corev1.ConditionStatus {
+func (d *PrimitiveConditions) GetReadAccess() corev1.ConditionStatus {
 	return d.getConditionStatus(d.getReadAccessType())
 }
 
-func (d PrimitiveConditions) SetReadAccess(status corev1.ConditionStatus) []corev1.PodCondition {
+func (d *PrimitiveConditions) SetReadAccess(status corev1.ConditionStatus) []corev1.PodCondition {
 	return d.setCondition(corev1.PodCondition{
 		Type:               d.getReadAccessType(),
 		Status:             status,
@@ -745,11 +742,11 @@ func (d PrimitiveConditions) SetReadAccess(status corev1.ConditionStatus) []core
 	})
 }
 
-func (d PrimitiveConditions) GetWriteAccess() corev1.ConditionStatus {
+func (d *PrimitiveConditions) GetWriteAccess() corev1.ConditionStatus {
 	return d.getConditionStatus(d.getWriteAccessType())
 }
 
-func (d PrimitiveConditions) SetWriteAccess(status corev1.ConditionStatus) []corev1.PodCondition {
+func (d *PrimitiveConditions) SetWriteAccess(status corev1.ConditionStatus) []corev1.PodCondition {
 	return d.setCondition(corev1.PodCondition{
 		Type:               d.getWriteAccessType(),
 		Status:             status,

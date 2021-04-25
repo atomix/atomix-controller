@@ -30,31 +30,45 @@ import (
 var log = logging.GetLogger("atomix", "controller", "primitives")
 
 func AddControllers(mgr manager.Manager) error {
-	if err := addController(mgr, &primitivesv2beta1.Counter{}); err != nil {
+	if err := addController(mgr, &primitivesv2beta1.Counter{}, func(object runtime.Object) string {
+		return object.(*primitivesv2beta1.Counter).Spec.Store.Name
+	}); err != nil {
 		return err
 	}
-	if err := addController(mgr, &primitivesv2beta1.Election{}); err != nil {
+	if err := addController(mgr, &primitivesv2beta1.Election{}, func(object runtime.Object) string {
+		return object.(*primitivesv2beta1.Election).Spec.Store.Name
+	}); err != nil {
 		return err
 	}
-	if err := addController(mgr, &primitivesv2beta1.List{}); err != nil {
+	if err := addController(mgr, &primitivesv2beta1.List{}, func(object runtime.Object) string {
+		return object.(*primitivesv2beta1.List).Spec.Store.Name
+	}); err != nil {
 		return err
 	}
-	if err := addController(mgr, &primitivesv2beta1.Lock{}); err != nil {
+	if err := addController(mgr, &primitivesv2beta1.Lock{}, func(object runtime.Object) string {
+		return object.(*primitivesv2beta1.Lock).Spec.Store.Name
+	}); err != nil {
 		return err
 	}
-	if err := addController(mgr, &primitivesv2beta1.Map{}); err != nil {
+	if err := addController(mgr, &primitivesv2beta1.Map{}, func(object runtime.Object) string {
+		return object.(*primitivesv2beta1.Map).Spec.Store.Name
+	}); err != nil {
 		return err
 	}
-	if err := addController(mgr, &primitivesv2beta1.Set{}); err != nil {
+	if err := addController(mgr, &primitivesv2beta1.Set{}, func(object runtime.Object) string {
+		return object.(*primitivesv2beta1.Set).Spec.Store.Name
+	}); err != nil {
 		return err
 	}
-	if err := addController(mgr, &primitivesv2beta1.Value{}); err != nil {
+	if err := addController(mgr, &primitivesv2beta1.Value{}, func(object runtime.Object) string {
+		return object.(*primitivesv2beta1.Value).Spec.Store.Name
+	}); err != nil {
 		return err
 	}
 	return nil
 }
 
-func addController(mgr manager.Manager, object runtime.Object) error {
+func addController(mgr manager.Manager, object runtime.Object, protocolGetter func(object runtime.Object) string) error {
 	kinds, _, err := mgr.GetScheme().ObjectKinds(object)
 	if err != nil {
 		return err
@@ -62,10 +76,11 @@ func addController(mgr manager.Manager, object runtime.Object) error {
 	kind := kinds[0]
 
 	r := &PrimitiveReconciler{
-		client: mgr.GetClient(),
-		scheme: mgr.GetScheme(),
-		config: mgr.GetConfig(),
-		kind:   kind,
+		client:         mgr.GetClient(),
+		scheme:         mgr.GetScheme(),
+		config:         mgr.GetConfig(),
+		kind:           kind,
+		protocolGetter: protocolGetter,
 	}
 
 	// Create a new controller

@@ -20,6 +20,7 @@ import (
 
 // PrimitiveSpec is the spec for a Primitive
 type PrimitiveSpec struct {
+	Type     string `json:"type,omitempty"`
 	Protocol string `json:"protocol,omitempty"`
 }
 
