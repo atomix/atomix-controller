@@ -20,7 +20,7 @@ import (
 
 // LockSpec specifies a Lock
 type LockSpec struct {
-	Storage StorageSpec `json:"storage,omitempty"`
+	Store StoreSpec `json:"store,omitempty"`
 }
 
 // +genclient

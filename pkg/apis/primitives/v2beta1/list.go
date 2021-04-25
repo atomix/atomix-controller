@@ -20,7 +20,7 @@ import (
 
 // ListSpec specifies a List
 type ListSpec struct {
-	Storage StorageSpec `json:"storage,omitempty"`
+	Store StoreSpec `json:"store,omitempty"`
 }
 
 // +genclient

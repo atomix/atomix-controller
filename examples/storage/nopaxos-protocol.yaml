@@ -1,7 +1,0 @@
-apiVersion: storage.atomix.io/v2beta1
-kind: NOPaxosProtocol
-metadata:
-  name: nopaxos
-spec:
-  replicas: 3
-  partitions: 10

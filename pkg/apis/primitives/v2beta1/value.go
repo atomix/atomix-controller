@@ -20,13 +20,7 @@ import (
 
 // ValueSpec specifies a Value
 type ValueSpec struct {
-	Storage StorageSpec    `json:"storage,omitempty"`
-	Cache   ValueCacheSpec `json:"cache,omitempty"`
-}
-
-// ValueCacheSpec specifies a Value cache configuration
-type ValueCacheSpec struct {
-	Enabled bool `json:"enabled,omitempty"`
+	Store StoreSpec `json:"store,omitempty"`
 }
 
 // +genclient

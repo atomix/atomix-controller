@@ -1,0 +1,12 @@
+apiVersion: atomix.io/v2beta1
+kind: Store
+metadata:
+  name: example-store
+spec:
+  protocol:
+    apiVersion: storage.atomix.io/v2beta1
+    kind: NOPaxosProtocol
+    spec:
+      clusters: 1
+      partitions: 1
+      replicas: 3

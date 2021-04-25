@@ -1,7 +1,7 @@
 apiVersion: atomix.io/v2beta1
 kind: Store
 metadata:
-  name: store
+  name: example-store
 spec:
   protocol:
     apiVersion: storage.atomix.io/v2beta1

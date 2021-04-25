@@ -1,18 +1,18 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: test-deployment
+  name: example-deployment
   labels:
-    app: test
+    app: example
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: test
+      app: example
   template:
     metadata:
       labels:
-        app: test
+        app: example
       annotations:
         broker.atomix.io/inject: "true"
         raft.storage.atomix.io/inject: "true"

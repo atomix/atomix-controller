@@ -14,8 +14,6 @@
 
 package v2beta1
 
-import corev1 "k8s.io/api/core/v1"
-
-type StorageSpec struct {
-	corev1.ObjectReference `json:",inline"`
+type StoreSpec struct {
+	Name string `json:"name,omitempty"`
 }

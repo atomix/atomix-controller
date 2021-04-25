@@ -20,14 +20,7 @@ import (
 
 // MapSpec specifies a Map
 type MapSpec struct {
-	Storage StorageSpec  `json:"storage,omitempty"`
-	Cache   MapCacheSpec `json:"cache,omitempty"`
-}
-
-// MapCacheSpec specifies a map cache configuration
-type MapCacheSpec struct {
-	Enabled bool  `json:"enabled,omitempty"`
-	MaxSize int32 `json:"maxSize,omitempty"`
+	Store StoreSpec `json:"store,omitempty"`
 }
 
 // +genclient

@@ -20,14 +20,7 @@ import (
 
 // SetSpec specifies a Set
 type SetSpec struct {
-	Storage StorageSpec  `json:"storage,omitempty"`
-	Cache   SetCacheSpec `json:"cache,omitempty"`
-}
-
-// SetCacheSpec specifies a Set cache configuration
-type SetCacheSpec struct {
-	Enabled bool  `json:"enabled,omitempty"`
-	MaxSize int32 `json:"maxSize,omitempty"`
+	Store StoreSpec `json:"store,omitempty"`
 }
 
 // +genclient

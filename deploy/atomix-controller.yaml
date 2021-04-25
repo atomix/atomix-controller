@@ -360,21 +360,13 @@ spec:
           spec:
             type: object
             required:
-            - storage
+            - store
             properties:
-              storage:
+              store:
                 type: object
                 required:
-                - apiVersion
-                - kind
                 - name
                 properties:
-                  apiVersion:
-                    type: string
-                  kind:
-                    type: string
-                  namespace:
-                    type: string
                   name:
                     type: string
 ---
@@ -403,21 +395,13 @@ spec:
           spec:
             type: object
             required:
-            - storage
+            - store
             properties:
-              storage:
+              store:
                 type: object
                 required:
-                - apiVersion
-                - kind
                 - name
                 properties:
-                  apiVersion:
-                    type: string
-                  kind:
-                    type: string
-                  namespace:
-                    type: string
                   name:
                     type: string
 ---
@@ -446,21 +430,13 @@ spec:
           spec:
             type: object
             required:
-            - storage
+            - store
             properties:
-              storage:
+              store:
                 type: object
                 required:
-                - apiVersion
-                - kind
                 - name
                 properties:
-                  apiVersion:
-                    type: string
-                  kind:
-                    type: string
-                  namespace:
-                    type: string
                   name:
                     type: string
 ---
@@ -489,21 +465,13 @@ spec:
           spec:
             type: object
             required:
-            - storage
+            - store
             properties:
-              storage:
+              store:
                 type: object
                 required:
-                - apiVersion
-                - kind
                 - name
                 properties:
-                  apiVersion:
-                    type: string
-                  kind:
-                    type: string
-                  namespace:
-                    type: string
                   name:
                     type: string
 ---
@@ -532,21 +500,13 @@ spec:
           spec:
             type: object
             required:
-            - storage
+            - store
             properties:
-              storage:
+              store:
                 type: object
                 required:
-                - apiVersion
-                - kind
                 - name
                 properties:
-                  apiVersion:
-                    type: string
-                  kind:
-                    type: string
-                  namespace:
-                    type: string
                   name:
                     type: string
 ---
@@ -575,21 +535,13 @@ spec:
           spec:
             type: object
             required:
-            - storage
+            - store
             properties:
-              storage:
+              store:
                 type: object
                 required:
-                - apiVersion
-                - kind
                 - name
                 properties:
-                  apiVersion:
-                    type: string
-                  kind:
-                    type: string
-                  namespace:
-                    type: string
                   name:
                     type: string
 ---
@@ -618,21 +570,13 @@ spec:
           spec:
             type: object
             required:
-            - storage
+            - store
             properties:
-              storage:
+              store:
                 type: object
                 required:
-                - apiVersion
-                - kind
                 - name
                 properties:
-                  apiVersion:
-                    type: string
-                  kind:
-                    type: string
-                  namespace:
-                    type: string
                   name:
                     type: string
 ---
