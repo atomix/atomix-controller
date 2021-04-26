@@ -20,8 +20,8 @@ import (
 
 // PrimitiveSpec is the spec for a Primitive
 type PrimitiveSpec struct {
-	Type     string `json:"type,omitempty"`
-	Protocol string `json:"protocol,omitempty"`
+	Type  string            `json:"type,omitempty"`
+	Store metav1.ObjectMeta `json:"store,omitempty"`
 }
 
 // +genclient

@@ -20,7 +20,7 @@ import (
 
 // CounterSpec specifies a Counter
 type CounterSpec struct {
-	Store StoreSpec `json:"store,omitempty"`
+	Store metav1.ObjectMeta `json:"store,omitempty"`
 }
 
 // +genclient

@@ -20,7 +20,7 @@ import (
 
 // MapSpec specifies a Map
 type MapSpec struct {
-	Store StoreSpec `json:"store,omitempty"`
+	Store metav1.ObjectMeta `json:"store,omitempty"`
 }
 
 // +genclient

@@ -211,7 +211,11 @@ func (r *ProtocolReconciler) reconcileStore(pod *corev1.Pod, store v2beta1.Store
 }
 
 func (r *ProtocolReconciler) prepareAgent(pod *corev1.Pod, store v2beta1.Store, log logging.Logger) (bool, error) {
-	conditions := NewProtocolConditions(store.Name, pod.Status.Conditions)
+	name := types.NamespacedName{
+		Namespace: store.Namespace,
+		Name:      store.Name,
+	}
+	conditions := NewProtocolConditions(name, pod.Status.Conditions)
 
 	// If the agent status is Unknown, add the status to the pod
 	switch conditions.GetReady() {
@@ -267,7 +271,11 @@ func (r *ProtocolReconciler) prepareAgent(pod *corev1.Pod, store v2beta1.Store, 
 }
 
 func (r *ProtocolReconciler) updateAgent(pod *corev1.Pod, store v2beta1.Store, log logging.Logger) (bool, error) {
-	conditions := NewProtocolConditions(store.Name, pod.Status.Conditions)
+	name := types.NamespacedName{
+		Namespace: store.Namespace,
+		Name:      store.Name,
+	}
+	conditions := NewProtocolConditions(name, pod.Status.Conditions)
 
 	// If the generation status is Unknown, add the status to the pod
 	switch conditions.GetRevision(store.Status.Protocol.Revision) {
@@ -401,7 +409,7 @@ func isProtocolReadyCondition(condition corev1.PodConditionType) bool {
 }
 
 // NewProtocolConditions returns new conditions helper for the given driver with the given conditions
-func NewProtocolConditions(protocol string, conditions []corev1.PodCondition) *ProtocolConditions {
+func NewProtocolConditions(protocol types.NamespacedName, conditions []corev1.PodCondition) *ProtocolConditions {
 	return &ProtocolConditions{
 		Protocol:   protocol,
 		Conditions: conditions,
@@ -410,16 +418,16 @@ func NewProtocolConditions(protocol string, conditions []corev1.PodCondition) *P
 
 // ProtocolConditions provides utility functions for driver conditions
 type ProtocolConditions struct {
-	Protocol   string
+	Protocol   types.NamespacedName
 	Conditions []corev1.PodCondition
 }
 
 func (d *ProtocolConditions) getReadyType() corev1.PodConditionType {
-	return corev1.PodConditionType(fmt.Sprintf("protocols.atomix.io/%s", d.Protocol))
+	return corev1.PodConditionType(fmt.Sprintf("%s.%s.protocols.atomix.io/agent", d.Protocol.Name, d.Protocol.Namespace))
 }
 
 func (d *ProtocolConditions) getRevisionType(generation int64) corev1.PodConditionType {
-	return corev1.PodConditionType(fmt.Sprintf("%s.protocols.atomix.io/%d", d.Protocol, generation))
+	return corev1.PodConditionType(fmt.Sprintf("%s.%s.protocols.atomix.io/%d", d.Protocol.Name, d.Protocol.Namespace, generation))
 }
 
 func (d *ProtocolConditions) getConditionStatus(conditionType corev1.PodConditionType) corev1.ConditionStatus {

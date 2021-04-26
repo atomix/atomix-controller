@@ -20,7 +20,7 @@ import (
 
 // ListSpec specifies a List
 type ListSpec struct {
-	Store StoreSpec `json:"store,omitempty"`
+	Store metav1.ObjectMeta `json:"store,omitempty"`
 }
 
 // +genclient

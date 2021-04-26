@@ -20,7 +20,7 @@ import (
 
 // ElectionSpec specifies a Election
 type ElectionSpec struct {
-	Store StoreSpec `json:"store,omitempty"`
+	Store metav1.ObjectMeta `json:"store,omitempty"`
 }
 
 // +genclient

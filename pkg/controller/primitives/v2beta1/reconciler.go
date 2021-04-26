@@ -28,11 +28,11 @@ import (
 )
 
 type PrimitiveReconciler struct {
-	client         client.Client
-	scheme         *runtime.Scheme
-	config         *rest.Config
-	kind           schema.GroupVersionKind
-	protocolGetter func(object runtime.Object) string
+	client      client.Client
+	scheme      *runtime.Scheme
+	config      *rest.Config
+	kind        schema.GroupVersionKind
+	storeGetter func(object runtime.Object) metav1.ObjectMeta
 }
 
 // Reconcile reads that state of the cluster for a primitive object and makes changes based on the pod's annotations
@@ -46,12 +46,8 @@ func (r *PrimitiveReconciler) Reconcile(request reconcile.Request) (reconcile.Re
 	err = r.client.Get(context.TODO(), request.NamespacedName, object)
 	if err != nil {
 		if k8serrors.IsNotFound(err) {
-			// Request object not found, could have been deleted after reconcile request.
-			// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
-			// Return and don't requeue
 			return reconcile.Result{}, nil
 		}
-		// Error reading the object - requeue the request.
 		return reconcile.Result{}, err
 	}
 
@@ -64,8 +60,8 @@ func (r *PrimitiveReconciler) Reconcile(request reconcile.Request) (reconcile.Re
 				Name:      request.Name,
 			},
 			Spec: v2beta1.PrimitiveSpec{
-				Type:     r.kind.Kind,
-				Protocol: r.protocolGetter(object),
+				Type:  r.kind.Kind,
+				Store: r.storeGetter(object),
 			},
 		}
 		if err := controllerutil.SetOwnerReference(object.(metav1.Object), primitive, r.scheme); err != nil {
@@ -74,6 +70,7 @@ func (r *PrimitiveReconciler) Reconcile(request reconcile.Request) (reconcile.Re
 		if err := r.client.Create(context.TODO(), primitive); err != nil {
 			return reconcile.Result{}, err
 		}
+		return reconcile.Result{}, nil
 	}
 	return reconcile.Result{}, err
 }

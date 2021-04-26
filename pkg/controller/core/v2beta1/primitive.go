@@ -191,7 +191,14 @@ func (r *PrimitiveReconciler) reconcilePrimitives(pod *corev1.Pod) (bool, error)
 
 func (r *PrimitiveReconciler) reconcilePrimitive(pod *corev1.Pod, primitive v2beta1.Primitive) (bool, error) {
 	log := newPrimitiveLogger(*pod, primitive)
-	conditions := NewProtocolConditions(primitive.Spec.Protocol, pod.Status.Conditions)
+	name := types.NamespacedName{
+		Namespace: primitive.Spec.Store.Namespace,
+		Name:      primitive.Spec.Store.Name,
+	}
+	if name.Namespace != "" {
+		name.Namespace = primitive.Namespace
+	}
+	conditions := NewProtocolConditions(name, pod.Status.Conditions)
 	if conditions.GetReady() != corev1.ConditionTrue {
 		log.Warn("Protocol is not ready")
 		return false, nil
@@ -342,7 +349,14 @@ func (r *PrimitiveReconciler) registerPrimitive(pod *corev1.Pod, primitive v2bet
 	client := brokerapi.NewBrokerClient(conn)
 
 	log.Info("Registering primitive with broker")
-	conditions := NewProtocolConditions(primitive.Spec.Protocol, pod.Status.Conditions)
+	name := types.NamespacedName{
+		Namespace: primitive.Spec.Store.Namespace,
+		Name:      primitive.Spec.Store.Name,
+	}
+	if name.Namespace != "" {
+		name.Namespace = primitive.Namespace
+	}
+	conditions := NewProtocolConditions(name, pod.Status.Conditions)
 	request := &brokerapi.RegisterPrimitiveRequest{
 		PrimitiveID: brokerapi.PrimitiveId{
 			PrimitiveId: primitiveapi.PrimitiveId{
@@ -453,7 +467,14 @@ func (r *PrimitiveReconciler) unregisterPrimitive(pod *corev1.Pod, primitive v2b
 }
 
 func (r *PrimitiveReconciler) connectAgent(pod *corev1.Pod, primitive v2beta1.Primitive) (*grpc.ClientConn, error) {
-	conditions := NewProtocolConditions(primitive.Spec.Protocol, pod.Status.Conditions)
+	name := types.NamespacedName{
+		Namespace: primitive.Spec.Store.Namespace,
+		Name:      primitive.Spec.Store.Name,
+	}
+	if name.Namespace != "" {
+		name.Namespace = primitive.Namespace
+	}
+	conditions := NewProtocolConditions(name, pod.Status.Conditions)
 	port := conditions.GetPort()
 	address := fmt.Sprintf("%s:%d", pod.Status.PodIP, port)
 	return grpc.Dial(address, grpc.WithInsecure())
@@ -766,7 +787,7 @@ func newPrimitiveLogger(pod corev1.Pod, primitive v2beta1.Primitive) logging.Log
 		logging.String("pod", types.NamespacedName{pod.Namespace, pod.Name}.String()),
 		logging.String("primitive", types.NamespacedName{primitive.Namespace, primitive.Name}.String()),
 		logging.String("type", primitive.OwnerReferences[0].Kind),
-		logging.String("protocol", primitive.Spec.Protocol),
+		logging.String("protocol", types.NamespacedName{primitive.Spec.Store.Namespace, primitive.Spec.Store.Name}.String()),
 	}
 	return log.WithFields(fields...)
 }

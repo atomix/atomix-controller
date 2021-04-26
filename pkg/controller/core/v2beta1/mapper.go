@@ -37,7 +37,7 @@ type podMapper struct {
 
 func (m *podMapper) Map(object handler.MapObject) []reconcile.Request {
 	pods := &corev1.PodList{}
-	if err := m.client.List(context.TODO(), pods); err != nil {
+	if err := m.client.List(context.TODO(), pods, &client.ListOptions{Namespace: object.Meta.GetNamespace()}); err != nil {
 		return []reconcile.Request{}
 	}
 

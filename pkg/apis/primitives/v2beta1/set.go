@@ -20,7 +20,7 @@ import (
 
 // SetSpec specifies a Set
 type SetSpec struct {
-	Store StoreSpec `json:"store,omitempty"`
+	Store metav1.ObjectMeta `json:"store,omitempty"`
 }
 
 // +genclient

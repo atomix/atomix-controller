@@ -331,12 +331,19 @@ spec:
             type: object
             required:
             - type
-            - protocol
+            - store
             properties:
               type:
                 type: string
-              protocol:
-                type: string
+              store:
+                type: object
+                required:
+                - name
+                properties:
+                  namespace:
+                    type: string
+                  name:
+                    type: string
 ---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
@@ -370,6 +377,8 @@ spec:
                 required:
                 - name
                 properties:
+                  namespace:
+                    type: string
                   name:
                     type: string
 ---
@@ -405,6 +414,8 @@ spec:
                 required:
                 - name
                 properties:
+                  namespace:
+                    type: string
                   name:
                     type: string
 ---
@@ -440,6 +451,8 @@ spec:
                 required:
                 - name
                 properties:
+                  namespace:
+                    type: string
                   name:
                     type: string
 ---
@@ -475,6 +488,8 @@ spec:
                 required:
                 - name
                 properties:
+                  namespace:
+                    type: string
                   name:
                     type: string
 ---
@@ -510,6 +525,8 @@ spec:
                 required:
                 - name
                 properties:
+                  namespace:
+                    type: string
                   name:
                     type: string
 ---
@@ -545,6 +562,8 @@ spec:
                 required:
                 - name
                 properties:
+                  namespace:
+                    type: string
                   name:
                     type: string
 ---
@@ -580,6 +599,8 @@ spec:
                 required:
                 - name
                 properties:
+                  namespace:
+                    type: string
                   name:
                     type: string
 ---

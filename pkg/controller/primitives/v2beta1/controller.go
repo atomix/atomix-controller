@@ -19,6 +19,7 @@ import (
 	"github.com/atomix/go-framework/pkg/atomix/logging"
 	"github.com/atomix/kubernetes-controller/pkg/apis/core/v2beta1"
 	primitivesv2beta1 "github.com/atomix/kubernetes-controller/pkg/apis/primitives/v2beta1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -30,45 +31,45 @@ import (
 var log = logging.GetLogger("atomix", "controller", "primitives")
 
 func AddControllers(mgr manager.Manager) error {
-	if err := addController(mgr, &primitivesv2beta1.Counter{}, func(object runtime.Object) string {
-		return object.(*primitivesv2beta1.Counter).Spec.Store.Name
+	if err := addController(mgr, &primitivesv2beta1.Counter{}, func(object runtime.Object) metav1.ObjectMeta {
+		return object.(*primitivesv2beta1.Counter).Spec.Store
 	}); err != nil {
 		return err
 	}
-	if err := addController(mgr, &primitivesv2beta1.Election{}, func(object runtime.Object) string {
-		return object.(*primitivesv2beta1.Election).Spec.Store.Name
+	if err := addController(mgr, &primitivesv2beta1.Election{}, func(object runtime.Object) metav1.ObjectMeta {
+		return object.(*primitivesv2beta1.Election).Spec.Store
 	}); err != nil {
 		return err
 	}
-	if err := addController(mgr, &primitivesv2beta1.List{}, func(object runtime.Object) string {
-		return object.(*primitivesv2beta1.List).Spec.Store.Name
+	if err := addController(mgr, &primitivesv2beta1.List{}, func(object runtime.Object) metav1.ObjectMeta {
+		return object.(*primitivesv2beta1.List).Spec.Store
 	}); err != nil {
 		return err
 	}
-	if err := addController(mgr, &primitivesv2beta1.Lock{}, func(object runtime.Object) string {
-		return object.(*primitivesv2beta1.Lock).Spec.Store.Name
+	if err := addController(mgr, &primitivesv2beta1.Lock{}, func(object runtime.Object) metav1.ObjectMeta {
+		return object.(*primitivesv2beta1.Lock).Spec.Store
 	}); err != nil {
 		return err
 	}
-	if err := addController(mgr, &primitivesv2beta1.Map{}, func(object runtime.Object) string {
-		return object.(*primitivesv2beta1.Map).Spec.Store.Name
+	if err := addController(mgr, &primitivesv2beta1.Map{}, func(object runtime.Object) metav1.ObjectMeta {
+		return object.(*primitivesv2beta1.Map).Spec.Store
 	}); err != nil {
 		return err
 	}
-	if err := addController(mgr, &primitivesv2beta1.Set{}, func(object runtime.Object) string {
-		return object.(*primitivesv2beta1.Set).Spec.Store.Name
+	if err := addController(mgr, &primitivesv2beta1.Set{}, func(object runtime.Object) metav1.ObjectMeta {
+		return object.(*primitivesv2beta1.Set).Spec.Store
 	}); err != nil {
 		return err
 	}
-	if err := addController(mgr, &primitivesv2beta1.Value{}, func(object runtime.Object) string {
-		return object.(*primitivesv2beta1.Value).Spec.Store.Name
+	if err := addController(mgr, &primitivesv2beta1.Value{}, func(object runtime.Object) metav1.ObjectMeta {
+		return object.(*primitivesv2beta1.Value).Spec.Store
 	}); err != nil {
 		return err
 	}
 	return nil
 }
 
-func addController(mgr manager.Manager, object runtime.Object, protocolGetter func(object runtime.Object) string) error {
+func addController(mgr manager.Manager, object runtime.Object, storeGetter func(object runtime.Object) metav1.ObjectMeta) error {
 	kinds, _, err := mgr.GetScheme().ObjectKinds(object)
 	if err != nil {
 		return err
@@ -76,11 +77,11 @@ func addController(mgr manager.Manager, object runtime.Object, protocolGetter fu
 	kind := kinds[0]
 
 	r := &PrimitiveReconciler{
-		client:         mgr.GetClient(),
-		scheme:         mgr.GetScheme(),
-		config:         mgr.GetConfig(),
-		kind:           kind,
-		protocolGetter: protocolGetter,
+		client:      mgr.GetClient(),
+		scheme:      mgr.GetScheme(),
+		config:      mgr.GetConfig(),
+		kind:        kind,
+		storeGetter: storeGetter,
 	}
 
 	// Create a new controller

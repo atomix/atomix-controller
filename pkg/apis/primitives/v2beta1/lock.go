@@ -20,7 +20,7 @@ import (
 
 // LockSpec specifies a Lock
 type LockSpec struct {
-	Store StoreSpec `json:"store,omitempty"`
+	Store metav1.ObjectMeta `json:"store,omitempty"`
 }
 
 // +genclient
