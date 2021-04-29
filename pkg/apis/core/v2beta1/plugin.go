@@ -27,8 +27,13 @@ type PluginSpec struct {
 
 // PluginVersion is a storage plugin version
 type PluginVersion struct {
-	Name   string `json:"name,omitempty"`
-	Driver string `json:"driver,omitempty"`
+	Name   string       `json:"name,omitempty"`
+	Driver PluginDriver `json:"driver,omitempty"`
+}
+
+// PluginDriver is storage plugin driver information
+type PluginDriver struct {
+	Image string `json:"image,omitempty"`
 }
 
 // +genclient

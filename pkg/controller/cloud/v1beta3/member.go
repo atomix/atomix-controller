@@ -17,7 +17,7 @@ package v1beta3
 import (
 	"context"
 	membershipapi "github.com/atomix/api/proto/atomix/membership"
-	"github.com/atomix/kubernetes-controller/pkg/apis/cloud/v1beta3"
+	"github.com/atomix/atomix-controller/pkg/apis/cloud/v1beta3"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"

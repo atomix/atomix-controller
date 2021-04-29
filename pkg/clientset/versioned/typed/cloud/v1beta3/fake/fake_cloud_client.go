@@ -19,7 +19,7 @@ limitations under the License.
 package fake
 
 import (
-	v1beta3 "github.com/atomix/kubernetes-controller/pkg/clientset/versioned/typed/cloud/v1beta3"
+	v1beta3 "github.com/atomix/atomix-controller/pkg/clientset/versioned/typed/cloud/v1beta3"
 	rest "k8s.io/client-go/rest"
 	testing "k8s.io/client-go/testing"
 )

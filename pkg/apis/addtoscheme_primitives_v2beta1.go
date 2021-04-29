@@ -15,7 +15,7 @@
 package apis
 
 import (
-	primitivesv2beta1 "github.com/atomix/kubernetes-controller/pkg/apis/primitives/v2beta1"
+	primitivesv2beta1 "github.com/atomix/atomix-controller/pkg/apis/primitives/v2beta1"
 )
 
 func init() {

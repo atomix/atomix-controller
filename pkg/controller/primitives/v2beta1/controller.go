@@ -16,9 +16,9 @@ package v2beta1
 
 import (
 	"fmt"
-	"github.com/atomix/go-framework/pkg/atomix/logging"
-	"github.com/atomix/kubernetes-controller/pkg/apis/core/v2beta1"
-	primitivesv2beta1 "github.com/atomix/kubernetes-controller/pkg/apis/primitives/v2beta1"
+	"github.com/atomix/atomix-controller/pkg/apis/core/v2beta1"
+	primitivesv2beta1 "github.com/atomix/atomix-controller/pkg/apis/primitives/v2beta1"
+	"github.com/atomix/atomix-go-framework/pkg/atomix/logging"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/controller"

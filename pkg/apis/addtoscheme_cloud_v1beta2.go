@@ -14,7 +14,7 @@
 
 package apis
 
-import "github.com/atomix/kubernetes-controller/pkg/apis/cloud/v1beta3"
+import "github.com/atomix/atomix-controller/pkg/apis/cloud/v1beta3"
 
 func init() {
 	// register the types with the Scheme so the components can map objects to GroupVersionKinds and back

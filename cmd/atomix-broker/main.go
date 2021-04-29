@@ -16,8 +16,8 @@ package main
 
 import (
 	"fmt"
-	"github.com/atomix/go-framework/pkg/atomix/broker"
-	"github.com/atomix/go-framework/pkg/atomix/logging"
+	"github.com/atomix/atomix-go-framework/pkg/atomix/broker"
+	"github.com/atomix/atomix-go-framework/pkg/atomix/logging"
 	"github.com/spf13/cobra"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	"os"

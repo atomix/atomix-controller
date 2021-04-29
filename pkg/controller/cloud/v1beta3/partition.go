@@ -16,7 +16,7 @@ package v1beta3
 
 import (
 	"fmt"
-	"github.com/atomix/kubernetes-controller/pkg/apis/cloud/v1beta3"
+	"github.com/atomix/atomix-controller/pkg/apis/cloud/v1beta3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"strconv"

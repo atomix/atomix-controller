@@ -18,7 +18,7 @@ import (
 	"context"
 	databaseapi "github.com/atomix/api/proto/atomix/database"
 	primitiveapi "github.com/atomix/api/proto/atomix/primitive"
-	"github.com/atomix/kubernetes-controller/pkg/apis/cloud/v1beta3"
+	"github.com/atomix/atomix-controller/pkg/apis/cloud/v1beta3"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"

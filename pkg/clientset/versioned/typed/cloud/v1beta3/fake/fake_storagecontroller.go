@@ -19,7 +19,7 @@ limitations under the License.
 package fake
 
 import (
-	v1beta3 "github.com/atomix/kubernetes-controller/pkg/apis/cloud/v1beta3"
+	v1beta3 "github.com/atomix/atomix-controller/pkg/apis/cloud/v1beta3"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"

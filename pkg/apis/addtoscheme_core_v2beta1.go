@@ -15,7 +15,7 @@
 package apis
 
 import (
-	corev2beta1 "github.com/atomix/kubernetes-controller/pkg/apis/core/v2beta1"
+	corev2beta1 "github.com/atomix/atomix-controller/pkg/apis/core/v2beta1"
 )
 
 func init() {

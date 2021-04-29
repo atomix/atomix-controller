@@ -19,8 +19,8 @@ limitations under the License.
 package v1beta3
 
 import (
-	"github.com/atomix/kubernetes-controller/pkg/apis/cloud/v1beta3"
-	"github.com/atomix/kubernetes-controller/pkg/clientset/versioned/scheme"
+	"github.com/atomix/atomix-controller/pkg/apis/cloud/v1beta3"
+	"github.com/atomix/atomix-controller/pkg/clientset/versioned/scheme"
 	"k8s.io/client-go/rest"
 )
 

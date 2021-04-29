@@ -16,7 +16,7 @@ package v2beta1
 
 import (
 	"context"
-	"github.com/atomix/kubernetes-controller/pkg/apis/core/v2beta1"
+	"github.com/atomix/atomix-controller/pkg/apis/core/v2beta1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"

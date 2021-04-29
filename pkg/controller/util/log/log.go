@@ -16,7 +16,7 @@ package log
 
 import (
 	"fmt"
-	"github.com/atomix/go-framework/pkg/atomix/logging"
+	"github.com/atomix/atomix-go-framework/pkg/atomix/logging"
 	"github.com/go-logr/logr"
 )
 

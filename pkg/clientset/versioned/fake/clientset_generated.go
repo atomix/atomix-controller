@@ -19,9 +19,9 @@ limitations under the License.
 package fake
 
 import (
-	clientset "github.com/atomix/kubernetes-controller/pkg/clientset/versioned"
-	cloudv1beta3 "github.com/atomix/kubernetes-controller/pkg/clientset/versioned/typed/cloud/v1beta3"
-	fakecloudv1beta3 "github.com/atomix/kubernetes-controller/pkg/clientset/versioned/typed/cloud/v1beta3/fake"
+	clientset "github.com/atomix/atomix-controller/pkg/clientset/versioned"
+	cloudv1beta3 "github.com/atomix/atomix-controller/pkg/clientset/versioned/typed/cloud/v1beta3"
+	fakecloudv1beta3 "github.com/atomix/atomix-controller/pkg/clientset/versioned/typed/cloud/v1beta3/fake"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/discovery"

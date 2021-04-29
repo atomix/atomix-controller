@@ -16,7 +16,7 @@ package v1beta3
 
 import (
 	membershipapi "github.com/atomix/api/proto/atomix/membership"
-	cloudv1beta3 "github.com/atomix/kubernetes-controller/pkg/apis/cloud/v1beta3"
+	cloudv1beta3 "github.com/atomix/atomix-controller/pkg/apis/cloud/v1beta3"
 	"google.golang.org/grpc"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"

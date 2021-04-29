@@ -1,11 +1,11 @@
-module github.com/atomix/kubernetes-controller
+module github.com/atomix/atomix-controller
 
 go 1.13
 
 require (
 	github.com/atomix/api v0.3.3
-	github.com/atomix/api/go v0.3.3
-	github.com/atomix/go-framework v0.5.1
+	github.com/atomix/atomix-api/go v0.3.3
+	github.com/atomix/atomix-go-framework v0.5.1
 	github.com/ghodss/yaml v1.0.0
 	github.com/go-logr/logr v0.1.0
 	github.com/go-logr/zapr v0.1.0 // indirect
@@ -34,6 +34,6 @@ require (
 	sigs.k8s.io/testing_frameworks v0.1.1 // indirect
 )
 
-replace github.com/atomix/api/go => ../atomix-api/go
+replace github.com/atomix/atomix-api/go => ../atomix-api/go
 
-replace github.com/atomix/go-framework => ../atomix-go-node
+replace github.com/atomix/atomix-go-framework => ../atomix-go-node

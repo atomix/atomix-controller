@@ -17,7 +17,7 @@ package v2beta1
 import (
 	"context"
 	"fmt"
-	"github.com/atomix/kubernetes-controller/pkg/apis/core/v2beta1"
+	"github.com/atomix/atomix-controller/pkg/apis/core/v2beta1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -146,8 +146,11 @@ func (i *DriverInjector) Handle(ctx context.Context, request admission.Request) 
 
 			container := corev1.Container{
 				Name:            strings.ReplaceAll(fmt.Sprintf("driver-%s-%s", pluginName, version.Name), ".", "-"),
-				Image:           version.Driver,
+				Image:           version.Driver.Image,
 				ImagePullPolicy: corev1.PullIfNotPresent,
+				Args: []string{
+					fmt.Sprintf(":%d", port),
+				},
 				Ports: []corev1.ContainerPort{
 					{
 						Name:          "driver",
@@ -166,10 +169,6 @@ func (i *DriverInjector) Handle(ctx context.Context, request admission.Request) 
 					{
 						Name:  driverNameEnv,
 						Value: namespacedName.Name,
-					},
-					{
-						Name:  driverPortEnv,
-						Value: fmt.Sprint(port),
 					},
 					{
 						Name: driverNodeEnv,

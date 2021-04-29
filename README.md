@@ -1,10 +1,10 @@
-# Atomix Kubernetes Controller
+# Atomix Kubernetes atomix-controller
 
-[![Build Status](https://travis-ci.org/atomix/kubernetes-controller.svg?branch=master)](https://travis-ci.org/atomix/kubernetes-controller)
-[![Integration Test Status](https://img.shields.io/travis/atomix/kubernetes-controller?label=Atomix%20Tests&logo=Atomix)](https://travis-ci.org/onosproject/onos-test)
-[![Go Report Card](https://goreportcard.com/badge/github.com/atomix/kubernetes-controller)](https://goreportcard.com/report/github.com/atomix/kubernetes-controller)
+[![Build Status](https://travis-ci.org/atomix/atomix-controller.svg?branch=master)](https://travis-ci.org/atomix/atomix-controller)
+[![Integration Test Status](https://img.shields.io/travis/atomix/atomix-controller?label=Atomix%20Tests&logo=Atomix)](https://travis-ci.org/onosproject/onos-test)
+[![Go Report Card](https://goreportcard.com/badge/github.com/atomix/atomix-controller)](https://goreportcard.com/report/github.com/atomix/atomix-controller)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://github.com/gojp/goreportcard/blob/master/LICENSE)
-[![GoDoc](https://godoc.org/github.com/atomix/kubernetes-controller?status.svg)](https://godoc.org/github.com/atomix/kubernetes-controller)
+[![GoDoc](https://godoc.org/github.com/atomix/atomix-controller?status.svg)](https://godoc.org/github.com/atomix/atomix-controller)
 
 This project provides an [Atomix] controller for [Kubernetes]. The controller
 implements the Atomix controller API and uses [custom Kubernetes resources][custom-resources]
@@ -16,21 +16,21 @@ partition groups and partitions. For more information see [how it works](#how-it
 To deploy the controller, use the `atomix-controller.yaml` manifest:
 
 ```bash
-> kubectl create -f https://raw.githubusercontent.com/atomix/kubernetes-controller/master/deploy/atomix-controller.yaml
+> kubectl create -f https://raw.githubusercontent.com/atomix/atomix-controller/master/deploy/atomix-controller.yaml
 customresourcedefinition.apiextensions.k8s.io/databases.cloud.atomix.io created
 customresourcedefinition.apiextensions.k8s.io/partitions.cloud.atomix.io created
 customresourcedefinition.apiextensions.k8s.io/members.cloud.atomix.io created
 customresourcedefinition.apiextensions.k8s.io/primitives.cloud.atomix.io created
-serviceaccount/atomix-controller created
-clusterrole.rbac.authorization.k8s.io/atomix-controller created
-clusterrolebinding.rbac.authorization.k8s.io/atomix-controller created
-service/atomix-controller created
-deployment.apps/atomix-controller created
+serviceaccount/atomix-atomix-atomix-controller created
+clusterrole.rbac.authorization.k8s.io/atomix-atomix-atomix-controller created
+clusterrolebinding.rbac.authorization.k8s.io/atomix-atomix-atomix-controller created
+service/atomix-atomix-atomix-controller created
+deployment.apps/atomix-atomix-atomix-controller created
 ```
 
 ## Usage
 
-The `kubernetes-controller` is the primary controller for deploying Atomix `Database`s in [Kubernetes]. The controller
+The `controller` is the primary controller for deploying Atomix `Database`s in [Kubernetes]. The controller
 adds a number of custom resources to the k8s cluster:
 * `Database` is used to deploy new databases
 * `Partition` is used by clients to partition databases

@@ -21,8 +21,8 @@ package v1beta3
 import (
 	"time"
 
-	scheme "github.com/atomix/kubernetes-controller/pkg/clientset/versioned/scheme"
-	v1beta3 "github.com/atomix/kubernetes-controller/pkg/apis/cloud/v1beta3"
+	scheme "github.com/atomix/atomix-controller/pkg/clientset/versioned/scheme"
+	v1beta3 "github.com/atomix/atomix-controller/pkg/apis/cloud/v1beta3"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"

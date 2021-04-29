@@ -19,7 +19,7 @@ limitations under the License.
 package scheme
 
 import (
-	cloudv1beta3 "github.com/atomix/kubernetes-controller/pkg/apis/cloud/v1beta3"
+	cloudv1beta3 "github.com/atomix/atomix-controller/pkg/apis/cloud/v1beta3"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"

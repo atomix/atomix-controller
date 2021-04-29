@@ -19,7 +19,7 @@ import (
 	"errors"
 	"fmt"
 	databaseapi "github.com/atomix/api/proto/atomix/database"
-	"github.com/atomix/kubernetes-controller/pkg/apis/cloud/v1beta3"
+	"github.com/atomix/atomix-controller/pkg/apis/cloud/v1beta3"
 	"google.golang.org/grpc"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"

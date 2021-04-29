@@ -5,7 +5,7 @@ metadata:
 spec:
   protocol:
     apiVersion: storage.atomix.io/v2beta1
-    kind: RaftProtocol
+    kind: MultiRaftProtocol
     spec:
       clusters: 1
       partitions: 1

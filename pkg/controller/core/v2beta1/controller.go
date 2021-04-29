@@ -15,7 +15,7 @@
 package v2beta1
 
 import (
-	"github.com/atomix/go-framework/pkg/atomix/logging"
+	"github.com/atomix/atomix-go-framework/pkg/atomix/logging"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 )
 

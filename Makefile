@@ -13,39 +13,39 @@ all: images
 
 build: # @HELP build the source code
 build:
-	go build -o build/bin/atomix-controller ./cmd/controller
-	go build -o build/bin/atomix-broker ./cmd/broker
-	go build -o build/bin/atomix-controller-init ./cmd/init
+	go build -o build/bin/atomix-controller ./cmd/atomix-controller
+	go build -o build/bin/atomix-broker ./cmd/atomix-broker
+	go build -o build/bin/atomix-controller-init-certs ./cmd/atomix-controller-init-certs
 
 controller-image:
-	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o build/docker/controller/bin/atomix-controller ./cmd/controller
-	docker build ./build/docker/controller -f build/docker/controller/Dockerfile -t atomix/kubernetes-controller:${CONTROLLER_VERSION}
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o build/docker/atomix-controller/bin/atomix-controller ./cmd/atomix-controller
+	docker build ./build/docker/atomix-controller -f build/docker/atomix-controller/Dockerfile -t atomix/atomix-controller:${CONTROLLER_VERSION}
 
 broker-image:
 	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o build/docker/broker/bin/atomix-broker ./cmd/broker
-	docker build ./build/docker/broker -f build/docker/broker/Dockerfile -t atomix/kubernetes-broker:${CONTROLLER_VERSION}
+	docker build ./build/docker/atomix-broker -f build/docker/broker/Dockerfile -t atomix/broker:${CONTROLLER_VERSION}
 
-init-image:
-	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o build/docker/init/bin/atomix-controller-init ./cmd/init
-	docker build ./build/docker/init -f build/docker/init/Dockerfile -t atomix/kubernetes-controller-init:${CONTROLLER_VERSION}
+init-certs-image:
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o build/docker/atomix-controller-init-certs/bin/atomix-controller-init-certs ./cmd/atomix-controller-init-certs
+	docker build ./build/docker/atomix-controller-init-certs -f build/docker/atomix-controller-init-certs/Dockerfile -t atomix/atomix-controller-init-certs:${CONTROLLER_VERSION}
 
-images: controller-image broker-image init-image
+images: controller-image broker-image init-certs-image
 
 kind: images
 	@if [ "`kind get clusters`" = '' ]; then echo "no kind cluster found" && exit 1; fi
-	kind load docker-image atomix/kubernetes-controller:${CONTROLLER_VERSION}
-	kind load docker-image atomix/kubernetes-broker:${CONTROLLER_VERSION}
-	kind load docker-image atomix/kubernetes-controller-init:${CONTROLLER_VERSION}
+	kind load docker-image atomix/atomix-controller:${CONTROLLER_VERSION}
+	kind load docker-image atomix/atomix-broker:${CONTROLLER_VERSION}
+	kind load docker-image atomix/atomix-controller-init-certs:${CONTROLLER_VERSION}
 
-push: # @HELP push kubernetes-controller Docker image
-	docker push atomix/kubernetes-controller:${CONTROLLER_VERSION}
-	docker push atomix/kubernetes-broker:${CONTROLLER_VERSION}
-	docker push atomix/kubernetes-controller-init:${CONTROLLER_VERSION}
+push: # @HELP push controller Docker image
+	docker push atomix/atomix-controller:${CONTROLLER_VERSION}
+	docker push atomix/atomix-broker:${CONTROLLER_VERSION}
+	docker push atomix/atomix-controller-init-certs:${CONTROLLER_VERSION}
 
 test: # @HELP run the unit tests and source code validation
 test: deps license_check linters
-	go test github.com/atomix/kubernetes-controller/cmd/...
-	go test github.com/atomix/kubernetes-controller/pkg/...
+	go test github.com/atomix/atomix-controller/cmd/...
+	go test github.com/atomix/atomix-controller/pkg/...
 
 deps: # @HELP ensure that the required dependencies are in place
 	go build -v ./...

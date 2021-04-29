@@ -22,8 +22,8 @@ import (
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"fmt"
-	"github.com/atomix/go-framework/pkg/atomix/logging"
-	"github.com/atomix/kubernetes-controller/pkg/controller/util/k8s"
+	"github.com/atomix/atomix-controller/pkg/controller/util/k8s"
+	"github.com/atomix/atomix-go-framework/pkg/atomix/logging"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"math/big"
@@ -33,7 +33,7 @@ import (
 	"time"
 )
 
-var log = logging.GetLogger("atomix", "controller", "init")
+var log = logging.GetLogger("atomix", "controller", "init-certs")
 
 func printVersion() {
 	log.Info(fmt.Sprintf("Go Version: %s", runtime.Version()))

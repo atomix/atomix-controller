@@ -225,7 +225,12 @@ spec:
                     name:
                       type: string
                     driver:
-                      type: string
+                      type: object
+                      required:
+                      - image
+                      properties:
+                        image:
+                          type: string
 ---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
@@ -712,7 +717,7 @@ spec:
       serviceAccountName: atomix-controller
       initContainers:
       - name: init-certs
-        image: atomix/kubernetes-controller-init:latest
+        image: atomix/atomix-controller-init-certs:latest
         imagePullPolicy: IfNotPresent
         securityContext:
           allowPrivilegeEscalation: false
@@ -744,7 +749,7 @@ spec:
           mountPath: /etc/webhook/certs
       containers:
       - name: controller
-        image: atomix/kubernetes-controller:latest
+        image: atomix/atomix-controller:latest
         imagePullPolicy: IfNotPresent
         securityContext:
           allowPrivilegeEscalation: false

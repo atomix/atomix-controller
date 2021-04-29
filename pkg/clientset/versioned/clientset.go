@@ -19,7 +19,7 @@ limitations under the License.
 package versioned
 
 import (
-	cloudv1beta3 "github.com/atomix/kubernetes-controller/pkg/clientset/versioned/typed/cloud/v1beta3"
+	cloudv1beta3 "github.com/atomix/atomix-controller/pkg/clientset/versioned/typed/cloud/v1beta3"
 	discovery "k8s.io/client-go/discovery"
 	rest "k8s.io/client-go/rest"
 	flowcontrol "k8s.io/client-go/util/flowcontrol"

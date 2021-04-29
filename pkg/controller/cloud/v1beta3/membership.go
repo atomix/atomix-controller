@@ -17,7 +17,7 @@ package v1beta3
 import (
 	"context"
 	membershipapi "github.com/atomix/api/proto/atomix/membership"
-	"github.com/atomix/kubernetes-controller/pkg/apis/cloud/v1beta3"
+	"github.com/atomix/atomix-controller/pkg/apis/cloud/v1beta3"
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	corev1 "k8s.io/api/core/v1"
