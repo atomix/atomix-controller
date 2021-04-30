@@ -34,8 +34,5 @@ func AddControllers(mgr manager.Manager) error {
 	if err := addPrimitiveController(mgr); err != nil {
 		return err
 	}
-	if err := addProtocolController(mgr); err != nil {
-		return err
-	}
 	return nil
 }

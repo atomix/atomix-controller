@@ -16,10 +16,12 @@ package v2beta1
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	brokerapi "github.com/atomix/atomix-api/go/atomix/management/broker"
 	driverapi "github.com/atomix/atomix-api/go/atomix/management/driver"
 	primitiveapi "github.com/atomix/atomix-api/go/atomix/primitive"
+	protocolapi "github.com/atomix/atomix-api/go/atomix/protocol"
 	"github.com/atomix/atomix-controller/pkg/apis/core/v2beta1"
 	"github.com/atomix/atomix-go-framework/pkg/atomix/logging"
 	"google.golang.org/grpc"
@@ -29,6 +31,7 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
@@ -39,7 +42,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
-	"strings"
+	"strconv"
 )
 
 const (
@@ -48,7 +51,7 @@ const (
 )
 
 func addPrimitiveController(mgr manager.Manager) error {
-	r := &PrimitiveReconciler{
+	r := &ProxyReconciler{
 		client: mgr.GetClient(),
 		scheme: mgr.GetScheme(),
 		config: mgr.GetConfig(),
@@ -68,7 +71,9 @@ func addPrimitiveController(mgr manager.Manager) error {
 
 	// Watch for changes to Primitives and enqueue all pods
 	err = c.Watch(&source.Kind{Type: &v2beta1.Primitive{}}, &handler.EnqueueRequestsFromMapFunc{
-		ToRequests: newPodMapper(mgr),
+		ToRequests: newPodMapper(mgr, func(object handler.MapObject) string {
+			return object.Meta.GetNamespace()
+		}),
 	})
 	if err != nil {
 		return err
@@ -76,7 +81,9 @@ func addPrimitiveController(mgr manager.Manager) error {
 
 	// Watch for changes to Stores and enqueue all pods
 	err = c.Watch(&source.Kind{Type: &v2beta1.Store{}}, &handler.EnqueueRequestsFromMapFunc{
-		ToRequests: newPodMapper(mgr),
+		ToRequests: newPodMapper(mgr, func(object handler.MapObject) string {
+			return ""
+		}),
 	})
 	if err != nil {
 		return err
@@ -84,14 +91,14 @@ func addPrimitiveController(mgr manager.Manager) error {
 	return nil
 }
 
-// PrimitiveReconciler is a Reconciler for Primitive resources
-type PrimitiveReconciler struct {
+// ProxyReconciler is a Reconciler for Primitive resources
+type ProxyReconciler struct {
 	client client.Client
 	scheme *runtime.Scheme
 	config *rest.Config
 }
 
-func (r *PrimitiveReconciler) Reconcile(request reconcile.Request) (reconcile.Result, error) {
+func (r *ProxyReconciler) Reconcile(request reconcile.Request) (reconcile.Result, error) {
 	log.Infof("Reconciling Pod '%s'", request.NamespacedName)
 	pod := &corev1.Pod{}
 	err := r.client.Get(context.TODO(), request.NamespacedName, pod)
@@ -134,7 +141,7 @@ func (r *PrimitiveReconciler) Reconcile(request reconcile.Request) (reconcile.Re
 	return reconcile.Result{}, nil
 }
 
-func (r *PrimitiveReconciler) prepareStatus(pod *corev1.Pod) (bool, error) {
+func (r *ProxyReconciler) prepareStatus(pod *corev1.Pod) (bool, error) {
 	log := newPodLogger(*pod)
 	for _, condition := range pod.Status.Conditions {
 		if condition.Type == brokerReadyCondition {
@@ -157,7 +164,7 @@ func (r *PrimitiveReconciler) prepareStatus(pod *corev1.Pod) (bool, error) {
 	return true, nil
 }
 
-func (r *PrimitiveReconciler) updateStatus(pod *corev1.Pod) (bool, error) {
+func (r *ProxyReconciler) updateStatus(pod *corev1.Pod) (bool, error) {
 	for _, condition := range pod.Status.Conditions {
 		if isProtocolReadyCondition(condition.Type) && condition.Status != corev1.ConditionTrue {
 			return false, nil
@@ -184,7 +191,226 @@ func (r *PrimitiveReconciler) updateStatus(pod *corev1.Pod) (bool, error) {
 	return true, nil
 }
 
-func (r *PrimitiveReconciler) reconcilePrimitives(pod *corev1.Pod) (bool, error) {
+func (r *ProxyReconciler) reconcileStore(pod *corev1.Pod, store v2beta1.Store) (bool, error) {
+	log := newStoreLogger(*pod, store)
+	if !store.Status.Ready {
+		log.Warn("Store is not ready")
+		return false, nil
+	}
+	if store.Status.Protocol == nil {
+		return false, errors.New("store is ready, but no protocol configuration provided by plugin")
+	}
+	if ok, err := r.prepareAgent(pod, store, log); err != nil {
+		return false, err
+	} else if ok {
+		return true, nil
+	}
+	if ok, err := r.updateAgent(pod, store, log); err != nil {
+		return false, err
+	} else if ok {
+		return true, nil
+	}
+	return false, nil
+}
+
+func (r *ProxyReconciler) prepareAgent(pod *corev1.Pod, store v2beta1.Store, log logging.Logger) (bool, error) {
+	name := types.NamespacedName{
+		Namespace: store.Namespace,
+		Name:      store.Name,
+	}
+	conditions := NewProtocolConditions(name, pod.Status.Conditions)
+
+	// If the agent status is Unknown, add the status to the pod
+	switch conditions.GetReady() {
+	case corev1.ConditionUnknown:
+		log.Info("Initializing agent ready condition")
+		pod.Status.Conditions = conditions.SetReady(corev1.ConditionFalse)
+		err := r.client.Status().Update(context.TODO(), pod)
+		if err != nil {
+			log.Error(err, "Initializing agent ready condition")
+			return false, err
+		}
+		return true, nil
+	case corev1.ConditionFalse:
+		log.Info("Connecting to protocol driver")
+		conn, err := r.connectDriver(pod, store)
+		if err != nil {
+			log.Error(err, "Connecting to protocol driver")
+			return false, err
+		}
+		defer conn.Close()
+		client := driverapi.NewDriverClient(conn)
+
+		log.Info("Starting protocol agent")
+		port, err := conditions.GetPort()
+		if err != nil {
+			log.Error(err, "Connecting to protocol driver")
+			return false, err
+		}
+		request := &driverapi.StartAgentRequest{
+			AgentID: driverapi.AgentId{
+				Namespace: store.Namespace,
+				Name:      store.Name,
+			},
+			Address: driverapi.AgentAddress{
+				Port: int32(port),
+			},
+			Config: driverapi.AgentConfig{
+				Protocol: r.getProtocolConfig(store),
+			},
+		}
+		_, err = client.StartAgent(context.TODO(), request)
+		if err != nil {
+			log.Error(err, "Starting protocol agent")
+			return false, err
+		}
+
+		log.Info("Updating agent ready condition")
+		pod.Status.Conditions = conditions.SetReady(corev1.ConditionTrue)
+		err = r.client.Status().Update(context.TODO(), pod)
+		if err != nil {
+			log.Error(err, "Updating agent ready condition")
+			return false, err
+		}
+		return true, nil
+	default:
+		return false, nil
+	}
+}
+
+func (r *ProxyReconciler) updateAgent(pod *corev1.Pod, store v2beta1.Store, log logging.Logger) (bool, error) {
+	name := types.NamespacedName{
+		Namespace: store.Namespace,
+		Name:      store.Name,
+	}
+	conditions := NewProtocolConditions(name, pod.Status.Conditions)
+
+	// If the generation status is Unknown, add the status to the pod
+	switch conditions.GetRevision(store.Status.Protocol.Revision) {
+	case corev1.ConditionUnknown:
+		log.Info("Initializing configuration change condition")
+		pod.Status.Conditions = conditions.SetRevision(store.Status.Protocol.Revision, corev1.ConditionFalse)
+		err := r.client.Status().Update(context.TODO(), pod)
+		if err != nil {
+			log.Error(err, "Initializing configuration change condition")
+			return false, err
+		}
+		return true, nil
+	case corev1.ConditionFalse:
+		log.Info("Connecting to protocol driver")
+		conn, err := r.connectDriver(pod, store)
+		if err != nil {
+			log.Error(err, "Connecting to protocol driver")
+			return false, err
+		}
+		defer conn.Close()
+		client := driverapi.NewDriverClient(conn)
+
+		log.Info("Reconfiguring protocol agent")
+		request := &driverapi.ConfigureAgentRequest{
+			AgentID: driverapi.AgentId{
+				Namespace: store.Namespace,
+				Name:      store.Name,
+			},
+			Config: driverapi.AgentConfig{
+				Protocol: r.getProtocolConfig(store),
+			},
+		}
+		_, err = client.ConfigureAgent(context.TODO(), request)
+		if err != nil {
+			log.Error(err, "Reconfiguring protocol agent")
+			return false, err
+		}
+
+		log.Info("Updating configuration change condition")
+		pod.Status.Conditions = conditions.SetRevision(store.Status.Protocol.Revision, corev1.ConditionTrue)
+		err = r.client.Status().Update(context.TODO(), pod)
+		if err != nil {
+			log.Error(err, "Updating configuration change condition")
+			return false, err
+		}
+		return true, nil
+	default:
+		return false, nil
+	}
+}
+
+func (r *ProxyReconciler) getDriverPort(pod *corev1.Pod, store v2beta1.Store) (int, error) {
+	object, err := runtime.Decode(unstructured.UnstructuredJSONScheme, store.Spec.Protocol.Raw)
+	if err != nil {
+		return 0, err
+	}
+	protocol := object.(*unstructured.Unstructured)
+	gvc := protocol.GroupVersionKind()
+
+	plugins := &v2beta1.StoragePluginList{}
+	err = r.client.List(context.TODO(), plugins)
+	if err != nil {
+		return 0, err
+	}
+
+	for _, plugin := range plugins.Items {
+		if plugin.Spec.Group == gvc.Group && plugin.Spec.Kind == gvc.Kind {
+			for _, version := range plugin.Spec.Versions {
+				if version.Name == gvc.Version {
+					portAnnotation := fmt.Sprintf("%s.%s/port", version.Name, plugin.Name)
+					portValue := pod.Annotations[portAnnotation]
+					if portValue == "" {
+						return 0, errors.New("port annotation not found")
+					}
+					return strconv.Atoi(portValue)
+				}
+			}
+			return 0, errors.New("protocol version not found")
+		}
+	}
+	return 0, errors.New("protocol plugin not found")
+}
+
+func (r *ProxyReconciler) connectDriver(pod *corev1.Pod, store v2beta1.Store) (*grpc.ClientConn, error) {
+	port, err := r.getDriverPort(pod, store)
+	if err != nil {
+		return nil, err
+	}
+	address := fmt.Sprintf("%s:%d", pod.Status.PodIP, port)
+	return grpc.Dial(address, grpc.WithInsecure())
+}
+
+func (r *ProxyReconciler) getProtocolConfig(protocol v2beta1.Store) protocolapi.ProtocolConfig {
+	replicas := make([]protocolapi.ProtocolReplica, len(protocol.Status.Protocol.Replicas))
+	for i, replica := range protocol.Status.Protocol.Replicas {
+		var host string
+		if replica.Host != nil {
+			host = *replica.Host
+		}
+		var port int32
+		if replica.Port != nil {
+			port = *replica.Port
+		}
+		replicas[i] = protocolapi.ProtocolReplica{
+			ID:         replica.ID,
+			NodeID:     replica.NodeID,
+			Host:       host,
+			APIPort:    port,
+			ExtraPorts: replica.ExtraPorts,
+		}
+	}
+
+	partitions := make([]protocolapi.ProtocolPartition, len(protocol.Status.Protocol.Partitions))
+	for i, partition := range protocol.Status.Protocol.Partitions {
+		partitions[i] = protocolapi.ProtocolPartition{
+			PartitionID: partition.ID,
+			Replicas:    partition.Replicas,
+		}
+	}
+
+	return protocolapi.ProtocolConfig{
+		Replicas:   replicas,
+		Partitions: partitions,
+	}
+}
+
+func (r *ProxyReconciler) reconcilePrimitives(pod *corev1.Pod) (bool, error) {
 	primitives := &v2beta1.PrimitiveList{}
 	err := r.client.List(context.TODO(), primitives, &client.ListOptions{Namespace: pod.Namespace})
 	if err != nil {
@@ -200,15 +426,30 @@ func (r *PrimitiveReconciler) reconcilePrimitives(pod *corev1.Pod) (bool, error)
 	return false, nil
 }
 
-func (r *PrimitiveReconciler) reconcilePrimitive(pod *corev1.Pod, primitive v2beta1.Primitive) (bool, error) {
+func (r *ProxyReconciler) reconcilePrimitive(pod *corev1.Pod, primitive v2beta1.Primitive) (bool, error) {
 	log := newPrimitiveLogger(*pod, primitive)
+	store := v2beta1.Store{}
 	name := types.NamespacedName{
 		Namespace: primitive.Spec.Store.Namespace,
 		Name:      primitive.Spec.Store.Name,
 	}
-	if name.Namespace != "" {
+	if name.Namespace == "" {
 		name.Namespace = primitive.Namespace
 	}
+	if err := r.client.Get(context.TODO(), name, &store); err != nil {
+		if k8serrors.IsNotFound(err) {
+			log.Warn("Store not found")
+			return false, nil
+		}
+		return false, err
+	}
+
+	if ok, err := r.reconcileStore(pod, store); err != nil {
+		return false, err
+	} else if ok {
+		return true, nil
+	}
+
 	conditions := NewProtocolConditions(name, pod.Status.Conditions)
 	if conditions.GetReady() != corev1.ConditionTrue {
 		log.Warn("Protocol is not ready")
@@ -233,7 +474,7 @@ func (r *PrimitiveReconciler) reconcilePrimitive(pod *corev1.Pod, primitive v2be
 	return false, nil
 }
 
-func (r *PrimitiveReconciler) updatePrimitive(pod *corev1.Pod, primitive v2beta1.Primitive, log logging.Logger) (bool, error) {
+func (r *ProxyReconciler) updatePrimitive(pod *corev1.Pod, primitive v2beta1.Primitive, log logging.Logger) (bool, error) {
 	// Update the proxy based on the status of primitive conditions
 	conditions := NewPrimitiveConditions(primitive.Name, pod.Status.Conditions)
 	switch conditions.GetReady() {
@@ -312,7 +553,7 @@ func (r *PrimitiveReconciler) updatePrimitive(pod *corev1.Pod, primitive v2beta1
 	return false, nil
 }
 
-func (r *PrimitiveReconciler) createProxy(pod *corev1.Pod, primitive v2beta1.Primitive, log logging.Logger) (bool, error) {
+func (r *ProxyReconciler) createProxy(pod *corev1.Pod, primitive v2beta1.Primitive, log logging.Logger) (bool, error) {
 	conditions := NewPrimitiveConditions(primitive.Name, pod.Status.Conditions)
 
 	log.Info("Connecting to protocol agent")
@@ -349,7 +590,7 @@ func (r *PrimitiveReconciler) createProxy(pod *corev1.Pod, primitive v2beta1.Pri
 	return true, nil
 }
 
-func (r *PrimitiveReconciler) registerPrimitive(pod *corev1.Pod, primitive v2beta1.Primitive, log logging.Logger) (bool, error) {
+func (r *ProxyReconciler) registerPrimitive(pod *corev1.Pod, primitive v2beta1.Primitive, log logging.Logger) (bool, error) {
 	log.Info("Connecting to broker")
 	conn, err := r.connectBroker(pod)
 	if err != nil {
@@ -364,10 +605,15 @@ func (r *PrimitiveReconciler) registerPrimitive(pod *corev1.Pod, primitive v2bet
 		Namespace: primitive.Spec.Store.Namespace,
 		Name:      primitive.Spec.Store.Name,
 	}
-	if name.Namespace != "" {
+	if name.Namespace == "" {
 		name.Namespace = primitive.Namespace
 	}
 	conditions := NewProtocolConditions(name, pod.Status.Conditions)
+	port, err := conditions.GetPort()
+	if err != nil {
+		log.Error(err, "Registering primitive with broker")
+		return false, err
+	}
 	request := &brokerapi.RegisterPrimitiveRequest{
 		PrimitiveID: brokerapi.PrimitiveId{
 			PrimitiveId: primitiveapi.PrimitiveId{
@@ -378,7 +624,7 @@ func (r *PrimitiveReconciler) registerPrimitive(pod *corev1.Pod, primitive v2bet
 		},
 		Address: brokerapi.PrimitiveAddress{
 			Host: "127.0.0.1",
-			Port: int32(conditions.GetPort()),
+			Port: int32(port),
 		},
 	}
 	_, err = client.RegisterPrimitive(context.TODO(), request)
@@ -392,7 +638,7 @@ func (r *PrimitiveReconciler) registerPrimitive(pod *corev1.Pod, primitive v2bet
 	return true, nil
 }
 
-func (r *PrimitiveReconciler) deletePrimitive(pod *corev1.Pod, primitive v2beta1.Primitive, log logging.Logger) (bool, error) {
+func (r *ProxyReconciler) deletePrimitive(pod *corev1.Pod, primitive v2beta1.Primitive, log logging.Logger) (bool, error) {
 	conditions := NewPrimitiveConditions(primitive.Name, pod.Status.Conditions)
 	if conditions.GetReady() == corev1.ConditionUnknown {
 		return false, nil
@@ -415,7 +661,7 @@ func (r *PrimitiveReconciler) deletePrimitive(pod *corev1.Pod, primitive v2beta1
 	return true, nil
 }
 
-func (r *PrimitiveReconciler) deleteProxy(pod *corev1.Pod, primitive v2beta1.Primitive, log logging.Logger) (bool, error) {
+func (r *ProxyReconciler) deleteProxy(pod *corev1.Pod, primitive v2beta1.Primitive, log logging.Logger) (bool, error) {
 	log.Info("Connecting to protocol agent")
 	conn, err := r.connectAgent(pod, primitive)
 	if err != nil {
@@ -446,7 +692,7 @@ func (r *PrimitiveReconciler) deleteProxy(pod *corev1.Pod, primitive v2beta1.Pri
 	return true, nil
 }
 
-func (r *PrimitiveReconciler) unregisterPrimitive(pod *corev1.Pod, primitive v2beta1.Primitive, log logging.Logger) (bool, error) {
+func (r *ProxyReconciler) unregisterPrimitive(pod *corev1.Pod, primitive v2beta1.Primitive, log logging.Logger) (bool, error) {
 	log.Info("Connecting to broker")
 	conn, err := r.connectBroker(pod)
 	if err != nil {
@@ -477,26 +723,29 @@ func (r *PrimitiveReconciler) unregisterPrimitive(pod *corev1.Pod, primitive v2b
 	return true, nil
 }
 
-func (r *PrimitiveReconciler) connectAgent(pod *corev1.Pod, primitive v2beta1.Primitive) (*grpc.ClientConn, error) {
+func (r *ProxyReconciler) connectAgent(pod *corev1.Pod, primitive v2beta1.Primitive) (*grpc.ClientConn, error) {
 	name := types.NamespacedName{
 		Namespace: primitive.Spec.Store.Namespace,
 		Name:      primitive.Spec.Store.Name,
 	}
-	if name.Namespace != "" {
+	if name.Namespace == "" {
 		name.Namespace = primitive.Namespace
 	}
 	conditions := NewProtocolConditions(name, pod.Status.Conditions)
-	port := conditions.GetPort()
+	port, err := conditions.GetPort()
+	if err != nil {
+		return nil, err
+	}
 	address := fmt.Sprintf("%s:%d", pod.Status.PodIP, port)
 	return grpc.Dial(address, grpc.WithInsecure())
 }
 
-func (r *PrimitiveReconciler) connectBroker(pod *corev1.Pod) (*grpc.ClientConn, error) {
+func (r *ProxyReconciler) connectBroker(pod *corev1.Pod) (*grpc.ClientConn, error) {
 	address := fmt.Sprintf("%s:5678", pod.Status.PodIP)
 	return grpc.Dial(address, grpc.WithInsecure())
 }
 
-func (r *PrimitiveReconciler) getPermissions(pod *corev1.Pod, primitive v2beta1.Primitive) (read bool, write bool, err error) {
+func (r *ProxyReconciler) getPermissions(pod *corev1.Pod, primitive v2beta1.Primitive) (read bool, write bool, err error) {
 	if pod.Spec.ServiceAccountName == "" {
 		return true, true, nil
 	}
@@ -696,109 +945,4 @@ func getGroupVersionKind(scheme *runtime.Scheme, object runtime.Object) (schema.
 	return kinds[0], nil
 }
 
-var _ reconcile.Reconciler = &PrimitiveReconciler{}
-
-func isPrimitiveReadyCondition(condition corev1.PodConditionType) bool {
-	return strings.HasSuffix(string(condition), ".primitive.atomix.io/ready")
-}
-
-// NewPrimitiveConditions returns new conditions helper for the given driver with the given conditions
-func NewPrimitiveConditions(primitive string, conditions []corev1.PodCondition) *PrimitiveConditions {
-	return &PrimitiveConditions{
-		Primitive:  primitive,
-		Conditions: conditions,
-	}
-}
-
-// PrimitiveConditions provides utility functions for driver conditions
-type PrimitiveConditions struct {
-	Primitive  string
-	Conditions []corev1.PodCondition
-}
-
-func (d *PrimitiveConditions) getReadyType() corev1.PodConditionType {
-	return corev1.PodConditionType(fmt.Sprintf("primitives.atomix.io/%s", d.Primitive))
-}
-
-func (d *PrimitiveConditions) getReadAccessType() corev1.PodConditionType {
-	return corev1.PodConditionType(fmt.Sprintf("%s.primitives.atomix.io/read-access", d.Primitive))
-}
-
-func (d *PrimitiveConditions) getWriteAccessType() corev1.PodConditionType {
-	return corev1.PodConditionType(fmt.Sprintf("%s.primitives.atomix.io/write-access", d.Primitive))
-}
-
-func (d *PrimitiveConditions) getConditionStatus(conditionType corev1.PodConditionType) corev1.ConditionStatus {
-	for _, condition := range d.Conditions {
-		if condition.Type == conditionType {
-			return condition.Status
-		}
-	}
-	return corev1.ConditionUnknown
-}
-
-func (d *PrimitiveConditions) setCondition(condition corev1.PodCondition) []corev1.PodCondition {
-	for i, c := range d.Conditions {
-		if c.Type == condition.Type {
-			if c.Status != condition.Status {
-				d.Conditions[i] = condition
-			}
-			return d.Conditions
-		}
-	}
-	d.Conditions = append(d.Conditions, condition)
-	return d.Conditions
-}
-
-func (d *PrimitiveConditions) GetReady() corev1.ConditionStatus {
-	return d.getConditionStatus(d.getReadyType())
-}
-
-func (d *PrimitiveConditions) SetReady(status corev1.ConditionStatus) []corev1.PodCondition {
-	return d.setCondition(corev1.PodCondition{
-		Type:               d.getReadyType(),
-		Status:             status,
-		LastTransitionTime: metav1.Now(),
-	})
-}
-
-func (d *PrimitiveConditions) GetReadAccess() corev1.ConditionStatus {
-	return d.getConditionStatus(d.getReadAccessType())
-}
-
-func (d *PrimitiveConditions) SetReadAccess(status corev1.ConditionStatus) []corev1.PodCondition {
-	return d.setCondition(corev1.PodCondition{
-		Type:               d.getReadAccessType(),
-		Status:             status,
-		LastTransitionTime: metav1.Now(),
-	})
-}
-
-func (d *PrimitiveConditions) GetWriteAccess() corev1.ConditionStatus {
-	return d.getConditionStatus(d.getWriteAccessType())
-}
-
-func (d *PrimitiveConditions) SetWriteAccess(status corev1.ConditionStatus) []corev1.PodCondition {
-	return d.setCondition(corev1.PodCondition{
-		Type:               d.getWriteAccessType(),
-		Status:             status,
-		LastTransitionTime: metav1.Now(),
-	})
-}
-
-func newPodLogger(pod corev1.Pod) logging.Logger {
-	fields := []logging.Field{
-		logging.String("pod", types.NamespacedName{pod.Namespace, pod.Name}.String()),
-	}
-	return log.WithFields(fields...)
-}
-
-func newPrimitiveLogger(pod corev1.Pod, primitive v2beta1.Primitive) logging.Logger {
-	fields := []logging.Field{
-		logging.String("pod", types.NamespacedName{pod.Namespace, pod.Name}.String()),
-		logging.String("primitive", types.NamespacedName{primitive.Namespace, primitive.Name}.String()),
-		logging.String("type", primitive.OwnerReferences[0].Kind),
-		logging.String("protocol", types.NamespacedName{primitive.Spec.Store.Namespace, primitive.Spec.Store.Name}.String()),
-	}
-	return log.WithFields(fields...)
-}
+var _ reconcile.Reconciler = &ProxyReconciler{}

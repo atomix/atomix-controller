@@ -31,6 +31,12 @@ import (
 )
 
 const (
+	brokerNodeEnv      = "ATOMIX_BROKER_NODE"
+	brokerNamespaceEnv = "ATOMIX_BROKER_NAMESPACE"
+	brokerNameEnv      = "ATOMIX_BROKER_NAME"
+)
+
+const (
 	brokerInjectPath             = "/inject-broker"
 	brokerInjectAnnotation       = "broker.atomix.io/inject"
 	brokerInjectStatusAnnotation = "broker.atomix.io/status"
@@ -109,6 +115,32 @@ func (i *BrokerInjector) Handle(ctx context.Context, request admission.Request) 
 		Name:            "atomix-broker",
 		Image:           getDefaultBrokerImage(),
 		ImagePullPolicy: corev1.PullIfNotPresent,
+		Env: []corev1.EnvVar{
+			{
+				Name: brokerNamespaceEnv,
+				ValueFrom: &corev1.EnvVarSource{
+					FieldRef: &corev1.ObjectFieldSelector{
+						FieldPath: "metadata.namespace",
+					},
+				},
+			},
+			{
+				Name: brokerNameEnv,
+				ValueFrom: &corev1.EnvVarSource{
+					FieldRef: &corev1.ObjectFieldSelector{
+						FieldPath: "metadata.name",
+					},
+				},
+			},
+			{
+				Name: brokerNodeEnv,
+				ValueFrom: &corev1.EnvVarSource{
+					FieldRef: &corev1.ObjectFieldSelector{
+						FieldPath: "spec.nodeName",
+					},
+				},
+			},
+		},
 	})
 	pod.Spec.ReadinessGates = append(pod.Spec.ReadinessGates, corev1.PodReadinessGate{
 		ConditionType: brokerReadyCondition,

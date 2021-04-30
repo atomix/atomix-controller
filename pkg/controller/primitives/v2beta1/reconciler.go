@@ -72,7 +72,7 @@ func (r *PrimitiveReconciler) Reconcile(request reconcile.Request) (reconcile.Re
 				Store: r.storeGetter(object),
 			},
 		}
-		if err := controllerutil.SetOwnerReference(object.(metav1.Object), primitive, r.scheme); err != nil {
+		if err := controllerutil.SetControllerReference(object.(metav1.Object), primitive, r.scheme); err != nil {
 			log.Errorf("Creating Primitive '%s' failed", request.NamespacedName, err)
 			return reconcile.Result{}, err
 		}

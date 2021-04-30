@@ -25,19 +25,22 @@ import (
 	"strconv"
 )
 
-func newPodMapper(mgr manager.Manager) handler.Mapper {
+func newPodMapper(mgr manager.Manager, namespaceFunc func(handler.MapObject) string) handler.Mapper {
 	return &podMapper{
-		client: mgr.GetClient(),
+		client:        mgr.GetClient(),
+		namespaceFunc: namespaceFunc,
 	}
 }
 
 type podMapper struct {
-	client client.Client
+	client        client.Client
+	namespaceFunc func(handler.MapObject) string
 }
 
 func (m *podMapper) Map(object handler.MapObject) []reconcile.Request {
 	pods := &corev1.PodList{}
-	if err := m.client.List(context.TODO(), pods, &client.ListOptions{Namespace: object.Meta.GetNamespace()}); err != nil {
+	namespace := m.namespaceFunc(object)
+	if err := m.client.List(context.TODO(), pods, &client.ListOptions{Namespace: namespace}); err != nil {
 		return []reconcile.Request{}
 	}
 
