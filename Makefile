@@ -22,8 +22,8 @@ controller-image:
 	docker build ./build/docker/atomix-controller -f build/docker/atomix-controller/Dockerfile -t atomix/atomix-controller:${CONTROLLER_VERSION}
 
 broker-image:
-	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o build/docker/broker/bin/atomix-broker ./cmd/broker
-	docker build ./build/docker/atomix-broker -f build/docker/broker/Dockerfile -t atomix/broker:${CONTROLLER_VERSION}
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o build/docker/atomix-broker/bin/atomix-broker ./cmd/atomix-broker
+	docker build ./build/docker/atomix-broker -f build/docker/atomix-broker/Dockerfile -t atomix/atomix-broker:${CONTROLLER_VERSION}
 
 init-certs-image:
 	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o build/docker/atomix-controller-init-certs/bin/atomix-controller-init-certs ./cmd/atomix-controller-init-certs

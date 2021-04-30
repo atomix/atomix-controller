@@ -36,7 +36,6 @@ const (
 	driverNodeEnv      = "ATOMIX_DRIVER_NODE"
 	driverNamespaceEnv = "ATOMIX_DRIVER_NAMESPACE"
 	driverNameEnv      = "ATOMIX_DRIVER_NAME"
-	driverPortEnv      = "ATOMIX_DRIVER_PORT"
 )
 
 const (

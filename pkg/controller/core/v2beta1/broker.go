@@ -40,7 +40,7 @@ const (
 
 const (
 	defaultBrokerImageEnv = "DEFAULT_BROKER_IMAGE"
-	defaultBrokerImage    = "atomix/kubernetes-broker:latest"
+	defaultBrokerImage    = "atomix/atomix-broker:latest"
 )
 
 func getDefaultBrokerImage() string {
