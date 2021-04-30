@@ -24,11 +24,6 @@ type StoreSpec struct {
 	Protocol runtime.RawExtension `json:"protocol,omitempty"`
 }
 
-// DriverStatus is a storage driver status
-type DriverStatus struct {
-	Name string `json:"name,omitempty"`
-}
-
 // ReplicaStatus is a storage replica status
 type ReplicaStatus struct {
 	ID         string           `json:"id,omitempty"`
@@ -46,8 +41,10 @@ type PartitionStatus struct {
 
 // StoreStatus is a store status
 type StoreStatus struct {
-	Ready    bool            `json:"ready,omitempty"`
-	Protocol *ProtocolStatus `json:"protocol,omitempty"`
+	Ready      bool            `json:"ready,omitempty"`
+	Replicas   *int32           `json:"replicas,omitempty"`
+	Partitions *int32           `json:"partitions,omitempty"`
+	Protocol   *ProtocolStatus `json:"protocol,omitempty"`
 }
 
 // ProtocolStatus is a protocol status
