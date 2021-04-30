@@ -41,19 +41,27 @@ func (r *PrimitiveReconciler) Reconcile(request reconcile.Request) (reconcile.Re
 
 	object, err := r.scheme.New(r.kind)
 	if err != nil {
+		log.Errorf("Reconciling %s '%s' failed", r.kind.Kind, request.NamespacedName, err)
 		return reconcile.Result{}, err
 	}
 	err = r.client.Get(context.TODO(), request.NamespacedName, object)
 	if err != nil {
-		if k8serrors.IsNotFound(err) {
+		if !k8serrors.IsNotFound(err) {
 			return reconcile.Result{}, nil
 		}
+		log.Errorf("Reconciling %s '%s' failed", r.kind.Kind, request.NamespacedName, err)
 		return reconcile.Result{}, err
 	}
 
 	primitive := &v2beta1.Primitive{}
 	err = r.client.Get(context.TODO(), request.NamespacedName, primitive)
-	if k8serrors.IsNotFound(err) {
+	if err != nil {
+		if !k8serrors.IsNotFound(err) {
+			log.Errorf("Reconciling %s '%s' failed", r.kind.Kind, request.NamespacedName, err)
+			return reconcile.Result{}, err
+		}
+
+		log.Infof("Creating Primitive '%s'", request.NamespacedName)
 		primitive = &v2beta1.Primitive{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: request.Namespace,
@@ -65,14 +73,15 @@ func (r *PrimitiveReconciler) Reconcile(request reconcile.Request) (reconcile.Re
 			},
 		}
 		if err := controllerutil.SetOwnerReference(object.(metav1.Object), primitive, r.scheme); err != nil {
+			log.Errorf("Creating Primitive '%s' failed", request.NamespacedName, err)
 			return reconcile.Result{}, err
 		}
 		if err := r.client.Create(context.TODO(), primitive); err != nil {
+			log.Errorf("Creating Primitive '%s' failed", request.NamespacedName, err)
 			return reconcile.Result{}, err
 		}
-		return reconcile.Result{}, nil
 	}
-	return reconcile.Result{}, err
+	return reconcile.Result{}, nil
 }
 
 var _ reconcile.Reconciler = &PrimitiveReconciler{}

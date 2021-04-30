@@ -70,6 +70,17 @@ func addPrimitiveController(mgr manager.Manager) error {
 	err = c.Watch(&source.Kind{Type: &v2beta1.Primitive{}}, &handler.EnqueueRequestsFromMapFunc{
 		ToRequests: newPodMapper(mgr),
 	})
+	if err != nil {
+		return err
+	}
+
+	// Watch for changes to Stores and enqueue all pods
+	err = c.Watch(&source.Kind{Type: &v2beta1.Store{}}, &handler.EnqueueRequestsFromMapFunc{
+		ToRequests: newPodMapper(mgr),
+	})
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
