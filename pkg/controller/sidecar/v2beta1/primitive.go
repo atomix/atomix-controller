@@ -96,8 +96,10 @@ func (r *PrimitiveReconciler) Reconcile(request reconcile.Request) (reconcile.Re
 			},
 		}
 		if err := r.client.DeleteAllOf(context.TODO(), &sidecarv2beta1.Proxy{}, options); err != nil {
-			log.Error(err)
-			return reconcile.Result{}, err
+			if !k8serrors.IsNotFound(err) {
+				log.Error(err)
+				return reconcile.Result{}, err
+			}
 		}
 
 		if k8s.HasFinalizer(primitive.Finalizers, primitiveFinalizer) {

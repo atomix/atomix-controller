@@ -19,7 +19,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 )
 
-var log = logging.GetLogger("atomix", "controller", "core")
+var log = logging.GetLogger("atomix", "controller", "sidecar")
 
 func AddControllers(mgr manager.Manager) error {
 	if err := addBrokerController(mgr); err != nil {

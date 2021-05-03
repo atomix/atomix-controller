@@ -267,7 +267,7 @@ spec:
             type: object
             properties:
               revision:
-                type: long
+                type: integer
               replicas:
                 type: integer
               readyReplicas:
@@ -427,7 +427,7 @@ spec:
               ready:
                 type: boolean
               revision:
-                type: long
+                type: integer
     additionalPrinterColumns:
     - name: Pod
       type: string
@@ -860,6 +860,7 @@ rules:
   - atomix.io
   - storage.atomix.io
   - primitives.atomix.io
+  - sidecar.atomix.io
   - cloud.atomix.io
   resources:
   - '*'

@@ -109,8 +109,10 @@ func (r *StoreReconciler) reconcileDelete(store *corev2beta1.Store) (reconcile.R
 		},
 	}
 	if err := r.client.DeleteAllOf(context.TODO(), &sidecarv2beta1.Agent{}, options); err != nil {
-		log.Error(err)
-		return reconcile.Result{}, err
+		if !k8serrors.IsNotFound(err) {
+			log.Error(err)
+			return reconcile.Result{}, err
+		}
 	}
 
 	store.Finalizers = k8s.RemoveFinalizer(store.Finalizers, storeFinalizer)

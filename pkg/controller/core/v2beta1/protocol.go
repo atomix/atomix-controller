@@ -39,6 +39,7 @@ func (p *protocolSource) InjectCache(cache cache.Cache) error {
 func (p *protocolSource) Start(eventHandler handler.EventHandler, limitingInterface workqueue.RateLimitingInterface, predicate ...predicate.Predicate) error {
 	i, err := p.cache.GetInformer(&corev2beta1.StoragePlugin{})
 	if err != nil {
+		log.Error(err)
 		return err
 	}
 	i.AddEventHandler(p.newPluginHandler(eventHandler, limitingInterface, predicate...))
@@ -56,16 +57,17 @@ func (p *protocolSource) newPluginHandler(eventHandler handler.EventHandler, lim
 					Kind:    plugin.Spec.Kind,
 					Version: version.Name,
 				}
+				log.Infof("Starting Source %s", gvc)
 				object := &unstructured.Unstructured{}
 				object.SetGroupVersionKind(gvc)
 				kind := &source.Kind{
-					Type: o,
+					Type: object,
 				}
 				if err := kind.InjectCache(p.cache); err != nil {
-					log.Error("InjectCache failed", err)
+					log.Error(err)
 				} else {
 					if err := kind.Start(eventHandler, limitingInterface, predicate...); err != nil {
-						log.Error("Start failed", err)
+						log.Error(err)
 					}
 				}
 			}

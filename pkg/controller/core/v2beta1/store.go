@@ -98,7 +98,7 @@ func (r *StoreReconciler) reconcileCreate(store *corev2beta1.Store) (reconcile.R
 			log.Error(err)
 			return reconcile.Result{}, err
 		}
-		return reconcile.Result{}, nil
+		return reconcile.Result{Requeue: true}, nil
 	}
 
 	if ok, err := r.createProtocol(store); err != nil {
@@ -147,6 +147,7 @@ func (r *StoreReconciler) createProtocol(store *corev2beta1.Store) (bool, error)
 		}
 	}
 
+	protocol = stored
 	if store.Status.Revision == nil || *store.Status.Revision < protocol.GetGeneration() {
 		store.Status.Protocol = corev2beta1.ProtocolStatus{}
 
