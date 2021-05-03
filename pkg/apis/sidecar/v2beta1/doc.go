@@ -12,18 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package v2beta1 contains API Schema definitions for the cloud v2beta1 API group
+// +k8s:deepcopy-gen=package,register
+// +groupName=sidecar.atomix.io
 package v2beta1
-
-import (
-	"github.com/atomix/atomix-go-framework/pkg/atomix/logging"
-	"sigs.k8s.io/controller-runtime/pkg/manager"
-)
-
-var log = logging.GetLogger("atomix", "controller", "core")
-
-func AddControllers(mgr manager.Manager) error {
-	if err := addStoreController(mgr); err != nil {
-		return err
-	}
-	return nil
-}

@@ -19,33 +19,48 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// MapSpec specifies a Map
-type MapSpec struct {
-	Store corev1.ObjectReference `json:"store,omitempty"`
+// ProxySpec is a proxy specification
+type ProxySpec struct {
+	Pod         corev1.ObjectReference `json:"pod,omitempty"`
+	Primitive   corev1.ObjectReference `json:"primitive,omitempty"`
+	Agent       corev1.ObjectReference `json:"agent,omitempty"`
+	Permissions ProxyPermissions       `json:"permissions,omitempty"`
+}
+
+// ProxyStatus is a proxy status
+type ProxyStatus struct {
+	Ready    bool  `json:"ready,omitempty"`
+}
+
+// ProxyPermissions is a proxy permissions status
+type ProxyPermissions struct {
+	Read  bool `json:"read,omitempty"`
+	Write bool `json:"write,omitempty"`
 }
 
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// Map is the Schema for the Map API
+// Proxy is the Schema for the Proxy API
 // +k8s:openapi-gen=true
-type Map struct {
+type Proxy struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
-	Spec              MapSpec `json:"spec,omitempty"`
+	Spec              ProxySpec   `json:"spec,omitempty"`
+	Status            ProxyStatus `json:"status,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// MapList contains a list of Map
-type MapList struct {
+// ProxyList contains a list of Proxy
+type ProxyList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 
-	// Items is the set of items in the list
-	Items []Map `json:"items"`
+	// Items is the list of Proxy items in the list
+	Items []Proxy `json:"items"`
 }
 
 func init() {
-	SchemeBuilder.Register(&Map{}, &MapList{})
+	SchemeBuilder.Register(&Proxy{}, &ProxyList{})
 }

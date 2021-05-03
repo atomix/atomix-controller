@@ -21,6 +21,7 @@ import (
 	cloudv1beta3 "github.com/atomix/atomix-controller/pkg/controller/cloud/v1beta3"
 	corev2beta1 "github.com/atomix/atomix-controller/pkg/controller/core/v2beta1"
 	primitivesv2beta1 "github.com/atomix/atomix-controller/pkg/controller/primitives/v2beta1"
+	sidecarv2beta1 "github.com/atomix/atomix-controller/pkg/controller/sidecar/v2beta1"
 	"github.com/atomix/atomix-controller/pkg/controller/util/leader"
 	logutil "github.com/atomix/atomix-controller/pkg/controller/util/log"
 	"github.com/atomix/atomix-controller/pkg/controller/util/ready"
@@ -95,6 +96,10 @@ func main() {
 		os.Exit(1)
 	}
 	if err := primitivesv2beta1.AddControllers(mgr); err != nil {
+		log.Error(err)
+		os.Exit(1)
+	}
+	if err := sidecarv2beta1.AddControllers(mgr); err != nil {
 		log.Error(err)
 		os.Exit(1)
 	}

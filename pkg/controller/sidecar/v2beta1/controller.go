@@ -22,7 +22,25 @@ import (
 var log = logging.GetLogger("atomix", "controller", "core")
 
 func AddControllers(mgr manager.Manager) error {
+	if err := addBrokerController(mgr); err != nil {
+		return err
+	}
+	if err := addDriverController(mgr); err != nil {
+		return err
+	}
+	if err := addPodController(mgr); err != nil {
+		return err
+	}
 	if err := addStoreController(mgr); err != nil {
+		return err
+	}
+	if err := addPrimitiveController(mgr); err != nil {
+		return err
+	}
+	if err := addAgentController(mgr); err != nil {
+		return err
+	}
+	if err := addProxyController(mgr); err != nil {
 		return err
 	}
 	return nil

@@ -17,6 +17,7 @@ package v2beta1
 import (
 	"context"
 	v2beta1 "github.com/atomix/atomix-controller/pkg/apis/core/v2beta1"
+	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -32,7 +33,7 @@ type PrimitiveReconciler struct {
 	scheme      *runtime.Scheme
 	config      *rest.Config
 	kind        schema.GroupVersionKind
-	storeGetter func(object runtime.Object) metav1.ObjectMeta
+	storeGetter func(object runtime.Object) corev1.ObjectReference
 }
 
 // Reconcile reads that state of the cluster for a primitive object and makes changes based on the pod's annotations

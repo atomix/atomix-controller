@@ -19,33 +19,42 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// MapSpec specifies a Map
-type MapSpec struct {
+// AgentSpec is an agent specification
+type AgentSpec struct {
+	Port  int32                  `json:"port,omitempty"`
+	Pod   corev1.ObjectReference `json:"pod,omitempty"`
 	Store corev1.ObjectReference `json:"store,omitempty"`
+}
+
+// AgentStatus is an agent status
+type AgentStatus struct {
+	Ready    bool  `json:"ready,omitempty"`
+	Revision int64 `json:"revision,omitempty"`
 }
 
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// Map is the Schema for the Map API
+// Agent is the Schema for the Agent API
 // +k8s:openapi-gen=true
-type Map struct {
+type Agent struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
-	Spec              MapSpec `json:"spec,omitempty"`
+	Spec              AgentSpec   `json:"spec,omitempty"`
+	Status            AgentStatus `json:"status,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// MapList contains a list of Map
-type MapList struct {
+// AgentList contains a list of Agent
+type AgentList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 
-	// Items is the set of items in the list
-	Items []Map `json:"items"`
+	// Items is the list of Agent items in the list
+	Items []Agent `json:"items"`
 }
 
 func init() {
-	SchemeBuilder.Register(&Map{}, &MapList{})
+	SchemeBuilder.Register(&Agent{}, &AgentList{})
 }

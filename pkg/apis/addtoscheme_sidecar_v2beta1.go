@@ -12,18 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package v2beta1
+package apis
 
 import (
-	"github.com/atomix/atomix-go-framework/pkg/atomix/logging"
-	"sigs.k8s.io/controller-runtime/pkg/manager"
+	sidecarv2beta1 "github.com/atomix/atomix-controller/pkg/apis/sidecar/v2beta1"
 )
 
-var log = logging.GetLogger("atomix", "controller", "core")
-
-func AddControllers(mgr manager.Manager) error {
-	if err := addStoreController(mgr); err != nil {
-		return err
-	}
-	return nil
+func init() {
+	// register the types with the Scheme so the components can map objects to GroupVersionKinds and back
+	AddToSchemes = append(AddToSchemes, sidecarv2beta1.SchemeBuilder.AddToScheme)
 }

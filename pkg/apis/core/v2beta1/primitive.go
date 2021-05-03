@@ -15,13 +15,14 @@
 package v2beta1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // PrimitiveSpec is the spec for a Primitive
 type PrimitiveSpec struct {
-	Type  string            `json:"type,omitempty"`
-	Store metav1.ObjectMeta `json:"store,omitempty"`
+	Type  string                 `json:"type,omitempty"`
+	Store corev1.ObjectReference `json:"store,omitempty"`
 }
 
 // +genclient

@@ -15,12 +15,13 @@
 package v2beta1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // LockSpec specifies a Lock
 type LockSpec struct {
-	Store metav1.ObjectMeta `json:"store,omitempty"`
+	Store corev1.ObjectReference `json:"store,omitempty"`
 }
 
 // +genclient

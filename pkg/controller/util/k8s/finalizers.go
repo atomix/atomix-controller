@@ -12,18 +12,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package v2beta1
+package k8s
 
-import (
-	"github.com/atomix/atomix-go-framework/pkg/atomix/logging"
-	"sigs.k8s.io/controller-runtime/pkg/manager"
-)
-
-var log = logging.GetLogger("atomix", "controller", "core")
-
-func AddControllers(mgr manager.Manager) error {
-	if err := addStoreController(mgr); err != nil {
-		return err
+func HasFinalizer(finalizers []string, name string) bool {
+	for _, finalizer := range finalizers {
+		if finalizer == name {
+			return true
+		}
 	}
-	return nil
+	return false
+}
+
+func AddFinalizer(finalizers []string, name string) []string {
+	return append(finalizers, name)
+}
+
+func RemoveFinalizer(finalizers []string, name string) []string {
+	newFinalizers := make([]string, 0, len(finalizers))
+	for _, finalizer := range finalizers {
+		if finalizer != name {
+			newFinalizers = append(newFinalizers, finalizer)
+		}
+	}
+	return newFinalizers
 }

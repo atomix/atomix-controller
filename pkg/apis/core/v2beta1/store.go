@@ -31,25 +31,29 @@ type ReplicaStatus struct {
 	Host       *string          `json:"host,omitempty"`
 	Port       *int32           `json:"port,omitempty"`
 	ExtraPorts map[string]int32 `json:"extraPorts,omitempty"`
+	Ready      bool             `json:"ready,omitempty"`
 }
 
 // PartitionStatus is a storage partition status
 type PartitionStatus struct {
 	ID       uint32   `json:"id,omitempty"`
 	Replicas []string `json:"replicas,omitempty"`
+	Ready    bool     `json:"ready,omitempty"`
 }
 
 // StoreStatus is a store status
 type StoreStatus struct {
-	Ready      bool            `json:"ready,omitempty"`
-	Replicas   *int32           `json:"replicas,omitempty"`
-	Partitions *int32           `json:"partitions,omitempty"`
-	Protocol   *ProtocolStatus `json:"protocol,omitempty"`
+	Replicas        int32          `json:"replicas,omitempty"`
+	ReadyReplicas   int32          `json:"readyReplicas,omitempty"`
+	Partitions      int32          `json:"partitions,omitempty"`
+	ReadyPartitions int32          `json:"readyPartitions,omitempty"`
+	Revision        *int64         `json:"revision,omitempty"`
+	Protocol        ProtocolStatus `json:"protocol,omitempty"`
 }
 
 // ProtocolStatus is a protocol status
 type ProtocolStatus struct {
-	Revision   int64             `json:"revision,omitempty"`
+	Ready      bool              `json:"ready,omitempty"`
 	Replicas   []ReplicaStatus   `json:"replicas,omitempty"`
 	Partitions []PartitionStatus `json:"partitions,omitempty"`
 }
