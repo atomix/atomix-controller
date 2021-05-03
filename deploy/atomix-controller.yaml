@@ -266,8 +266,8 @@ spec:
           status:
             type: object
             properties:
-              revision:
-                type: integer
+              ready:
+                type: boolean
               replicas:
                 type: integer
               readyReplicas:

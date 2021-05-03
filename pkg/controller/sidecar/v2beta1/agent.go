@@ -116,7 +116,7 @@ func (r *AgentReconciler) reconcileCreate(agent *sidecarv2beta1.Agent) (reconcil
 		return reconcile.Result{}, r.client.Delete(context.TODO(), agent)
 	}
 
-	if store.Status.Protocol.Ready && agent.Status.Ready && agent.Status.Revision == *store.Status.Revision {
+	if store.Status.Ready && agent.Status.Ready && agent.Status.Revision == store.Status.Protocol.Revision {
 		return reconcile.Result{}, nil
 	}
 
@@ -172,7 +172,7 @@ func (r *AgentReconciler) reconcileCreate(agent *sidecarv2beta1.Agent) (reconcil
 	}
 
 	agent.Status.Ready = true
-	agent.Status.Revision = *store.Status.Revision
+	agent.Status.Revision = store.Status.Protocol.Revision
 	if err := r.client.Status().Update(context.TODO(), agent); err != nil {
 		log.Error(err)
 		return reconcile.Result{}, err

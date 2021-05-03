@@ -148,8 +148,18 @@ func (r *StoreReconciler) createProtocol(store *corev2beta1.Store) (bool, error)
 	}
 
 	protocol = stored
-	if store.Status.Revision == nil || *store.Status.Revision < protocol.GetGeneration() {
-		store.Status.Protocol = corev2beta1.ProtocolStatus{}
+	revision, ok, err := unstructured.NestedInt64(protocol.UnstructuredContent(), "status", "revision")
+	if err != nil {
+		log.Error(err)
+		return false, err
+	} else if !ok {
+		return false, nil
+	}
+
+	if store.Status.Protocol.Revision <= revision {
+		protocolStatus := corev2beta1.ProtocolStatus{
+			Revision: revision,
+		}
 
 		var readyReplicas int32
 		replicas, ok, err := unstructured.NestedSlice(protocol.UnstructuredContent(), "status", "replicas")
@@ -209,7 +219,7 @@ func (r *StoreReconciler) createProtocol(store *corev2beta1.Store) (bool, error)
 					replica.Ready = ready
 					readyReplicas++
 				}
-				store.Status.Protocol.Replicas = append(store.Status.Protocol.Replicas, replica)
+				protocolStatus.Replicas = append(protocolStatus.Replicas, replica)
 			}
 		}
 
@@ -243,22 +253,20 @@ func (r *StoreReconciler) createProtocol(store *corev2beta1.Store) (bool, error)
 					partition.Ready = ready
 					readyPartitions++
 				}
-				store.Status.Protocol.Partitions = append(store.Status.Protocol.Partitions, partition)
+				protocolStatus.Partitions = append(protocolStatus.Partitions, partition)
 			}
 		}
 
-		ready, _, err := unstructured.NestedBool(protocol.UnstructuredContent(), "status", "ready")
-		if err != nil {
-			log.Error(err)
-			return false, err
+		if revision == store.Status.Protocol.Revision && readyReplicas == store.Status.ReadyReplicas && readyPartitions == store.Status.ReadyPartitions {
+			return false, nil
 		}
-		store.Status.Protocol.Ready = ready
 
-		store.Status.Revision = pointer.Int64Ptr(protocol.GetGeneration())
+		store.Status.Protocol = protocolStatus
 		store.Status.Replicas = int32(len(store.Status.Protocol.Replicas))
 		store.Status.ReadyReplicas = readyReplicas
 		store.Status.Partitions = int32(len(store.Status.Protocol.Partitions))
 		store.Status.ReadyPartitions = readyPartitions
+		store.Status.Ready = store.Status.ReadyReplicas == store.Status.Replicas && store.Status.ReadyPartitions == store.Status.Partitions
 
 		err = r.client.Status().Update(context.TODO(), store)
 		if err != nil {

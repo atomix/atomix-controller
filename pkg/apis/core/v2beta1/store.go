@@ -43,17 +43,17 @@ type PartitionStatus struct {
 
 // StoreStatus is a store status
 type StoreStatus struct {
+	Ready           bool           `json:"ready,omitempty"`
 	Replicas        int32          `json:"replicas,omitempty"`
 	ReadyReplicas   int32          `json:"readyReplicas,omitempty"`
 	Partitions      int32          `json:"partitions,omitempty"`
 	ReadyPartitions int32          `json:"readyPartitions,omitempty"`
-	Revision        *int64         `json:"revision,omitempty"`
 	Protocol        ProtocolStatus `json:"protocol,omitempty"`
 }
 
 // ProtocolStatus is a protocol status
 type ProtocolStatus struct {
-	Ready      bool              `json:"ready,omitempty"`
+	Revision   int64             `json:"revision,omitempty"`
 	Replicas   []ReplicaStatus   `json:"replicas,omitempty"`
 	Partitions []PartitionStatus `json:"partitions,omitempty"`
 }
