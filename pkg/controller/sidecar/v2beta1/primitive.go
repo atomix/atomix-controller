@@ -40,13 +40,6 @@ func addPrimitiveController(mgr manager.Manager) error {
 		config: mgr.GetConfig(),
 	}
 
-	err := mgr.GetFieldIndexer().IndexField(&sidecarv2beta1.Proxy{}, "spec.primitive.uid", func(object runtime.Object) []string {
-		return []string{string(object.(*sidecarv2beta1.Proxy).Spec.Primitive.UID)}
-	})
-	if err != nil {
-		return err
-	}
-
 	// Create a new controller
 	c, err := controller.New("primitive-controller", mgr, controller.Options{Reconciler: r})
 	if err != nil {

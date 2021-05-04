@@ -43,6 +43,23 @@ import (
 
 const agentFinalizer = "agent"
 
+func addAgentIndexes(mgr manager.Manager) error {
+	err := mgr.GetFieldIndexer().IndexField(&sidecarv2beta1.Agent{}, "spec.pod.uid", func(object runtime.Object) []string {
+		return []string{string(object.(*sidecarv2beta1.Agent).Spec.Pod.UID)}
+	})
+	if err != nil {
+		return err
+	}
+
+	err = mgr.GetFieldIndexer().IndexField(&sidecarv2beta1.Agent{}, "spec.store.uid", func(object runtime.Object) []string {
+		return []string{string(object.(*sidecarv2beta1.Agent).Spec.Store.UID)}
+	})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func addAgentController(mgr manager.Manager) error {
 	r := &AgentReconciler{
 		client: mgr.GetClient(),

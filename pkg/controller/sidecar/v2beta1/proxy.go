@@ -42,6 +42,30 @@ import (
 
 const proxyFinalizer = "proxy"
 
+func addProxyIndexes(mgr manager.Manager) error {
+	err := mgr.GetFieldIndexer().IndexField(&sidecarv2beta1.Proxy{}, "spec.pod.uid", func(object runtime.Object) []string {
+		return []string{string(object.(*sidecarv2beta1.Proxy).Spec.Pod.UID)}
+	})
+	if err != nil {
+		return err
+	}
+
+	err = mgr.GetFieldIndexer().IndexField(&sidecarv2beta1.Proxy{}, "spec.primitive.uid", func(object runtime.Object) []string {
+		return []string{string(object.(*sidecarv2beta1.Proxy).Spec.Primitive.UID)}
+	})
+	if err != nil {
+		return err
+	}
+
+	err = mgr.GetFieldIndexer().IndexField(&sidecarv2beta1.Proxy{}, "spec.agent.uid", func(object runtime.Object) []string {
+		return []string{string(object.(*sidecarv2beta1.Proxy).Spec.Agent.UID)}
+	})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func addProxyController(mgr manager.Manager) error {
 	r := &AgentReconciler{
 		client: mgr.GetClient(),

@@ -40,13 +40,6 @@ func addStoreController(mgr manager.Manager) error {
 		config: mgr.GetConfig(),
 	}
 
-	err := mgr.GetFieldIndexer().IndexField(&sidecarv2beta1.Agent{}, "spec.store.uid", func(object runtime.Object) []string {
-		return []string{string(object.(*sidecarv2beta1.Agent).Spec.Store.UID)}
-	})
-	if err != nil {
-		return err
-	}
-
 	// Create a new controller
 	c, err := controller.New("store-controller", mgr, controller.Options{Reconciler: r})
 	if err != nil {

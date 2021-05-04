@@ -22,6 +22,12 @@ import (
 var log = logging.GetLogger("atomix", "controller", "sidecar")
 
 func AddControllers(mgr manager.Manager) error {
+	if err := addAgentIndexes(mgr); err != nil {
+		return err
+	}
+	if err := addProxyIndexes(mgr); err != nil {
+		return err
+	}
 	if err := addBrokerController(mgr); err != nil {
 		return err
 	}
