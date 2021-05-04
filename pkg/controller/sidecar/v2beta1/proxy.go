@@ -67,7 +67,7 @@ func addProxyIndexes(mgr manager.Manager) error {
 }
 
 func addProxyController(mgr manager.Manager) error {
-	r := &AgentReconciler{
+	r := &ProxyReconciler{
 		client: mgr.GetClient(),
 		scheme: mgr.GetScheme(),
 		config: mgr.GetConfig(),
