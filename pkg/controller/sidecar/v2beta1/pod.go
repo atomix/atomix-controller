@@ -30,6 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/reference"
+	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -156,17 +157,22 @@ func (r *PodReconciler) reconcilePrimitives(pod *corev1.Pod) (bool, error) {
 		return false, err
 	}
 
+	ready := true
 	for _, primitive := range primitives.Items {
-		if ok, err := r.reconcilePrimitive(pod, primitive); err != nil {
+		if ok, err := r.reconcilePrimitive(pod, primitive, &ready); err != nil {
 			return false, err
 		} else if ok {
 			return true, nil
 		}
 	}
+
+	if ready {
+		return r.setAtomixCondition(pod, corev1.ConditionTrue, "", "")
+	}
 	return false, nil
 }
 
-func (r *PodReconciler) reconcilePrimitive(pod *corev1.Pod, primitive v2beta1.Primitive) (bool, error) {
+func (r *PodReconciler) reconcilePrimitive(pod *corev1.Pod, primitive v2beta1.Primitive, ready *bool) (bool, error) {
 	podName := types.NamespacedName{
 		Namespace: pod.Namespace,
 		Name:      pod.Name,
@@ -278,6 +284,15 @@ func (r *PodReconciler) reconcilePrimitive(pod *corev1.Pod, primitive v2beta1.Pr
 			return true, nil
 		}
 
+		if *ready && !agent.Status.Ready {
+			if ok, err := r.setAtomixCondition(pod, corev1.ConditionFalse, "WaitingForAgent", fmt.Sprintf("Waiting for %s agent", agentName)); err != nil {
+				return false, err
+			} else if ok {
+				return true, nil
+			}
+			ready = pointer.BoolPtr(false)
+		}
+
 		podRef, err := reference.GetReference(r.scheme, pod)
 		if err != nil {
 			log.Error(err)
@@ -331,6 +346,15 @@ func (r *PodReconciler) reconcilePrimitive(pod *corev1.Pod, primitive v2beta1.Pr
 		return true, nil
 	}
 
+	if *ready && !proxy.Status.Ready {
+		if ok, err := r.setAtomixCondition(pod, corev1.ConditionFalse, "WaitingForProxy", fmt.Sprintf("Waiting for %s proxy", proxyName)); err != nil {
+			return false, err
+		} else if ok {
+			return true, nil
+		}
+		ready = pointer.BoolPtr(false)
+	}
+
 	agentName := types.NamespacedName{
 		Namespace: pod.Namespace,
 		Name:      proxy.Spec.Agent.Name,
@@ -376,6 +400,39 @@ func (r *PodReconciler) reconcilePrimitive(pod *corev1.Pod, primitive v2beta1.Pr
 		return true, nil
 	}
 	return false, nil
+}
+
+func (r *PodReconciler) setAtomixCondition(pod *corev1.Pod, status corev1.ConditionStatus, reason string, message string) (bool, error) {
+	for i, condition := range pod.Status.Conditions {
+		if condition.Type == atomixReadyCondition {
+			if condition.Status == status && condition.Reason == reason && condition.Message == message {
+				return false, nil
+			}
+			if condition.Status != status {
+				condition.LastTransitionTime = metav1.Now()
+			}
+			condition.Status = status
+			condition.Reason = reason
+			condition.Message = message
+			pod.Status.Conditions[i] = condition
+			if err := r.client.Status().Update(context.TODO(), pod); err != nil {
+				return false, err
+			}
+			return true, nil
+		}
+	}
+
+	pod.Status.Conditions = append(pod.Status.Conditions, corev1.PodCondition{
+		Type:               atomixReadyCondition,
+		Status:             status,
+		LastTransitionTime: metav1.Now(),
+		Reason:             reason,
+		Message:            message,
+	})
+	if err := r.client.Status().Update(context.TODO(), pod); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 func (r *PodReconciler) getPort(pod *corev1.Pod) (int, error) {

@@ -1,0 +1,90 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: atomix-example
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  creationTimestamp: null
+  name: atomix-example
+rules:
+- apiGroups:
+  - primitives.atomix.io
+  resources:
+  - '*'
+  verbs:
+  - read
+- apiGroups:
+  - primitives.atomix.io
+  resources:
+  - Counter
+  verbs:
+  - '*'
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: atomix-example
+subjects:
+- kind: ServiceAccount
+  name: atomix-example
+roleRef:
+  kind: Role
+  name: atomix-example
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: atomix.io/v2beta1
+kind: Store
+metadata:
+  name: atomix-example-store
+spec:
+  protocol:
+    apiVersion: storage.atomix.io/v2beta1
+    kind: MultiRaftProtocol
+    spec:
+      clusters: 1
+      partitions: 1
+      replicas: 3
+---
+apiVersion: primitives.atomix.io/v2beta1
+kind: Counter
+metadata:
+  name: atomix-example-counter
+spec:
+  store:
+    name: atomix-example-store
+---
+apiVersion: primitives.atomix.io/v2beta1
+kind: Map
+metadata:
+  name: atomix-example-map
+spec:
+  store:
+    name: atomix-example-store
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: atomix-example
+  labels:
+    app: atomix-example
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: atomix-example
+  template:
+    metadata:
+      labels:
+        app: atomix-example
+      annotations:
+        broker.atomix.io/inject: "true"
+        raft.storage.atomix.io/inject: "true"
+    spec:
+      serviceAccountName: atomix-example
+      containers:
+      - name: sleep
+        image: alpine:latest
+        command: ["/bin/sh", "-c", "--"]
+        args: ["while true; do sleep 30; done;"]

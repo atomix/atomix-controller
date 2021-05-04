@@ -40,7 +40,7 @@ const (
 	brokerInjectPath             = "/inject-broker"
 	brokerInjectAnnotation       = "broker.atomix.io/inject"
 	brokerInjectStatusAnnotation = "broker.atomix.io/status"
-	brokerReadyCondition         = "broker.atomix.io/ready"
+	atomixReadyCondition         = "AtomixReady"
 	injectedStatus               = "injected"
 )
 
@@ -143,7 +143,7 @@ func (i *BrokerInjector) Handle(ctx context.Context, request admission.Request) 
 		},
 	})
 	pod.Spec.ReadinessGates = append(pod.Spec.ReadinessGates, corev1.PodReadinessGate{
-		ConditionType: brokerReadyCondition,
+		ConditionType: atomixReadyCondition,
 	})
 	pod.Annotations[brokerInjectStatusAnnotation] = injectedStatus
 
