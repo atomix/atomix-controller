@@ -20,8 +20,9 @@ import (
 	sidecarv2beta1 "github.com/atomix/atomix-controller/pkg/apis/sidecar/v2beta1"
 	"github.com/atomix/atomix-controller/pkg/controller/util/k8s"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -82,6 +83,7 @@ func (r *StoreReconciler) Reconcile(request reconcile.Request) (reconcile.Result
 
 func (r *StoreReconciler) reconcileCreate(store *corev2beta1.Store) (reconcile.Result, error) {
 	if !k8s.HasFinalizer(store.Finalizers, storeFinalizer) {
+		log.Infof("Adding finalizer to Store %s", types.NamespacedName{store.Namespace, store.Name})
 		store.Finalizers = k8s.AddFinalizer(store.Finalizers, storeFinalizer)
 		if err := r.client.Update(context.TODO(), store); err != nil {
 			log.Error(err)
@@ -96,9 +98,12 @@ func (r *StoreReconciler) reconcileDelete(store *corev2beta1.Store) (reconcile.R
 		return reconcile.Result{}, nil
 	}
 
+	log.Infof("Deleting Agents for Store %s", types.NamespacedName{store.Namespace, store.Name})
 	options := &client.DeleteAllOfOptions{
 		ListOptions: client.ListOptions{
-			FieldSelector: fields.OneTermEqualSelector("spec.store.uid", string(store.UID)),
+			LabelSelector: labels.SelectorFromSet(map[string]string{
+				"store": string(store.UID),
+			}),
 		},
 	}
 	if err := r.client.DeleteAllOf(context.TODO(), &sidecarv2beta1.Agent{}, options); err != nil {
@@ -108,6 +113,7 @@ func (r *StoreReconciler) reconcileDelete(store *corev2beta1.Store) (reconcile.R
 		}
 	}
 
+	log.Infof("Removing finalizer from Store %s", types.NamespacedName{store.Namespace, store.Name})
 	store.Finalizers = k8s.RemoveFinalizer(store.Finalizers, storeFinalizer)
 	if err := r.client.Update(context.TODO(), store); err != nil {
 		log.Error(err)

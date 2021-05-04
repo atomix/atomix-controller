@@ -48,10 +48,10 @@ func (r *PrimitiveReconciler) Reconcile(request reconcile.Request) (reconcile.Re
 	err = r.client.Get(context.TODO(), request.NamespacedName, object)
 	if err != nil {
 		if !k8serrors.IsNotFound(err) {
-			return reconcile.Result{}, nil
+			log.Errorf("Reconciling %s '%s' failed", r.kind.Kind, request.NamespacedName, err)
+			return reconcile.Result{}, err
 		}
-		log.Errorf("Reconciling %s '%s' failed", r.kind.Kind, request.NamespacedName, err)
-		return reconcile.Result{}, err
+		return reconcile.Result{}, nil
 	}
 
 	primitive := &v2beta1.Primitive{}
@@ -78,9 +78,12 @@ func (r *PrimitiveReconciler) Reconcile(request reconcile.Request) (reconcile.Re
 			return reconcile.Result{}, err
 		}
 		if err := r.client.Create(context.TODO(), primitive); err != nil {
-			log.Errorf("Creating Primitive '%s' failed", request.NamespacedName, err)
-			return reconcile.Result{}, err
+			if !k8serrors.IsAlreadyExists(err) {
+				log.Errorf("Creating Primitive '%s' failed", request.NamespacedName, err)
+				return reconcile.Result{}, err
+			}
 		}
+		return reconcile.Result{}, nil
 	}
 	return reconcile.Result{}, nil
 }

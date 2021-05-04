@@ -24,7 +24,7 @@ import (
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
@@ -167,6 +167,16 @@ func (r *PodReconciler) reconcilePrimitives(pod *corev1.Pod) (bool, error) {
 }
 
 func (r *PodReconciler) reconcilePrimitive(pod *corev1.Pod, primitive v2beta1.Primitive) (bool, error) {
+	podName := types.NamespacedName{
+		Namespace: pod.Namespace,
+		Name:      pod.Name,
+	}
+	primitiveName := types.NamespacedName{
+		Namespace: primitive.Namespace,
+		Name:      primitive.Name,
+	}
+
+	log.Infof("Reconciling Primitive %s for Pod %s", primitiveName, podName)
 	read, write, err := r.getPermissions(pod, primitive)
 	if err != nil {
 		log.Error(err)
@@ -242,6 +252,10 @@ func (r *PodReconciler) reconcilePrimitive(pod *corev1.Pod, primitive v2beta1.Pr
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: agentName.Namespace,
 					Name:      agentName.Name,
+					Labels: map[string]string{
+						"pod":   string(podRef.UID),
+						"store": string(storeRef.UID),
+					},
 				},
 				Spec: sidecarv2beta1.AgentSpec{
 					Port:  int32(port),
@@ -253,6 +267,7 @@ func (r *PodReconciler) reconcilePrimitive(pod *corev1.Pod, primitive v2beta1.Pr
 				log.Error(err)
 				return false, err
 			}
+			log.Infof("Creating Agent %s for Pod %s", agentName, podName)
 			if err := r.client.Create(context.TODO(), agent); err != nil {
 				if !k8serrors.IsAlreadyExists(err) {
 					log.Error(err)
@@ -285,6 +300,11 @@ func (r *PodReconciler) reconcilePrimitive(pod *corev1.Pod, primitive v2beta1.Pr
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: proxyName.Namespace,
 				Name:      proxyName.Name,
+				Labels: map[string]string{
+					"pod":       string(podRef.UID),
+					"primitive": string(primitiveRef.UID),
+					"agent":     string(agentRef.UID),
+				},
 			},
 			Spec: sidecarv2beta1.ProxySpec{
 				Pod:       *podRef,
@@ -300,6 +320,7 @@ func (r *PodReconciler) reconcilePrimitive(pod *corev1.Pod, primitive v2beta1.Pr
 			log.Error(err)
 			return false, err
 		}
+		log.Infof("Creating Proxy %s for Pod %s", proxyName, podName)
 		if err := r.client.Create(context.TODO(), proxy); err != nil {
 			if !k8serrors.IsAlreadyExists(err) {
 				log.Error(err)
@@ -320,6 +341,7 @@ func (r *PodReconciler) reconcilePrimitive(pod *corev1.Pod, primitive v2beta1.Pr
 			log.Error(err)
 			return false, err
 		}
+		log.Infof("Deleting Proxy %s for Pod %s", proxyName, podName)
 		if err := r.client.Delete(context.TODO(), proxy); err != nil {
 			if !k8serrors.IsNotFound(err) {
 				log.Error(err)
@@ -331,6 +353,7 @@ func (r *PodReconciler) reconcilePrimitive(pod *corev1.Pod, primitive v2beta1.Pr
 	}
 
 	if proxy.Spec.Agent.UID != agent.UID {
+		log.Infof("Deleting Proxy %s for Pod %s", proxyName, podName)
 		if err := r.client.Delete(context.TODO(), proxy); err != nil {
 			if !k8serrors.IsNotFound(err) {
 				log.Error(err)
@@ -342,6 +365,7 @@ func (r *PodReconciler) reconcilePrimitive(pod *corev1.Pod, primitive v2beta1.Pr
 	}
 
 	if proxy.Spec.Permissions.Read != read || proxy.Spec.Permissions.Write != write {
+		log.Infof("Deleting Proxy %s for Pod %s", proxyName, podName)
 		if err := r.client.Delete(context.TODO(), proxy); err != nil {
 			if !k8serrors.IsNotFound(err) {
 				log.Error(err)
@@ -357,8 +381,10 @@ func (r *PodReconciler) reconcilePrimitive(pod *corev1.Pod, primitive v2beta1.Pr
 func (r *PodReconciler) getPort(pod *corev1.Pod) (int, error) {
 	agents := &sidecarv2beta1.AgentList{}
 	options := &client.ListOptions{
-		Namespace:     pod.Namespace,
-		FieldSelector: fields.OneTermEqualSelector("spec.pod.uid", string(pod.UID)),
+		Namespace: pod.Namespace,
+		LabelSelector: labels.SelectorFromSet(map[string]string{
+			"pod": string(pod.UID),
+		}),
 	}
 	if err := r.client.List(context.TODO(), agents, options); err != nil {
 		log.Error(err)

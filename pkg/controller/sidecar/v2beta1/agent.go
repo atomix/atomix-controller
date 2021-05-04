@@ -28,7 +28,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
@@ -42,23 +42,6 @@ import (
 )
 
 const agentFinalizer = "agent"
-
-func addAgentIndexes(mgr manager.Manager) error {
-	err := mgr.GetFieldIndexer().IndexField(&sidecarv2beta1.Agent{}, "spec.pod.uid", func(object runtime.Object) []string {
-		return []string{string(object.(*sidecarv2beta1.Agent).Spec.Pod.UID)}
-	})
-	if err != nil {
-		return err
-	}
-
-	err = mgr.GetFieldIndexer().IndexField(&sidecarv2beta1.Agent{}, "spec.store.uid", func(object runtime.Object) []string {
-		return []string{string(object.(*sidecarv2beta1.Agent).Spec.Store.UID)}
-	})
-	if err != nil {
-		return err
-	}
-	return nil
-}
 
 func addAgentController(mgr manager.Manager) error {
 	r := &AgentReconciler{
@@ -115,22 +98,49 @@ func (r *AgentReconciler) Reconcile(request reconcile.Request) (reconcile.Result
 }
 
 func (r *AgentReconciler) reconcileCreate(agent *sidecarv2beta1.Agent) (reconcile.Result, error) {
+	agentName := types.NamespacedName{
+		Namespace: agent.Namespace,
+		Name:      agent.Name,
+	}
 	if !k8s.HasFinalizer(agent.Finalizers, agentFinalizer) {
+		log.Infof("Initializing Agent %s", agentName)
 		return reconcile.Result{}, r.addFinalizer(agent)
 	}
 
+	podName := types.NamespacedName{
+		Namespace: agent.Spec.Pod.Namespace,
+		Name:      agent.Spec.Pod.Name,
+	}
 	pod, err := r.getPod(agent)
 	if err != nil {
 		return reconcile.Result{}, err
 	} else if pod == nil {
-		return reconcile.Result{}, r.client.Delete(context.TODO(), agent)
+		log.Infof("Pod %s not found. Deleting Agent %s", podName, agentName)
+		if err := r.client.Delete(context.TODO(), agent); err != nil {
+			if !k8serrors.IsNotFound(err) {
+				log.Error(err)
+				return reconcile.Result{}, err
+			}
+		}
+		return reconcile.Result{}, nil
 	}
 
+	storeName := types.NamespacedName{
+		Namespace: agent.Spec.Store.Namespace,
+		Name:      agent.Spec.Store.Name,
+	}
 	store, err := r.getStore(agent)
 	if err != nil {
 		return reconcile.Result{}, err
-	} else if store == nil {
-		return reconcile.Result{}, r.client.Delete(context.TODO(), agent)
+	} else if store == nil || store.DeletionTimestamp != nil {
+		log.Infof("Store %s not found. Deleting Agent %s", storeName, agentName)
+		if err := r.client.Delete(context.TODO(), agent); err != nil {
+			if !k8serrors.IsNotFound(err) {
+				log.Error(err)
+				return reconcile.Result{}, err
+			}
+		}
+		return reconcile.Result{}, nil
 	}
 
 	if store.Status.Ready && agent.Status.Ready && agent.Status.Revision == store.Status.Protocol.Revision {
@@ -236,6 +246,7 @@ func (r *AgentReconciler) reconcileDelete(agent *sidecarv2beta1.Agent) (reconcil
 		return reconcile.Result{}, nil
 	}
 
+	log.Infof("Finalizing Agent %s", types.NamespacedName{agent.Namespace, agent.Name})
 	pod, err := r.getPod(agent)
 	if err != nil {
 		return reconcile.Result{}, err
@@ -379,7 +390,9 @@ func (m *storeAgentMapper) Map(object handler.MapObject) []reconcile.Request {
 	store := object.Object.(*corev2beta1.Store)
 	agents := &sidecarv2beta1.AgentList{}
 	options := &client.ListOptions{
-		FieldSelector: fields.OneTermEqualSelector("spec.store.uid", string(store.UID)),
+		LabelSelector: labels.SelectorFromSet(map[string]string{
+			"store": string(store.UID),
+		}),
 	}
 	if err := m.client.List(context.TODO(), agents, options); err != nil {
 		log.Error(err)

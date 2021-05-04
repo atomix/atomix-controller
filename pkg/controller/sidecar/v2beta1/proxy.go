@@ -28,7 +28,7 @@ import (
 	"google.golang.org/grpc/status"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
@@ -41,30 +41,6 @@ import (
 )
 
 const proxyFinalizer = "proxy"
-
-func addProxyIndexes(mgr manager.Manager) error {
-	err := mgr.GetFieldIndexer().IndexField(&sidecarv2beta1.Proxy{}, "spec.pod.uid", func(object runtime.Object) []string {
-		return []string{string(object.(*sidecarv2beta1.Proxy).Spec.Pod.UID)}
-	})
-	if err != nil {
-		return err
-	}
-
-	err = mgr.GetFieldIndexer().IndexField(&sidecarv2beta1.Proxy{}, "spec.primitive.uid", func(object runtime.Object) []string {
-		return []string{string(object.(*sidecarv2beta1.Proxy).Spec.Primitive.UID)}
-	})
-	if err != nil {
-		return err
-	}
-
-	err = mgr.GetFieldIndexer().IndexField(&sidecarv2beta1.Proxy{}, "spec.agent.uid", func(object runtime.Object) []string {
-		return []string{string(object.(*sidecarv2beta1.Proxy).Spec.Agent.UID)}
-	})
-	if err != nil {
-		return err
-	}
-	return nil
-}
 
 func addProxyController(mgr manager.Manager) error {
 	r := &ProxyReconciler{
@@ -129,7 +105,12 @@ func (r *ProxyReconciler) Reconcile(request reconcile.Request) (reconcile.Result
 }
 
 func (r *ProxyReconciler) reconcileCreate(proxy *sidecarv2beta1.Proxy) (reconcile.Result, error) {
+	proxyName := types.NamespacedName{
+		Namespace: proxy.Namespace,
+		Name:      proxy.Name,
+	}
 	if !k8s.HasFinalizer(proxy.Finalizers, proxyFinalizer) {
+		log.Infof("Initializing Proxy %s", proxyName)
 		return reconcile.Result{}, r.addFinalizer(proxy)
 	}
 
@@ -137,32 +118,65 @@ func (r *ProxyReconciler) reconcileCreate(proxy *sidecarv2beta1.Proxy) (reconcil
 		return reconcile.Result{}, nil
 	}
 
+	podName := types.NamespacedName{
+		Namespace: proxy.Spec.Pod.Namespace,
+		Name:      proxy.Spec.Pod.Name,
+	}
 	pod, err := r.getPod(proxy)
 	if err != nil {
 		return reconcile.Result{}, err
 	} else if pod == nil {
-		return reconcile.Result{}, r.client.Delete(context.TODO(), proxy)
+		log.Infof("Pod %s not found. Deleting Proxy %s", podName, proxyName)
+		if err := r.client.Delete(context.TODO(), proxy); err != nil {
+			if !k8serrors.IsNotFound(err) {
+				log.Error(err)
+				return reconcile.Result{}, err
+			}
+		}
+		return reconcile.Result{}, nil
 	}
 
+	primitiveName := types.NamespacedName{
+		Namespace: proxy.Spec.Primitive.Namespace,
+		Name:      proxy.Spec.Primitive.Name,
+	}
 	primitive, err := r.getPrimitive(proxy)
 	if err != nil {
 		return reconcile.Result{}, err
-	} else if primitive == nil {
-		return reconcile.Result{}, r.client.Delete(context.TODO(), proxy)
+	} else if primitive == nil || primitive.DeletionTimestamp != nil {
+		log.Infof("Primitive %s not found. Deleting Proxy %s", primitiveName, proxyName)
+		if err := r.client.Delete(context.TODO(), proxy); err != nil {
+			if !k8serrors.IsNotFound(err) {
+				log.Error(err)
+				return reconcile.Result{}, err
+			}
+		}
+		return reconcile.Result{}, nil
 	}
 
+	agentName := types.NamespacedName{
+		Namespace: proxy.Spec.Agent.Namespace,
+		Name:      proxy.Spec.Agent.Name,
+	}
 	agent, err := r.getAgent(proxy)
 	if err != nil {
 		return reconcile.Result{}, err
-	} else if agent == nil {
-		return reconcile.Result{}, r.client.Delete(context.TODO(), proxy)
+	} else if agent == nil || agent.DeletionTimestamp != nil {
+		log.Infof("Agent %s not found. Deleting Proxy %s", agentName, proxyName)
+		if err := r.client.Delete(context.TODO(), proxy); err != nil {
+			if !k8serrors.IsNotFound(err) {
+				log.Error(err)
+				return reconcile.Result{}, err
+			}
+		}
+		return reconcile.Result{}, nil
 	}
 
 	if !agent.Status.Ready {
 		return reconcile.Result{}, nil
 	}
 
-	log.Info("Connecting to agent")
+	log.Infof("Connecting to agent %s", agentName)
 	agentConn, err := grpc.Dial(fmt.Sprintf("%s:%d", pod.Status.PodIP, agent.Spec.Port), grpc.WithInsecure())
 	if err != nil {
 		log.Error(err)
@@ -170,7 +184,7 @@ func (r *ProxyReconciler) reconcileCreate(proxy *sidecarv2beta1.Proxy) (reconcil
 	}
 	agentClient := driverapi.NewAgentClient(agentConn)
 
-	log.Info("Creating primitive proxy")
+	log.Infof("Creating Primitive %s proxy", primitiveName)
 	createProxyRequest := &driverapi.CreateProxyRequest{
 		ProxyID: driverapi.ProxyId{
 			PrimitiveId: primitiveapi.PrimitiveId{
@@ -190,7 +204,7 @@ func (r *ProxyReconciler) reconcileCreate(proxy *sidecarv2beta1.Proxy) (reconcil
 		return reconcile.Result{}, err
 	}
 
-	log.Info("Connecting to broker")
+	log.Infof("Connecting to Pod %s broker", podName)
 	brokerConn, err := grpc.Dial(fmt.Sprintf("%s:5678", pod.Status.PodIP), grpc.WithInsecure())
 	if err != nil {
 		log.Error(err)
@@ -198,7 +212,7 @@ func (r *ProxyReconciler) reconcileCreate(proxy *sidecarv2beta1.Proxy) (reconcil
 	}
 	brokerClient := brokerapi.NewBrokerClient(brokerConn)
 
-	log.Info("Registering primitive with broker")
+	log.Infof("Registering Primitive %s with Pod %s broker", primitiveName, podName)
 	registerPrimitiveRequest := &brokerapi.RegisterPrimitiveRequest{
 		PrimitiveID: brokerapi.PrimitiveId{
 			PrimitiveId: primitiveapi.PrimitiveId{
@@ -227,10 +241,19 @@ func (r *ProxyReconciler) reconcileCreate(proxy *sidecarv2beta1.Proxy) (reconcil
 }
 
 func (r *ProxyReconciler) reconcileDelete(proxy *sidecarv2beta1.Proxy) (reconcile.Result, error) {
+	proxyName := types.NamespacedName{
+		Namespace: proxy.Namespace,
+		Name:      proxy.Name,
+	}
 	if !k8s.HasFinalizer(proxy.Finalizers, proxyFinalizer) {
 		return reconcile.Result{}, nil
 	}
 
+	log.Infof("Finalizing Proxy %s", proxyName)
+	podName := types.NamespacedName{
+		Namespace: proxy.Spec.Pod.Namespace,
+		Name:      proxy.Spec.Pod.Name,
+	}
 	pod, err := r.getPod(proxy)
 	if err != nil {
 		return reconcile.Result{}, err
@@ -238,6 +261,10 @@ func (r *ProxyReconciler) reconcileDelete(proxy *sidecarv2beta1.Proxy) (reconcil
 		return reconcile.Result{}, r.removeFinalizer(proxy)
 	}
 
+	primitiveName := types.NamespacedName{
+		Namespace: proxy.Spec.Primitive.Namespace,
+		Name:      proxy.Spec.Primitive.Name,
+	}
 	primitive, err := r.getPrimitive(proxy)
 	if err != nil {
 		return reconcile.Result{}, err
@@ -245,7 +272,7 @@ func (r *ProxyReconciler) reconcileDelete(proxy *sidecarv2beta1.Proxy) (reconcil
 		return reconcile.Result{}, r.removeFinalizer(proxy)
 	}
 
-	log.Info("Connecting to broker")
+	log.Infof("Connecting to Pod %s broker", podName)
 	brokerConn, err := grpc.Dial(fmt.Sprintf("%s:5678", pod.Status.PodIP), grpc.WithInsecure())
 	if err != nil {
 		log.Error(err)
@@ -253,7 +280,7 @@ func (r *ProxyReconciler) reconcileDelete(proxy *sidecarv2beta1.Proxy) (reconcil
 	}
 	brokerClient := brokerapi.NewBrokerClient(brokerConn)
 
-	log.Info("Unregistering primitive with broker")
+	log.Infof("Unregistering Primitive %s with Pod %s broker", primitiveName, podName)
 	unregisterPrimitiveRequest := &brokerapi.UnregisterPrimitiveRequest{
 		PrimitiveID: brokerapi.PrimitiveId{
 			PrimitiveId: primitiveapi.PrimitiveId{
@@ -269,14 +296,18 @@ func (r *ProxyReconciler) reconcileDelete(proxy *sidecarv2beta1.Proxy) (reconcil
 		return reconcile.Result{}, err
 	}
 
+	agentName := types.NamespacedName{
+		Namespace: proxy.Spec.Agent.Namespace,
+		Name:      proxy.Spec.Agent.Name,
+	}
 	agent, err := r.getAgent(proxy)
 	if err != nil {
 		return reconcile.Result{}, err
-	} else if agent == nil {
+	} else if agent == nil || agent.DeletionTimestamp != nil {
 		return reconcile.Result{}, r.removeFinalizer(proxy)
 	}
 
-	log.Info("Connecting to agent")
+	log.Infof("Connecting to Agent %s", agentName)
 	agentConn, err := grpc.Dial(fmt.Sprintf("%s:%d", pod.Status.PodIP, agent.Spec.Port), grpc.WithInsecure())
 	if err != nil {
 		log.Error(err)
@@ -284,7 +315,7 @@ func (r *ProxyReconciler) reconcileDelete(proxy *sidecarv2beta1.Proxy) (reconcil
 	}
 	agentClient := driverapi.NewAgentClient(agentConn)
 
-	log.Info("Destroying primitive proxy")
+	log.Info("Destroying Primitive %s proxy", primitiveName)
 	destroyProxyRequest := &driverapi.DestroyProxyRequest{
 		ProxyID: driverapi.ProxyId{
 			PrimitiveId: primitiveapi.PrimitiveId{
@@ -384,8 +415,10 @@ func (m *primitiveProxyMapper) Map(object handler.MapObject) []reconcile.Request
 	primitive := object.Object.(*corev2beta1.Primitive)
 	proxies := &sidecarv2beta1.ProxyList{}
 	options := &client.ListOptions{
-		Namespace:     primitive.Namespace,
-		FieldSelector: fields.OneTermEqualSelector("spec.primitive.uid", string(primitive.UID)),
+		Namespace: primitive.Namespace,
+		LabelSelector: labels.SelectorFromSet(map[string]string{
+			"primitive": string(primitive.UID),
+		}),
 	}
 	if err := m.client.List(context.TODO(), proxies, options); err != nil {
 		log.Error(err)
@@ -419,8 +452,10 @@ func (m *agentProxyMapper) Map(object handler.MapObject) []reconcile.Request {
 	agent := object.Object.(*sidecarv2beta1.Agent)
 	proxies := &sidecarv2beta1.ProxyList{}
 	options := &client.ListOptions{
-		Namespace:     agent.Namespace,
-		FieldSelector: fields.OneTermEqualSelector("spec.agent.uid", string(agent.UID)),
+		Namespace: agent.Namespace,
+		LabelSelector: labels.SelectorFromSet(map[string]string{
+			"agent": string(agent.UID),
+		}),
 	}
 	if err := m.client.List(context.TODO(), proxies, options); err != nil {
 		log.Error(err)

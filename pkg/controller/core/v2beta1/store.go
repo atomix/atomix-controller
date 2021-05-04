@@ -17,7 +17,6 @@ package v2beta1
 import (
 	"context"
 	corev2beta1 "github.com/atomix/atomix-controller/pkg/apis/core/v2beta1"
-	"github.com/atomix/atomix-controller/pkg/controller/util/k8s"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -32,8 +31,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
-
-const storeFinalizer = "store"
 
 func addStoreController(mgr manager.Manager) error {
 	r := &StoreReconciler{
@@ -83,25 +80,11 @@ func (r *StoreReconciler) Reconcile(request reconcile.Request) (reconcile.Result
 		log.Error(err)
 		return reconcile.Result{}, err
 	}
-
-	if store.DeletionTimestamp == nil {
-		return r.reconcileCreate(store)
-	} else {
-		return r.reconcileDelete(store)
-	}
+	return r.reconcileStore(store)
 }
 
-func (r *StoreReconciler) reconcileCreate(store *corev2beta1.Store) (reconcile.Result, error) {
-	if !k8s.HasFinalizer(store.Finalizers, storeFinalizer) {
-		store.Finalizers = k8s.AddFinalizer(store.Finalizers, storeFinalizer)
-		if err := r.client.Update(context.TODO(), store); err != nil {
-			log.Error(err)
-			return reconcile.Result{}, err
-		}
-		return reconcile.Result{Requeue: true}, nil
-	}
-
-	if ok, err := r.createProtocol(store); err != nil {
+func (r *StoreReconciler) reconcileStore(store *corev2beta1.Store) (reconcile.Result, error) {
+	if ok, err := r.reconcileProtocol(store); err != nil {
 		return reconcile.Result{}, err
 	} else if ok {
 		return reconcile.Result{Requeue: true}, nil
@@ -109,7 +92,7 @@ func (r *StoreReconciler) reconcileCreate(store *corev2beta1.Store) (reconcile.R
 	return reconcile.Result{}, nil
 }
 
-func (r *StoreReconciler) createProtocol(store *corev2beta1.Store) (bool, error) {
+func (r *StoreReconciler) reconcileProtocol(store *corev2beta1.Store) (bool, error) {
 	object, err := runtime.Decode(unstructured.UnstructuredJSONScheme, store.Spec.Protocol.Raw)
 	if err != nil {
 		log.Error(err)
@@ -130,6 +113,7 @@ func (r *StoreReconciler) createProtocol(store *corev2beta1.Store) (bool, error)
 			return false, err
 		}
 
+		log.Infof("Creating protocol for Store %s", types.NamespacedName{store.Namespace, store.Name})
 		protocol.SetNamespace(store.Namespace)
 		protocol.SetName(store.Name)
 
@@ -261,6 +245,7 @@ func (r *StoreReconciler) createProtocol(store *corev2beta1.Store) (bool, error)
 			return false, nil
 		}
 
+		log.Infof("Protocol status changed for Store %s", types.NamespacedName{store.Namespace, store.Name})
 		store.Status.Protocol = protocolStatus
 		store.Status.Replicas = int32(len(store.Status.Protocol.Replicas))
 		store.Status.ReadyReplicas = readyReplicas
@@ -279,57 +264,4 @@ func (r *StoreReconciler) createProtocol(store *corev2beta1.Store) (bool, error)
 		return true, nil
 	}
 	return false, nil
-}
-
-func (r *StoreReconciler) reconcileDelete(store *corev2beta1.Store) (reconcile.Result, error) {
-	if !k8s.HasFinalizer(store.Finalizers, storeFinalizer) {
-		return reconcile.Result{}, nil
-	}
-
-	if ok, err := r.deleteProtocol(store); err != nil {
-		return reconcile.Result{}, err
-	} else if ok {
-		return reconcile.Result{Requeue: true}, nil
-	}
-
-	store.Finalizers = k8s.RemoveFinalizer(store.Finalizers, storeFinalizer)
-	if err := r.client.Update(context.TODO(), store); err != nil {
-		log.Error(err)
-		return reconcile.Result{}, err
-	}
-	return reconcile.Result{}, nil
-}
-
-func (r *StoreReconciler) deleteProtocol(store *corev2beta1.Store) (bool, error) {
-	object, err := runtime.Decode(unstructured.UnstructuredJSONScheme, store.Spec.Protocol.Raw)
-	if err != nil {
-		log.Error(err)
-		return false, err
-	}
-
-	protocol := object.(*unstructured.Unstructured)
-	stored := &unstructured.Unstructured{}
-	stored.SetGroupVersionKind(protocol.GroupVersionKind())
-	name := types.NamespacedName{
-		Namespace: store.Namespace,
-		Name:      store.Name,
-	}
-	err = r.client.Get(context.TODO(), name, stored)
-	if err != nil {
-		if !k8serrors.IsNotFound(err) {
-			log.Error(err)
-			return false, err
-		}
-		return false, nil
-	}
-
-	err = r.client.Delete(context.TODO(), stored)
-	if err != nil {
-		if !k8serrors.IsNotFound(err) {
-			log.Error(err)
-			return false, err
-		}
-		return false, nil
-	}
-	return true, nil
 }
