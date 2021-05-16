@@ -919,7 +919,7 @@ spec:
       serviceAccountName: atomix-controller
       initContainers:
       - name: init-certs
-        image: atomix/atomix-controller-init-certs:v0.5.0
+        image: atomix/atomix-controller-init-certs:v0.5.1
         imagePullPolicy: IfNotPresent
         securityContext:
           allowPrivilegeEscalation: false
@@ -951,7 +951,7 @@ spec:
           mountPath: /etc/webhook/certs
       containers:
       - name: controller
-        image: atomix/atomix-controller:v0.5.0
+        image: atomix/atomix-controller:v0.5.1
         imagePullPolicy: IfNotPresent
         securityContext:
           allowPrivilegeEscalation: false
