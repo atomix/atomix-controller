@@ -42,10 +42,10 @@ github.com/asaskevich/govalidator v0.0.0-20180720115003-f9ffefc3facf/go.mod h1:l
 github.com/asaskevich/govalidator v0.0.0-20190424111038-f61b66f89f4a/go.mod h1:lB+ZfQJz7igIIfQNfa7Ml4HSf2uFQQRzpGGRXenZAgY=
 github.com/atomix/api v0.3.3 h1:7iTCHxeTrnkZ5C0S6XTXkBCYjUW4KbTjDd3X4pxD3Us=
 github.com/atomix/api v0.3.3/go.mod h1:G8fCdKYiPhZMYTgfz7QAtw6JqIfY2szigiz/gILNY50=
-github.com/atomix/atomix-api/go v0.4.1 h1:x9Ko/m0wH2tCZcDwojBiSm033UEnPC7Dd5x75FIq6NY=
-github.com/atomix/atomix-api/go v0.4.1/go.mod h1:N6gtApjoC9bRS9m7dksdVQIWSKaNArAl5EiOoaTHnmw=
-github.com/atomix/atomix-go-framework v0.6.0 h1:fn40DgNTRHOmHWKV3o6Nal5gwMRHy7WEnonC+m7sLO8=
-github.com/atomix/atomix-go-framework v0.6.0/go.mod h1:6D9de5OPgJE8hTP8TRaXJrIt9ERSlX+nuvCZNT2Yem0=
+github.com/atomix/atomix-api/go v0.4.3 h1:e7HTh2k8xbErtmjEg7FBYvivAoSIC/rJ5p/o13URkwk=
+github.com/atomix/atomix-api/go v0.4.3/go.mod h1:N6gtApjoC9bRS9m7dksdVQIWSKaNArAl5EiOoaTHnmw=
+github.com/atomix/atomix-go-framework v0.6.2 h1:2y0clKmpqSAFSH72xD2Bzi1Tsgau725QJnygvScz5ek=
+github.com/atomix/atomix-go-framework v0.6.2/go.mod h1:3R37zGCkvoBglAO7ghxmq4xJV23mmx/ADRwJgXZ6YKs=
 github.com/beorn7/perks v0.0.0-20180321164747-3a771d992973/go.mod h1:Dwedo/Wpr24TaqPxmxbtue+5NUziq4I4S80YR8gNf3Q=
 github.com/beorn7/perks v1.0.0 h1:HWo1m869IqiPhD389kmkxeTalrjNbbJTC8LXupb+sl0=
 github.com/beorn7/perks v1.0.0/go.mod h1:KWe93zE9D1o94FZ5RNwFwVgaQK1VOXiVxmqh+CedLV8=
