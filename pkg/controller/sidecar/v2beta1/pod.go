@@ -30,7 +30,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/reference"
-	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -38,6 +37,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
+	"sort"
 )
 
 const (
@@ -142,7 +142,14 @@ func (r *PodReconciler) reconcilePrimitives(pod *corev1.Pod) (bool, error) {
 	}
 
 	ready := true
-	for _, primitive := range primitives.Items {
+	sortedPrimitives := make([]v2beta1.Primitive, len(primitives.Items))
+	for i, primitive := range primitives.Items {
+		sortedPrimitives[i] = primitive
+	}
+	sort.Slice(sortedPrimitives, func(i, j int) bool {
+		return sortedPrimitives[i].Name < sortedPrimitives[j].Name
+	})
+	for _, primitive := range sortedPrimitives {
 		if ok, err := r.reconcilePrimitive(pod, primitive, &ready); err != nil {
 			return false, err
 		} else if ok {
@@ -185,6 +192,7 @@ func (r *PodReconciler) reconcilePrimitive(pod *corev1.Pod, primitive v2beta1.Pr
 		}
 
 		if !read && !write {
+			log.Warnf("Pod %s does not have permissions to access Primitive %s", podName, primitiveName)
 			return false, nil
 		}
 
@@ -205,8 +213,10 @@ func (r *PodReconciler) reconcilePrimitive(pod *corev1.Pod, primitive v2beta1.Pr
 		}
 
 		if supported, err := r.isProtocolSupported(pod, *store); err != nil {
+			log.Error(err)
 			return false, err
 		} else if !supported {
+			log.Warnf("Pod %s does not have the appropriate drivers for Primitive %s installed", podName, primitiveName)
 			return false, nil
 		}
 
@@ -223,6 +233,7 @@ func (r *PodReconciler) reconcilePrimitive(pod *corev1.Pod, primitive v2beta1.Pr
 
 			port, err := r.getPort(pod)
 			if err != nil {
+				log.Error(err)
 				return false, err
 			}
 
@@ -274,7 +285,7 @@ func (r *PodReconciler) reconcilePrimitive(pod *corev1.Pod, primitive v2beta1.Pr
 			} else if ok {
 				return true, nil
 			}
-			ready = pointer.BoolPtr(false)
+			*ready = false
 		}
 
 		podRef, err := reference.GetReference(r.scheme, pod)
@@ -336,7 +347,7 @@ func (r *PodReconciler) reconcilePrimitive(pod *corev1.Pod, primitive v2beta1.Pr
 		} else if ok {
 			return true, nil
 		}
-		ready = pointer.BoolPtr(false)
+		*ready = false
 	}
 
 	agentName := types.NamespacedName{
@@ -392,6 +403,8 @@ func (r *PodReconciler) setAtomixCondition(pod *corev1.Pod, status corev1.Condit
 			if condition.Status == status && condition.Reason == reason && condition.Message == message {
 				return false, nil
 			}
+			log.Infof("Updating Pod %s condition: status=%s, reason=%s, message=%s",
+				types.NamespacedName{pod.Namespace, pod.Name}, status, reason, message)
 			if condition.Status != status {
 				condition.LastTransitionTime = metav1.Now()
 			}
@@ -400,12 +413,15 @@ func (r *PodReconciler) setAtomixCondition(pod *corev1.Pod, status corev1.Condit
 			condition.Message = message
 			pod.Status.Conditions[i] = condition
 			if err := r.client.Status().Update(context.TODO(), pod); err != nil {
+				log.Error(err)
 				return false, err
 			}
 			return true, nil
 		}
 	}
 
+	log.Infof("Initializing Pod %s condition: status=%s, reason=%s, message=%s",
+		types.NamespacedName{pod.Namespace, pod.Name}, status, reason, message)
 	pod.Status.Conditions = append(pod.Status.Conditions, corev1.PodCondition{
 		Type:               atomixReadyCondition,
 		Status:             status,
@@ -428,7 +444,6 @@ func (r *PodReconciler) getPort(pod *corev1.Pod) (int, error) {
 		}),
 	}
 	if err := r.client.List(context.TODO(), agents, options); err != nil {
-		log.Error(err)
 		return 0, err
 	}
 
