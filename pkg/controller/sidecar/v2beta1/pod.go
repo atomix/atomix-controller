@@ -68,7 +68,7 @@ func addPodController(mgr manager.Manager) error {
 		return err
 	}
 
-	// Watch for changes to ProtocolAgents
+	// Watch for changes to Agents
 	err = c.Watch(&source.Kind{Type: &sidecarv2beta1.Agent{}}, &handler.EnqueueRequestForOwner{
 		OwnerType:    &corev1.Pod{},
 		IsController: true,
@@ -97,22 +97,6 @@ func addPodController(mgr manager.Manager) error {
 	// Watch for changes to Primitives
 	err = c.Watch(&source.Kind{Type: &v2beta1.Primitive{}}, &handler.EnqueueRequestsFromMapFunc{
 		ToRequests: newPrimitivePodMapper(mgr),
-	})
-	if err != nil {
-		return err
-	}
-
-	// Watch for changes to ProtocolAgents
-	err = c.Watch(&source.Kind{Type: &sidecarv2beta1.Agent{}}, &handler.EnqueueRequestsFromMapFunc{
-		ToRequests: newAgentPodMapper(mgr),
-	})
-	if err != nil {
-		return err
-	}
-
-	// Watch for changes to Proxy's
-	err = c.Watch(&source.Kind{Type: &sidecarv2beta1.Proxy{}}, &handler.EnqueueRequestsFromMapFunc{
-		ToRequests: newProxyPodMapper(mgr),
 	})
 	if err != nil {
 		return err
@@ -269,7 +253,7 @@ func (r *PodReconciler) reconcilePrimitive(pod *corev1.Pod, primitive v2beta1.Pr
 					Store: *storeRef,
 				},
 			}
-			if err := controllerutil.SetOwnerReference(pod, agent, r.scheme); err != nil {
+			if err := controllerutil.SetControllerReference(pod, agent, r.scheme); err != nil {
 				log.Error(err)
 				return false, err
 			}
@@ -331,7 +315,7 @@ func (r *PodReconciler) reconcilePrimitive(pod *corev1.Pod, primitive v2beta1.Pr
 				},
 			},
 		}
-		if err := controllerutil.SetOwnerReference(pod, proxy, r.scheme); err != nil {
+		if err := controllerutil.SetControllerReference(pod, proxy, r.scheme); err != nil {
 			log.Error(err)
 			return false, err
 		}
@@ -752,51 +736,3 @@ func (m *primitivePodMapper) Map(object handler.MapObject) []reconcile.Request {
 }
 
 var _ handler.Mapper = &primitivePodMapper{}
-
-func newAgentPodMapper(mgr manager.Manager) handler.Mapper {
-	return &agentPodMapper{
-		client: mgr.GetClient(),
-	}
-}
-
-type agentPodMapper struct {
-	client client.Client
-}
-
-func (m *agentPodMapper) Map(object handler.MapObject) []reconcile.Request {
-	agent := object.Object.(*sidecarv2beta1.Agent)
-	return []reconcile.Request{
-		{
-			NamespacedName: types.NamespacedName{
-				Namespace: agent.Spec.Pod.Namespace,
-				Name:      agent.Spec.Pod.Name,
-			},
-		},
-	}
-}
-
-var _ handler.Mapper = &agentPodMapper{}
-
-func newProxyPodMapper(mgr manager.Manager) handler.Mapper {
-	return &proxyPodMapper{
-		client: mgr.GetClient(),
-	}
-}
-
-type proxyPodMapper struct {
-	client client.Client
-}
-
-func (m *proxyPodMapper) Map(object handler.MapObject) []reconcile.Request {
-	proxy := object.Object.(*sidecarv2beta1.Proxy)
-	return []reconcile.Request{
-		{
-			NamespacedName: types.NamespacedName{
-				Namespace: proxy.Spec.Pod.Namespace,
-				Name:      proxy.Spec.Pod.Name,
-			},
-		},
-	}
-}
-
-var _ handler.Mapper = &proxyPodMapper{}
