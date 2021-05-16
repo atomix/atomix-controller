@@ -41,6 +41,11 @@ func AddControllers(mgr manager.Manager) error {
 	}); err != nil {
 		return err
 	}
+	if err := addController(mgr, &primitivesv2beta1.IndexedMap{}, func(object runtime.Object) corev1.ObjectReference {
+		return object.(*primitivesv2beta1.IndexedMap).Spec.Store
+	}); err != nil {
+		return err
+	}
 	if err := addController(mgr, &primitivesv2beta1.List{}, func(object runtime.Object) corev1.ObjectReference {
 		return object.(*primitivesv2beta1.List).Spec.Store
 	}); err != nil {
