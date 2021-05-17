@@ -939,6 +939,8 @@ spec:
   selector:
     name: atomix-controller
   ports:
+  - name: control
+    port: 5679
   - name: webhook
     port: 443
     targetPort: 443
@@ -999,6 +1001,8 @@ spec:
           allowPrivilegeEscalation: false
           runAsUser: 0
         ports:
+        - containerPort: 5679
+          name: control
         - containerPort: 443
           name: webhook-server
         readinessProbe:
