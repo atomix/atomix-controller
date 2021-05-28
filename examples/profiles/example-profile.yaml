@@ -1,0 +1,12 @@
+apiVersion: atomix.io/v2beta1
+kind: StorageProfile
+metadata:
+  name: example-profile
+  labels:
+    app: example
+spec:
+  drivers:
+  - raft.storage.atomix.io
+  selector:
+    matchLabels:
+      app: example

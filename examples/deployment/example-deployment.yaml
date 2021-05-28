@@ -15,7 +15,7 @@ spec:
         app: example
       annotations:
         broker.atomix.io/inject: "true"
-        raft.storage.atomix.io/inject: "true"
+        storage.atomix.io/profile: example-profile
     spec:
       serviceAccountName: primitives
       containers:

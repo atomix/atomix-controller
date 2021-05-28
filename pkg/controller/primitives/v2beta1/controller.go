@@ -19,7 +19,6 @@ import (
 	"github.com/atomix/atomix-controller/pkg/apis/core/v2beta1"
 	primitivesv2beta1 "github.com/atomix/atomix-controller/pkg/apis/primitives/v2beta1"
 	"github.com/atomix/atomix-go-framework/pkg/atomix/logging"
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -31,50 +30,34 @@ import (
 var log = logging.GetLogger("atomix", "controller", "primitives")
 
 func AddControllers(mgr manager.Manager) error {
-	if err := addController(mgr, &primitivesv2beta1.Counter{}, func(object runtime.Object) corev1.ObjectReference {
-		return object.(*primitivesv2beta1.Counter).Spec.Store
-	}); err != nil {
+	if err := addController(mgr, &primitivesv2beta1.Counter{}); err != nil {
 		return err
 	}
-	if err := addController(mgr, &primitivesv2beta1.Election{}, func(object runtime.Object) corev1.ObjectReference {
-		return object.(*primitivesv2beta1.Election).Spec.Store
-	}); err != nil {
+	if err := addController(mgr, &primitivesv2beta1.Election{}); err != nil {
 		return err
 	}
-	if err := addController(mgr, &primitivesv2beta1.IndexedMap{}, func(object runtime.Object) corev1.ObjectReference {
-		return object.(*primitivesv2beta1.IndexedMap).Spec.Store
-	}); err != nil {
+	if err := addController(mgr, &primitivesv2beta1.IndexedMap{}); err != nil {
 		return err
 	}
-	if err := addController(mgr, &primitivesv2beta1.List{}, func(object runtime.Object) corev1.ObjectReference {
-		return object.(*primitivesv2beta1.List).Spec.Store
-	}); err != nil {
+	if err := addController(mgr, &primitivesv2beta1.List{}); err != nil {
 		return err
 	}
-	if err := addController(mgr, &primitivesv2beta1.Lock{}, func(object runtime.Object) corev1.ObjectReference {
-		return object.(*primitivesv2beta1.Lock).Spec.Store
-	}); err != nil {
+	if err := addController(mgr, &primitivesv2beta1.Lock{}); err != nil {
 		return err
 	}
-	if err := addController(mgr, &primitivesv2beta1.Map{}, func(object runtime.Object) corev1.ObjectReference {
-		return object.(*primitivesv2beta1.Map).Spec.Store
-	}); err != nil {
+	if err := addController(mgr, &primitivesv2beta1.Map{}); err != nil {
 		return err
 	}
-	if err := addController(mgr, &primitivesv2beta1.Set{}, func(object runtime.Object) corev1.ObjectReference {
-		return object.(*primitivesv2beta1.Set).Spec.Store
-	}); err != nil {
+	if err := addController(mgr, &primitivesv2beta1.Set{}); err != nil {
 		return err
 	}
-	if err := addController(mgr, &primitivesv2beta1.Value{}, func(object runtime.Object) corev1.ObjectReference {
-		return object.(*primitivesv2beta1.Value).Spec.Store
-	}); err != nil {
+	if err := addController(mgr, &primitivesv2beta1.Value{}); err != nil {
 		return err
 	}
 	return nil
 }
 
-func addController(mgr manager.Manager, object runtime.Object, storeGetter func(object runtime.Object) corev1.ObjectReference) error {
+func addController(mgr manager.Manager, object runtime.Object) error {
 	kinds, _, err := mgr.GetScheme().ObjectKinds(object)
 	if err != nil {
 		return err
@@ -82,11 +65,10 @@ func addController(mgr manager.Manager, object runtime.Object, storeGetter func(
 	kind := kinds[0]
 
 	r := &PrimitiveReconciler{
-		client:      mgr.GetClient(),
-		scheme:      mgr.GetScheme(),
-		config:      mgr.GetConfig(),
-		kind:        kind,
-		storeGetter: storeGetter,
+		client: mgr.GetClient(),
+		scheme: mgr.GetScheme(),
+		config: mgr.GetConfig(),
+		kind:   kind,
 	}
 
 	// Create a new controller

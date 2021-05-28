@@ -174,6 +174,15 @@ func (r *PodReconciler) reconcilePrimitive(pod *corev1.Pod, primitive v2beta1.Pr
 	}
 
 	log.Infof("Reconciling Primitive %s for Pod %s", primitiveName, podName)
+	selected, err := r.isSelected(pod, primitive)
+	if err != nil {
+		log.Error(err)
+		return false, err
+	} else if !selected {
+		log.Warnf("StorageProfile for Pod %s does not select Primitive %s", podName, primitiveName)
+		return false, nil
+	}
+
 	read, write, err := r.getPermissions(pod, primitive)
 	if err != nil {
 		log.Error(err)
@@ -486,6 +495,28 @@ func (r *PodReconciler) isProtocolSupported(pod *corev1.Pod, store v2beta1.Store
 	}
 	log.Errorf("Could not find plugin for %s", gvc)
 	return false, nil
+}
+
+func (r *PodReconciler) isSelected(pod *corev1.Pod, primitive v2beta1.Primitive) (bool, error) {
+	profileName, ok := pod.Annotations[storageProfileAnnotation]
+	if !ok {
+		return true, nil
+	}
+
+	profile := &v2beta1.StorageProfile{}
+	profileNamespacedName := types.NamespacedName{
+		Namespace: pod.Namespace,
+		Name:      profileName,
+	}
+	if err := r.client.Get(context.TODO(), profileNamespacedName, profile); err != nil {
+		return false, err
+	}
+
+	selector, err := metav1.LabelSelectorAsSelector(profile.Spec.Selector)
+	if err != nil {
+		return false, err
+	}
+	return selector.Matches(labels.Set(primitive.Labels)), nil
 }
 
 func (r *PodReconciler) getPermissions(pod *corev1.Pod, primitive v2beta1.Primitive) (read bool, write bool, err error) {

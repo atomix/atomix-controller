@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"github.com/atomix/atomix-controller/pkg/apis/core/v2beta1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/json"
@@ -40,6 +41,10 @@ const (
 
 const (
 	driverInjectPath = "/inject-drivers"
+)
+
+const (
+	storageProfileAnnotation = "storage.atomix.io/profile"
 )
 
 func addDriverController(mgr manager.Manager) error {
@@ -83,9 +88,39 @@ func (i *DriverInjector) Handle(ctx context.Context, request admission.Request) 
 		return admission.Errored(http.StatusInternalServerError, err)
 	}
 
-	plugins := make(map[string]v2beta1.StoragePlugin)
+	allPlugins := make(map[string]v2beta1.StoragePlugin)
 	for _, plugin := range pluginList.Items {
-		plugins[plugin.Name] = plugin
+		allPlugins[plugin.Name] = plugin
+	}
+
+	injectPlugins := make(map[string]v2beta1.StoragePlugin)
+	profileName, ok := pod.Annotations[storageProfileAnnotation]
+	if ok {
+		profile := &v2beta1.StorageProfile{}
+		profileNamespacedName := types.NamespacedName{
+			Namespace: request.Namespace,
+			Name:      profileName,
+		}
+		if err := i.client.Get(ctx, profileNamespacedName, profile); err != nil {
+			if errors.IsNotFound(err) {
+				return admission.Denied(fmt.Sprintf("StorageProfile %s not found", profileNamespacedName))
+			}
+			return admission.Errored(http.StatusInternalServerError, err)
+		}
+
+		for _, driver := range profile.Spec.Drivers {
+			plugin := v2beta1.StoragePlugin{}
+			pluginNamespacedName := types.NamespacedName{
+				Name: driver,
+			}
+			if err := i.client.Get(ctx, pluginNamespacedName, &plugin); err != nil {
+				if errors.IsNotFound(err) {
+					return admission.Denied(fmt.Sprintf("StoragePlugin %s not found", profileNamespacedName))
+				}
+				return admission.Errored(http.StatusInternalServerError, err)
+			}
+			injectPlugins[plugin.Name] = plugin
+		}
 	}
 
 	for annotation, value := range pod.Annotations {
@@ -103,11 +138,12 @@ func (i *DriverInjector) Handle(ctx context.Context, request admission.Request) 
 			continue
 		}
 
-		plugin, ok := plugins[domain]
-		if !ok {
-			continue
+		if plugin, ok := allPlugins[domain]; ok {
+			injectPlugins[domain] = plugin
 		}
+	}
 
+	for _, plugin := range injectPlugins {
 		for _, version := range plugin.Spec.Versions {
 			driverQualifiedName := fmt.Sprintf("%s.%s", version.Name, plugin.Name)
 			pluginName := plugin.Name[len(plugin.Name)-len(plugin.Spec.Group):]
@@ -129,7 +165,7 @@ func (i *DriverInjector) Handle(ctx context.Context, request admission.Request) 
 					continue
 				}
 
-				_, ok := plugins[domain]
+				_, ok := injectPlugins[domain]
 				if !ok {
 					continue
 				}

@@ -1,6 +1,1120 @@
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
+  name: storageplugins.atomix.io
+spec:
+  group: atomix.io
+  scope: Cluster
+  names:
+    kind: StoragePlugin
+    listKind: StoragePluginList
+    plural: storageplugins
+    singular: storageplugin
+  versions:
+  - name: v2beta1
+    served: true
+    storage: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        required:
+        - spec
+        properties:
+          spec:
+            description: |-
+              The specification for the storage plugin. The plugin must point to a custom resource definition (CRD)
+              used to implement the storage.
+            type: object
+            required:
+            - group
+            - kind
+            properties:
+              group:
+                description: |-
+                  The API group of the custom resource definition (CRD) used to implement storage. This must
+                  match a group defined as a CRD.
+                type: string
+              kind:
+                description: |-
+                  The API kind of the custom resource definition (CRD) used to implement storage. This must
+                  match a kind defined as a CRD.
+                type: string
+              versions:
+                description: |-
+                  A list of API versions supported by the storage custom resource definition (CRD). These must
+                  match versions defined by the CRD specification.
+                type: array
+                items:
+                  type: object
+                  required:
+                  - name
+                  - driver
+                  properties:
+                    name:
+                      description: |-
+                        The version name as defined in the CRD specification.
+                      type: string
+                    driver:
+                      description: |-
+                        A specification for the driver used to access this version of the storage plugin API.
+                        The driver will be injected into pods to manage access to stores running this version of
+                        the plugin API.
+                      type: object
+                      required:
+                      - image
+                      properties:
+                        image:
+                          description: |-
+                            The driver image to inject into pods to acecss this version of the store.
+                          type: string
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: stores.atomix.io
+spec:
+  group: atomix.io
+  scope: Namespaced
+  names:
+    kind: Store
+    listKind: StoreList
+    plural: stores
+    singular: store
+  versions:
+  - name: v2beta1
+    served: true
+    storage: true
+    subresources:
+      status: {}
+    schema:
+      openAPIV3Schema:
+        type: object
+        required:
+        - spec
+        properties:
+          spec:
+            description: |-
+              The specification for the store. The spec must include a protocol configuration describing how the
+              store should be implemented.
+            type: object
+            properties:
+              protocol:
+                description: |-
+                  The configuration for the protocol to be used to implement the store. The protocol is a complete
+                  Kubernetes resource configuration, including the 'apiVersion' and 'kind'. The protocol kind must
+                  match a custom resource defined by one of the StoragePlugins.
+                type: object
+                x-kubernetes-embedded-resource: true
+                x-kubernetes-preserve-unknown-fields: true
+          status:
+            type: object
+            properties:
+              ready:
+                type: boolean
+              replicas:
+                type: integer
+              readyReplicas:
+                type: integer
+              partitions:
+                type: integer
+              readyPartitions:
+                type: integer
+              protocol:
+                type: object
+                properties:
+                  revision:
+                    type: integer
+                  replicas:
+                    type: array
+                    items:
+                      type: object
+                      required:
+                      - id
+                      - host
+                      - port
+                      properties:
+                        id:
+                          type: string
+                        nodeId:
+                          type: string
+                        host:
+                          type: string
+                        port:
+                          type: integer
+                        extraPorts:
+                          type: object
+                          additionalProperties:
+                            type: integer
+                        ready:
+                          type: boolean
+                  partitions:
+                    type: array
+                    items:
+                      type: object
+                      required:
+                      - id
+                      - replicas
+                      properties:
+                        id:
+                          type: integer
+                          minimum: 1
+                        replicas:
+                          type: array
+                          items:
+                            type: string
+                        ready:
+                          type: boolean
+    additionalPrinterColumns:
+    - name: Protocol
+      type: string
+      description: The storage protocol kind
+      jsonPath: .spec.protocol.kind
+    - name: Replicas
+      type: integer
+      description: The number of replicas in the store
+      jsonPath: .status.replicas
+    - name: Partitions
+      type: integer
+      description: The number of partitions in the store
+      jsonPath: .status.partitions
+    - name: Ready
+      type: boolean
+      description: The store status
+      jsonPath: .status.ready
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: primitives.atomix.io
+spec:
+  group: atomix.io
+  scope: Namespaced
+  names:
+    kind: Primitive
+    listKind: PrimitiveList
+    plural: primitives
+    singular: primitive
+  versions:
+  - name: v2beta1
+    served: true
+    storage: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        required:
+        - spec
+        properties:
+          spec:
+            description: |-
+              The primitive specification describes how a primitive is stored and accessed.
+            type: object
+            required:
+            - type
+            - store
+            properties:
+              type:
+                description: |-
+                  The primitive type name.
+                type: string
+              store:
+                description: |-
+                  A reference to the Store used to manage the primitive state. This must include the UID of a valid
+                  store.
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
+              selector:
+                description: |-
+                  An optional label selector used to limit the scope of the primitive to pods with labels matching
+                  those in the selector. The selector operates similarly to the Service selector.
+                type: object
+                additionalProperties:
+                  type: string
+    additionalPrinterColumns:
+    - name: Type
+      type: string
+      description: The primitive type
+      jsonPath: .spec.type
+    - name: Store
+      type: string
+      description: The primitive store
+      jsonPath: .spec.store.name
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: storageprofiles.atomix.io
+spec:
+  group: atomix.io
+  scope: Namespaced
+  names:
+    kind: StorageProfile
+    listKind: StorageProfileList
+    plural: storageprofiles
+    singular: storageprofile
+    shortNames:
+    - profiles
+    - profile
+  versions:
+  - name: v2beta1
+    served: true
+    storage: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        required:
+        - spec
+        properties:
+          spec:
+            description: |-
+              The primitive specification describes how a primitive is stored and accessed.
+            type: object
+            required:
+            - selector
+            - drivers
+            properties:
+              drivers:
+                description: |-
+                  A list of drivers required by the profile.
+                type: array
+                items:
+                  type: string
+              selector:
+                description: |-
+                  An optional label selector used to limit the scope of the primitive to pods with labels matching
+                  those in the selector. The selector operates similarly to the Service selector.
+                type: object
+                properties:
+                  matchLabels:
+                    type: object
+                    additionalProperties:
+                      type: string
+                  matchExpressions:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        key:
+                          type: string
+                        operator:
+                          type: string
+                        values:
+                          type: array
+                          items:
+                            type: string
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: agents.sidecar.atomix.io
+spec:
+  group: sidecar.atomix.io
+  scope: Namespaced
+  names:
+    kind: Agent
+    listKind: AgentList
+    plural: agents
+    singular: agent
+  versions:
+  - name: v2beta1
+    served: true
+    storage: true
+    subresources:
+      status: {}
+    schema:
+      openAPIV3Schema:
+        type: object
+        required:
+        - spec
+        properties:
+          spec:
+            type: object
+            required:
+            - port
+            - pod
+            - store
+            properties:
+              port:
+                type: integer
+              pod:
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
+              store:
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
+          status:
+            type: object
+            properties:
+              ready:
+                type: boolean
+              revision:
+                type: integer
+    additionalPrinterColumns:
+    - name: Pod
+      type: string
+      description: The pod
+      jsonPath: .spec.pod.name
+    - name: Store
+      type: string
+      description: The store
+      jsonPath: .spec.store.name
+    - name: Ready
+      type: boolean
+      description: The agent status
+      jsonPath: .status.ready
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: proxies.sidecar.atomix.io
+spec:
+  group: sidecar.atomix.io
+  scope: Namespaced
+  names:
+    kind: Proxy
+    listKind: ProxyList
+    plural: proxies
+    singular: proxy
+  versions:
+  - name: v2beta1
+    served: true
+    storage: true
+    subresources:
+      status: {}
+    schema:
+      openAPIV3Schema:
+        type: object
+        required:
+        - spec
+        properties:
+          spec:
+            type: object
+            required:
+            - pod
+            - primitive
+            - agent
+            properties:
+              pod:
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
+              primitive:
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
+              agent:
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
+              permissions:
+                type: object
+                properties:
+                  read:
+                    type: boolean
+                  write:
+                    type: boolean
+          status:
+            type: object
+            properties:
+              ready:
+                type: boolean
+    additionalPrinterColumns:
+    - name: Pod
+      type: string
+      description: The pod
+      jsonPath: .spec.pod.name
+    - name: Primitive
+      type: string
+      description: The store
+      jsonPath: .spec.primitive.name
+    - name: Read Access
+      type: boolean
+      description: The read permission
+      jsonPath: .spec.permissions.read
+    - name: Write Access
+      type: boolean
+      description: The write permission
+      jsonPath: .spec.permissions.write
+    - name: Ready
+      type: boolean
+      description: The proxy status
+      jsonPath: .status.ready
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: counters.primitives.atomix.io
+spec:
+  group: primitives.atomix.io
+  scope: Namespaced
+  names:
+    kind: Counter
+    listKind: CounterList
+    plural: counters
+    singular: counter
+  versions:
+  - name: v2beta1
+    served: true
+    storage: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        required:
+        - spec
+        properties:
+          spec:
+            type: object
+            required:
+            - store
+            properties:
+              store:
+                description: |-
+                  A reference to the Store used to manage the primitive state. A Store 'name' must be
+                  provided. The 'namespace' is optional. If no 'namespace' is specified, the local namespace
+                  will be used.
+                type: object
+                required:
+                - name
+                properties:
+                  namespace:
+                    type: string
+                  name:
+                    type: string
+              selector:
+                description: |-
+                  An optional label selector used to limit the scope of the primitive to pods with labels matching
+                  those in the selector. The selector operates similarly to the Service selector.
+                type: object
+                additionalProperties:
+                  type: string
+    additionalPrinterColumns:
+    - name: Store
+      type: string
+      description: The primitive store
+      jsonPath: .spec.store.name
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: elections.primitives.atomix.io
+spec:
+  group: primitives.atomix.io
+  scope: Namespaced
+  names:
+    kind: Election
+    listKind: ElectionList
+    plural: elections
+    singular: election
+  versions:
+  - name: v2beta1
+    served: true
+    storage: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        required:
+        - spec
+        properties:
+          spec:
+            type: object
+            required:
+            - store
+            properties:
+              store:
+                description: |-
+                  A reference to the Store used to manage the primitive state. A Store 'name' must be
+                  provided. The 'namespace' is optional. If no 'namespace' is specified, the local namespace
+                  will be used.
+                type: object
+                required:
+                - name
+                properties:
+                  namespace:
+                    type: string
+                  name:
+                    type: string
+              selector:
+                description: |-
+                  An optional label selector used to limit the scope of the primitive to pods with labels matching
+                  those in the selector. The selector operates similarly to the Service selector.
+                type: object
+                additionalProperties:
+                  type: string
+    additionalPrinterColumns:
+    - name: Store
+      type: string
+      description: The primitive store
+      jsonPath: .spec.store.name
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: indexedmaps.primitives.atomix.io
+spec:
+  group: primitives.atomix.io
+  scope: Namespaced
+  names:
+    kind: IndexedMap
+    listKind: IndexedMapList
+    plural: indexedmaps
+    singular: indexedmap
+  versions:
+  - name: v2beta1
+    served: true
+    storage: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        required:
+        - spec
+        properties:
+          spec:
+            type: object
+            required:
+            - store
+            properties:
+              store:
+                description: |-
+                  A reference to the Store used to manage the primitive state. A Store 'name' must be
+                  provided. The 'namespace' is optional. If no 'namespace' is specified, the local namespace
+                  will be used.
+                type: object
+                required:
+                - name
+                properties:
+                  namespace:
+                    type: string
+                  name:
+                    type: string
+              selector:
+                description: |-
+                  An optional label selector used to limit the scope of the primitive to pods with labels matching
+                  those in the selector. The selector operates similarly to the Service selector.
+                type: object
+                additionalProperties:
+                  type: string
+    additionalPrinterColumns:
+    - name: Store
+      type: string
+      description: The primitive store
+      jsonPath: .spec.store.name
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: lists.primitives.atomix.io
+spec:
+  group: primitives.atomix.io
+  scope: Namespaced
+  names:
+    kind: List
+    listKind: ListList
+    plural: lists
+    singular: list
+  versions:
+  - name: v2beta1
+    served: true
+    storage: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        required:
+        - spec
+        properties:
+          spec:
+            type: object
+            required:
+            - store
+            properties:
+              store:
+                description: |-
+                  A reference to the Store used to manage the primitive state. A Store 'name' must be
+                  provided. The 'namespace' is optional. If no 'namespace' is specified, the local namespace
+                  will be used.
+                type: object
+                required:
+                - name
+                properties:
+                  namespace:
+                    type: string
+                  name:
+                    type: string
+              selector:
+                description: |-
+                  An optional label selector used to limit the scope of the primitive to pods with labels matching
+                  those in the selector. The selector operates similarly to the Service selector.
+                type: object
+                additionalProperties:
+                  type: string
+    additionalPrinterColumns:
+    - name: Store
+      type: string
+      description: The primitive store
+      jsonPath: .spec.store.name
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: locks.primitives.atomix.io
+spec:
+  group: primitives.atomix.io
+  scope: Namespaced
+  names:
+    kind: Lock
+    listKind: LockList
+    plural: locks
+    singular: lock
+  versions:
+  - name: v2beta1
+    served: true
+    storage: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        required:
+        - spec
+        properties:
+          spec:
+            type: object
+            required:
+            - store
+            properties:
+              store:
+                description: |-
+                  A reference to the Store used to manage the primitive state. A Store 'name' must be
+                  provided. The 'namespace' is optional. If no 'namespace' is specified, the local namespace
+                  will be used.
+                type: object
+                required:
+                - name
+                properties:
+                  namespace:
+                    type: string
+                  name:
+                    type: string
+              selector:
+                description: |-
+                  An optional label selector used to limit the scope of the primitive to pods with labels matching
+                  those in the selector. The selector operates similarly to the Service selector.
+                type: object
+                additionalProperties:
+                  type: string
+    additionalPrinterColumns:
+    - name: Store
+      type: string
+      description: The primitive store
+      jsonPath: .spec.store.name
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: maps.primitives.atomix.io
+spec:
+  group: primitives.atomix.io
+  scope: Namespaced
+  names:
+    kind: Map
+    listKind: MapList
+    plural: maps
+    singular: map
+  versions:
+  - name: v2beta1
+    served: true
+    storage: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        required:
+        - spec
+        properties:
+          spec:
+            type: object
+            required:
+            - store
+            properties:
+              store:
+                description: |-
+                  A reference to the Store used to manage the primitive state. A Store 'name' must be
+                  provided. The 'namespace' is optional. If no 'namespace' is specified, the local namespace
+                  will be used.
+                type: object
+                required:
+                - name
+                properties:
+                  namespace:
+                    type: string
+                  name:
+                    type: string
+              selector:
+                description: |-
+                  An optional label selector used to limit the scope of the primitive to pods with labels matching
+                  those in the selector. The selector operates similarly to the Service selector.
+                type: object
+                additionalProperties:
+                  type: string
+    additionalPrinterColumns:
+    - name: Store
+      type: string
+      description: The primitive store
+      jsonPath: .spec.store.name
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: sets.primitives.atomix.io
+spec:
+  group: primitives.atomix.io
+  scope: Namespaced
+  names:
+    kind: Set
+    listKind: SetList
+    plural: sets
+    singular: set
+  versions:
+  - name: v2beta1
+    served: true
+    storage: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        required:
+        - spec
+        properties:
+          spec:
+            type: object
+            required:
+            - store
+            properties:
+              store:
+                description: |-
+                  A reference to the Store used to manage the primitive state. A Store 'name' must be
+                  provided. The 'namespace' is optional. If no 'namespace' is specified, the local namespace
+                  will be used.
+                type: object
+                required:
+                - name
+                properties:
+                  namespace:
+                    type: string
+                  name:
+                    type: string
+              selector:
+                description: |-
+                  An optional label selector used to limit the scope of the primitive to pods with labels matching
+                  those in the selector. The selector operates similarly to the Service selector.
+                type: object
+                additionalProperties:
+                  type: string
+    additionalPrinterColumns:
+    - name: Store
+      type: string
+      description: The primitive store
+      jsonPath: .spec.store.name
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: values.primitives.atomix.io
+spec:
+  group: primitives.atomix.io
+  scope: Namespaced
+  names:
+    kind: Value
+    listKind: ValueList
+    plural: values
+    singular: value
+  versions:
+  - name: v2beta1
+    served: true
+    storage: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        required:
+        - spec
+        properties:
+          spec:
+            type: object
+            required:
+            - store
+            properties:
+              store:
+                description: |-
+                  A reference to the Store used to manage the primitive state. A Store 'name' must be
+                  provided. The 'namespace' is optional. If no 'namespace' is specified, the local namespace
+                  will be used.
+                type: object
+                required:
+                - name
+                properties:
+                  namespace:
+                    type: string
+                  name:
+                    type: string
+              selector:
+                description: |-
+                  An optional label selector used to limit the scope of the primitive to pods with labels matching
+                  those in the selector. The selector operates similarly to the Service selector.
+                type: object
+                additionalProperties:
+                  type: string
+    additionalPrinterColumns:
+    - name: Store
+      type: string
+      description: The primitive store
+      jsonPath: .spec.store.name
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: atomix-controller
+  namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  creationTimestamp: null
+  name: atomix-controller
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  - pods/status
+  - configmaps
+  verbs:
+  - '*'
+- apiGroups:
+  - ""
+  resources:
+  - namespaces
+  - serviceaccounts
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - policy
+  resources:
+  - poddisruptionbudgets
+  verbs:
+  - '*'
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resources:
+  - roles
+  - rolebindings
+  - clusterroles
+  - clusterrolebindings
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - atomix.io
+  - storage.atomix.io
+  - primitives.atomix.io
+  - sidecar.atomix.io
+  - cloud.atomix.io
+  resources:
+  - '*'
+  verbs:
+  - '*'
+- apiGroups:
+  - admissionregistration.k8s.io
+  resources:
+  - mutatingwebhookconfigurations
+  verbs:
+  - '*'
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: atomix-controller
+subjects:
+- kind: ServiceAccount
+  name: atomix-controller
+  namespace: kube-system
+roleRef:
+  kind: ClusterRole
+  name: atomix-controller
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: atomix-controller
+  namespace: kube-system
+  labels:
+    name: atomix-controller
+spec:
+  selector:
+    name: atomix-controller
+  ports:
+  - name: control
+    port: 5679
+  - name: webhook
+    port: 443
+    targetPort: 443
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: atomix-controller
+  namespace: kube-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: atomix-controller
+  template:
+    metadata:
+      labels:
+        name: atomix-controller
+    spec:
+      serviceAccountName: atomix-controller
+      initContainers:
+      - name: init-certs
+        image: atomix/atomix-controller-init-certs:latest
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsUser: 0
+        env:
+        - name: CONTROLLER_NAME
+          value: atomix-controller
+        - name: CONTROLLER_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: WEBHOOK_NAME
+          value: injector.broker.atomix.io
+        - name: WEBHOOK_PATH
+          value: /inject-broker
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        volumeMounts:
+        - name: config
+          mountPath: /etc/atomix/config
+          readOnly: true
+        - name: certs
+          mountPath: /etc/webhook/certs
+      containers:
+      - name: controller
+        image: atomix/atomix-controller:latest
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsUser: 0
+        ports:
+        - containerPort: 5679
+          name: control
+        - containerPort: 443
+          name: webhook-server
+        readinessProbe:
+          exec:
+            command:
+            - stat
+            - /tmp/atomix-controller-ready
+          initialDelaySeconds: 4
+          periodSeconds: 10
+          failureThreshold: 1
+        env:
+        - name: CONTROLLER_NAME
+          value: atomix-controller
+        - name: CONTROLLER_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: DEFAULT_BROKER_IMAGE
+          value: atomix/atomix-broker:latest
+        volumeMounts:
+        - name: certs
+          mountPath: /tmp/k8s-webhook-server/serving-certs
+          readOnly: true
+        - name: config
+          mountPath: /etc/atomix/config
+          readOnly: true
+      volumes:
+      - name: certs
+        emptyDir: {}
+      - name: config
+        configMap:
+          name: atomix-controller-config
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: atomix-controller
+webhooks:
+- name: injector.broker.atomix.io
+  rules:
+  - operations: ["CREATE"]
+    apiGroups: [""]
+    apiVersions: ["v1"]
+    resources: ["pods"]
+    scope: Namespaced
+  clientConfig:
+    service:
+      name: atomix-controller
+      namespace: kube-system
+      path: /inject-broker
+  admissionReviewVersions: ["v1beta1"]
+  sideEffects: None
+  failurePolicy: Ignore
+  timeoutSeconds: 10
+- name: injector.driver.atomix.io
+  rules:
+  - operations: ["CREATE"]
+    apiGroups: [""]
+    apiVersions: ["v1"]
+    resources: ["pods"]
+    scope: Namespaced
+  clientConfig:
+    service:
+      name: atomix-controller
+      namespace: kube-system
+      path: /inject-drivers
+  admissionReviewVersions: ["v1beta1"]
+  sideEffects: None
+  failurePolicy: Ignore
+  timeoutSeconds: 10
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: atomix-controller-config
+  namespace: kube-system
+data:
+  logging.yaml: |-
+    loggers:
+      root:
+        level: debug
+        output:
+          stdout:
+            sink: stdout
+    sinks:
+      stdout:
+        type: stdout
+        stdout: {}
+---
+
+########################################
+# The following resources are deprecated
+########################################
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
   name: databases.cloud.atomix.io
 spec:
   group: cloud.atomix.io
@@ -181,921 +1295,3 @@ spec:
                 type: string
               type:
                 type: string
----
-apiVersion: apiextensions.k8s.io/v1
-kind: CustomResourceDefinition
-metadata:
-  name: storageplugins.atomix.io
-spec:
-  group: atomix.io
-  scope: Cluster
-  names:
-    kind: StoragePlugin
-    listKind: StoragePluginList
-    plural: storageplugins
-    singular: storageplugin
-  versions:
-  - name: v2beta1
-    served: true
-    storage: true
-    schema:
-      openAPIV3Schema:
-        type: object
-        required:
-        - spec
-        properties:
-          spec:
-            type: object
-            required:
-            - group
-            - kind
-            properties:
-              group:
-                type: string
-              kind:
-                type: string
-              versions:
-                type: array
-                items:
-                  type: object
-                  required:
-                  - name
-                  - driver
-                  properties:
-                    name:
-                      type: string
-                    driver:
-                      type: object
-                      required:
-                      - image
-                      properties:
-                        image:
-                          type: string
----
-apiVersion: apiextensions.k8s.io/v1
-kind: CustomResourceDefinition
-metadata:
-  name: stores.atomix.io
-spec:
-  group: atomix.io
-  scope: Namespaced
-  names:
-    kind: Store
-    listKind: StoreList
-    plural: stores
-    singular: store
-  versions:
-  - name: v2beta1
-    served: true
-    storage: true
-    subresources:
-      status: {}
-    schema:
-      openAPIV3Schema:
-        type: object
-        required:
-        - spec
-        properties:
-          spec:
-            type: object
-            properties:
-              protocol:
-                type: object
-                x-kubernetes-embedded-resource: true
-                x-kubernetes-preserve-unknown-fields: true
-          status:
-            type: object
-            properties:
-              ready:
-                type: boolean
-              replicas:
-                type: integer
-              readyReplicas:
-                type: integer
-              partitions:
-                type: integer
-              readyPartitions:
-                type: integer
-              protocol:
-                type: object
-                properties:
-                  revision:
-                    type: integer
-                  replicas:
-                    type: array
-                    items:
-                      type: object
-                      required:
-                      - id
-                      - host
-                      - port
-                      properties:
-                        id:
-                          type: string
-                        nodeId:
-                          type: string
-                        host:
-                          type: string
-                        port:
-                          type: integer
-                        extraPorts:
-                          type: object
-                          additionalProperties:
-                            type: integer
-                        ready:
-                          type: boolean
-                  partitions:
-                    type: array
-                    items:
-                      type: object
-                      required:
-                      - id
-                      - replicas
-                      properties:
-                        id:
-                          type: integer
-                          minimum: 1
-                        replicas:
-                          type: array
-                          items:
-                            type: string
-                        ready:
-                          type: boolean
-    additionalPrinterColumns:
-    - name: Protocol
-      type: string
-      description: The storage protocol kind
-      jsonPath: .spec.protocol.kind
-    - name: Replicas
-      type: integer
-      description: The number of replicas in the store
-      jsonPath: .status.replicas
-    - name: Partitions
-      type: integer
-      description: The number of partitions in the store
-      jsonPath: .status.partitions
-    - name: Ready
-      type: boolean
-      description: The store status
-      jsonPath: .status.ready
----
-apiVersion: apiextensions.k8s.io/v1
-kind: CustomResourceDefinition
-metadata:
-  name: primitives.atomix.io
-spec:
-  group: atomix.io
-  scope: Namespaced
-  names:
-    kind: Primitive
-    listKind: PrimitiveList
-    plural: primitives
-    singular: primitive
-  versions:
-  - name: v2beta1
-    served: true
-    storage: true
-    schema:
-      openAPIV3Schema:
-        type: object
-        required:
-        - spec
-        properties:
-          spec:
-            type: object
-            required:
-            - type
-            - store
-            properties:
-              type:
-                type: string
-              store:
-                type: object
-                x-kubernetes-preserve-unknown-fields: true
-    additionalPrinterColumns:
-    - name: Type
-      type: string
-      description: The primitive type
-      jsonPath: .spec.type
-    - name: Store
-      type: string
-      description: The primitive store
-      jsonPath: .spec.store.name
----
-apiVersion: apiextensions.k8s.io/v1
-kind: CustomResourceDefinition
-metadata:
-  name: agents.sidecar.atomix.io
-spec:
-  group: sidecar.atomix.io
-  scope: Namespaced
-  names:
-    kind: Agent
-    listKind: AgentList
-    plural: agents
-    singular: agent
-  versions:
-  - name: v2beta1
-    served: true
-    storage: true
-    subresources:
-      status: {}
-    schema:
-      openAPIV3Schema:
-        type: object
-        required:
-        - spec
-        properties:
-          spec:
-            type: object
-            required:
-            - port
-            - pod
-            - store
-            properties:
-              port:
-                type: integer
-              pod:
-                type: object
-                x-kubernetes-preserve-unknown-fields: true
-              store:
-                type: object
-                x-kubernetes-preserve-unknown-fields: true
-          status:
-            type: object
-            properties:
-              ready:
-                type: boolean
-              revision:
-                type: integer
-    additionalPrinterColumns:
-    - name: Pod
-      type: string
-      description: The pod
-      jsonPath: .spec.pod.name
-    - name: Store
-      type: string
-      description: The store
-      jsonPath: .spec.store.name
-    - name: Ready
-      type: boolean
-      description: The agent status
-      jsonPath: .status.ready
----
-apiVersion: apiextensions.k8s.io/v1
-kind: CustomResourceDefinition
-metadata:
-  name: proxies.sidecar.atomix.io
-spec:
-  group: sidecar.atomix.io
-  scope: Namespaced
-  names:
-    kind: Proxy
-    listKind: ProxyList
-    plural: proxies
-    singular: proxy
-  versions:
-  - name: v2beta1
-    served: true
-    storage: true
-    subresources:
-      status: {}
-    schema:
-      openAPIV3Schema:
-        type: object
-        required:
-        - spec
-        properties:
-          spec:
-            type: object
-            required:
-            - pod
-            - primitive
-            - agent
-            properties:
-              pod:
-                type: object
-                x-kubernetes-preserve-unknown-fields: true
-              primitive:
-                type: object
-                x-kubernetes-preserve-unknown-fields: true
-              agent:
-                type: object
-                x-kubernetes-preserve-unknown-fields: true
-              permissions:
-                type: object
-                properties:
-                  read:
-                    type: boolean
-                  write:
-                    type: boolean
-          status:
-            type: object
-            properties:
-              ready:
-                type: boolean
-    additionalPrinterColumns:
-    - name: Pod
-      type: string
-      description: The pod
-      jsonPath: .spec.pod.name
-    - name: Primitive
-      type: string
-      description: The store
-      jsonPath: .spec.primitive.name
-    - name: Read Access
-      type: boolean
-      description: The read permission
-      jsonPath: .spec.permissions.read
-    - name: Write Access
-      type: boolean
-      description: The write permission
-      jsonPath: .spec.permissions.write
-    - name: Ready
-      type: boolean
-      description: The proxy status
-      jsonPath: .status.ready
----
-apiVersion: apiextensions.k8s.io/v1
-kind: CustomResourceDefinition
-metadata:
-  name: counters.primitives.atomix.io
-spec:
-  group: primitives.atomix.io
-  scope: Namespaced
-  names:
-    kind: Counter
-    listKind: CounterList
-    plural: counters
-    singular: counter
-  versions:
-  - name: v2beta1
-    served: true
-    storage: true
-    schema:
-      openAPIV3Schema:
-        type: object
-        required:
-        - spec
-        properties:
-          spec:
-            type: object
-            required:
-            - store
-            properties:
-              store:
-                type: object
-                required:
-                - name
-                properties:
-                  namespace:
-                    type: string
-                  name:
-                    type: string
-    additionalPrinterColumns:
-    - name: Store
-      type: string
-      description: The primitive store
-      jsonPath: .spec.store.name
----
-apiVersion: apiextensions.k8s.io/v1
-kind: CustomResourceDefinition
-metadata:
-  name: elections.primitives.atomix.io
-spec:
-  group: primitives.atomix.io
-  scope: Namespaced
-  names:
-    kind: Election
-    listKind: ElectionList
-    plural: elections
-    singular: election
-  versions:
-  - name: v2beta1
-    served: true
-    storage: true
-    schema:
-      openAPIV3Schema:
-        type: object
-        required:
-        - spec
-        properties:
-          spec:
-            type: object
-            required:
-            - store
-            properties:
-              store:
-                type: object
-                required:
-                - name
-                properties:
-                  namespace:
-                    type: string
-                  name:
-                    type: string
-    additionalPrinterColumns:
-    - name: Store
-      type: string
-      description: The primitive store
-      jsonPath: .spec.store.name
----
-apiVersion: apiextensions.k8s.io/v1
-kind: CustomResourceDefinition
-metadata:
-  name: indexedmaps.primitives.atomix.io
-spec:
-  group: primitives.atomix.io
-  scope: Namespaced
-  names:
-    kind: IndexedMap
-    listKind: IndexedMapList
-    plural: indexedmaps
-    singular: indexedmap
-  versions:
-  - name: v2beta1
-    served: true
-    storage: true
-    schema:
-      openAPIV3Schema:
-        type: object
-        required:
-        - spec
-        properties:
-          spec:
-            type: object
-            required:
-            - store
-            properties:
-              store:
-                type: object
-                required:
-                - name
-                properties:
-                  namespace:
-                    type: string
-                  name:
-                    type: string
-    additionalPrinterColumns:
-    - name: Store
-      type: string
-      description: The primitive store
-      jsonPath: .spec.store.name
----
-apiVersion: apiextensions.k8s.io/v1
-kind: CustomResourceDefinition
-metadata:
-  name: lists.primitives.atomix.io
-spec:
-  group: primitives.atomix.io
-  scope: Namespaced
-  names:
-    kind: List
-    listKind: ListList
-    plural: lists
-    singular: list
-  versions:
-  - name: v2beta1
-    served: true
-    storage: true
-    schema:
-      openAPIV3Schema:
-        type: object
-        required:
-        - spec
-        properties:
-          spec:
-            type: object
-            required:
-            - store
-            properties:
-              store:
-                type: object
-                required:
-                - name
-                properties:
-                  namespace:
-                    type: string
-                  name:
-                    type: string
-    additionalPrinterColumns:
-    - name: Store
-      type: string
-      description: The primitive store
-      jsonPath: .spec.store.name
----
-apiVersion: apiextensions.k8s.io/v1
-kind: CustomResourceDefinition
-metadata:
-  name: locks.primitives.atomix.io
-spec:
-  group: primitives.atomix.io
-  scope: Namespaced
-  names:
-    kind: Lock
-    listKind: LockList
-    plural: locks
-    singular: lock
-  versions:
-  - name: v2beta1
-    served: true
-    storage: true
-    schema:
-      openAPIV3Schema:
-        type: object
-        required:
-        - spec
-        properties:
-          spec:
-            type: object
-            required:
-            - store
-            properties:
-              store:
-                type: object
-                required:
-                - name
-                properties:
-                  namespace:
-                    type: string
-                  name:
-                    type: string
-    additionalPrinterColumns:
-    - name: Store
-      type: string
-      description: The primitive store
-      jsonPath: .spec.store.name
----
-apiVersion: apiextensions.k8s.io/v1
-kind: CustomResourceDefinition
-metadata:
-  name: maps.primitives.atomix.io
-spec:
-  group: primitives.atomix.io
-  scope: Namespaced
-  names:
-    kind: Map
-    listKind: MapList
-    plural: maps
-    singular: map
-  versions:
-  - name: v2beta1
-    served: true
-    storage: true
-    schema:
-      openAPIV3Schema:
-        type: object
-        required:
-        - spec
-        properties:
-          spec:
-            type: object
-            required:
-            - store
-            properties:
-              store:
-                type: object
-                required:
-                - name
-                properties:
-                  namespace:
-                    type: string
-                  name:
-                    type: string
-    additionalPrinterColumns:
-    - name: Store
-      type: string
-      description: The primitive store
-      jsonPath: .spec.store.name
----
-apiVersion: apiextensions.k8s.io/v1
-kind: CustomResourceDefinition
-metadata:
-  name: sets.primitives.atomix.io
-spec:
-  group: primitives.atomix.io
-  scope: Namespaced
-  names:
-    kind: Set
-    listKind: SetList
-    plural: sets
-    singular: set
-  versions:
-  - name: v2beta1
-    served: true
-    storage: true
-    schema:
-      openAPIV3Schema:
-        type: object
-        required:
-        - spec
-        properties:
-          spec:
-            type: object
-            required:
-            - store
-            properties:
-              store:
-                type: object
-                required:
-                - name
-                properties:
-                  namespace:
-                    type: string
-                  name:
-                    type: string
-    additionalPrinterColumns:
-    - name: Store
-      type: string
-      description: The primitive store
-      jsonPath: .spec.store.name
----
-apiVersion: apiextensions.k8s.io/v1
-kind: CustomResourceDefinition
-metadata:
-  name: values.primitives.atomix.io
-spec:
-  group: primitives.atomix.io
-  scope: Namespaced
-  names:
-    kind: Value
-    listKind: ValueList
-    plural: values
-    singular: value
-  versions:
-  - name: v2beta1
-    served: true
-    storage: true
-    schema:
-      openAPIV3Schema:
-        type: object
-        required:
-        - spec
-        properties:
-          spec:
-            type: object
-            required:
-            - store
-            properties:
-              store:
-                type: object
-                required:
-                - name
-                properties:
-                  namespace:
-                    type: string
-                  name:
-                    type: string
-    additionalPrinterColumns:
-    - name: Store
-      type: string
-      description: The primitive store
-      jsonPath: .spec.store.name
----
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: atomix-controller
-  namespace: kube-system
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  creationTimestamp: null
-  name: atomix-controller
-rules:
-- apiGroups:
-  - ""
-  resources:
-  - pods
-  - pods/status
-  - configmaps
-  verbs:
-  - '*'
-- apiGroups:
-  - ""
-  resources:
-  - namespaces
-  - serviceaccounts
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - policy
-  resources:
-  - poddisruptionbudgets
-  verbs:
-  - '*'
-- apiGroups:
-  - rbac.authorization.k8s.io
-  resources:
-  - roles
-  - rolebindings
-  - clusterroles
-  - clusterrolebindings
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - atomix.io
-  - storage.atomix.io
-  - primitives.atomix.io
-  - sidecar.atomix.io
-  - cloud.atomix.io
-  resources:
-  - '*'
-  verbs:
-  - '*'
-- apiGroups:
-  - admissionregistration.k8s.io
-  resources:
-  - mutatingwebhookconfigurations
-  verbs:
-  - '*'
----
-kind: ClusterRoleBinding
-apiVersion: rbac.authorization.k8s.io/v1
-metadata:
-  name: atomix-controller
-subjects:
-- kind: ServiceAccount
-  name: atomix-controller
-  namespace: kube-system
-roleRef:
-  kind: ClusterRole
-  name: atomix-controller
-  apiGroup: rbac.authorization.k8s.io
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: atomix-controller
-  namespace: kube-system
-  labels:
-    name: atomix-controller
-spec:
-  selector:
-    name: atomix-controller
-  ports:
-  - name: control
-    port: 5679
-  - name: webhook
-    port: 443
-    targetPort: 443
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: atomix-controller
-  namespace: kube-system
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      name: atomix-controller
-  template:
-    metadata:
-      labels:
-        name: atomix-controller
-    spec:
-      serviceAccountName: atomix-controller
-      initContainers:
-      - name: init-certs
-        image: atomix/atomix-controller-init-certs:v0.5.3
-        imagePullPolicy: IfNotPresent
-        securityContext:
-          allowPrivilegeEscalation: false
-          runAsUser: 0
-        env:
-        - name: CONTROLLER_NAME
-          value: atomix-controller
-        - name: CONTROLLER_NAMESPACE
-          valueFrom:
-            fieldRef:
-              fieldPath: metadata.namespace
-        - name: WEBHOOK_NAME
-          value: injector.broker.atomix.io
-        - name: WEBHOOK_PATH
-          value: /inject-broker
-        - name: POD_NAME
-          valueFrom:
-            fieldRef:
-              fieldPath: metadata.name
-        - name: POD_NAMESPACE
-          valueFrom:
-            fieldRef:
-              fieldPath: metadata.namespace
-        volumeMounts:
-        - name: config
-          mountPath: /etc/atomix/config
-          readOnly: true
-        - name: certs
-          mountPath: /etc/webhook/certs
-      containers:
-      - name: controller
-        image: atomix/atomix-controller:v0.5.3
-        imagePullPolicy: IfNotPresent
-        securityContext:
-          allowPrivilegeEscalation: false
-          runAsUser: 0
-        ports:
-        - containerPort: 5679
-          name: control
-        - containerPort: 443
-          name: webhook-server
-        readinessProbe:
-          exec:
-            command:
-            - stat
-            - /tmp/atomix-controller-ready
-          initialDelaySeconds: 4
-          periodSeconds: 10
-          failureThreshold: 1
-        env:
-        - name: CONTROLLER_NAME
-          value: atomix-controller
-        - name: CONTROLLER_NAMESPACE
-          valueFrom:
-            fieldRef:
-              fieldPath: metadata.namespace
-        - name: POD_NAME
-          valueFrom:
-            fieldRef:
-              fieldPath: metadata.name
-        - name: POD_NAMESPACE
-          valueFrom:
-            fieldRef:
-              fieldPath: metadata.namespace
-        - name: DEFAULT_BROKER_IMAGE
-          value: atomix/atomix-broker:v0.5.3
-        volumeMounts:
-        - name: certs
-          mountPath: /tmp/k8s-webhook-server/serving-certs
-          readOnly: true
-        - name: config
-          mountPath: /etc/atomix/config
-          readOnly: true
-      volumes:
-      - name: certs
-        emptyDir: {}
-      - name: config
-        configMap:
-          name: atomix-controller-config
----
-apiVersion: admissionregistration.k8s.io/v1
-kind: MutatingWebhookConfiguration
-metadata:
-  name: atomix-controller
-webhooks:
-- name: injector.broker.atomix.io
-  rules:
-  - operations: ["CREATE"]
-    apiGroups: [""]
-    apiVersions: ["v1"]
-    resources: ["pods"]
-    scope: Namespaced
-  clientConfig:
-    service:
-      name: atomix-controller
-      namespace: kube-system
-      path: /inject-broker
-  admissionReviewVersions: ["v1beta1"]
-  sideEffects: None
-  failurePolicy: Ignore
-  timeoutSeconds: 10
-- name: injector.driver.atomix.io
-  rules:
-  - operations: ["CREATE"]
-    apiGroups: [""]
-    apiVersions: ["v1"]
-    resources: ["pods"]
-    scope: Namespaced
-  clientConfig:
-    service:
-      name: atomix-controller
-      namespace: kube-system
-      path: /inject-drivers
-  admissionReviewVersions: ["v1beta1"]
-  sideEffects: None
-  failurePolicy: Ignore
-  timeoutSeconds: 10
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: atomix-controller-config
-  namespace: kube-system
-data:
-  logging.yaml: |-
-    loggers:
-      root:
-        level: debug
-        output:
-          stdout:
-            sink: stdout
-    sinks:
-      stdout:
-        type: stdout
-        stdout: {}

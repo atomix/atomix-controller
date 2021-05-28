@@ -18,15 +18,15 @@ build:
 	go build -o build/bin/atomix-controller-init-certs ./cmd/atomix-controller-init-certs
 
 controller-image:
-	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o build/docker/atomix-controller/bin/atomix-controller ./cmd/atomix-controller
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -gcflags=-trimpath=${GOPATH} -asmflags=-trimpath=${GOPATH} -o build/docker/atomix-controller/bin/atomix-controller ./cmd/atomix-controller
 	docker build ./build/docker/atomix-controller -f build/docker/atomix-controller/Dockerfile -t atomix/atomix-controller:${CONTROLLER_VERSION}
 
 broker-image:
-	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o build/docker/atomix-broker/bin/atomix-broker ./cmd/atomix-broker
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -gcflags=-trimpath=${GOPATH} -asmflags=-trimpath=${GOPATH} -o build/docker/atomix-broker/bin/atomix-broker ./cmd/atomix-broker
 	docker build ./build/docker/atomix-broker -f build/docker/atomix-broker/Dockerfile -t atomix/atomix-broker:${CONTROLLER_VERSION}
 
 init-certs-image:
-	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o build/docker/atomix-controller-init-certs/bin/atomix-controller-init-certs ./cmd/atomix-controller-init-certs
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -gcflags=-trimpath=${GOPATH} -asmflags=-trimpath=${GOPATH} -o build/docker/atomix-controller-init-certs/bin/atomix-controller-init-certs ./cmd/atomix-controller-init-certs
 	docker build ./build/docker/atomix-controller-init-certs -f build/docker/atomix-controller-init-certs/Dockerfile -t atomix/atomix-controller-init-certs:${CONTROLLER_VERSION}
 
 images: controller-image broker-image init-certs-image
