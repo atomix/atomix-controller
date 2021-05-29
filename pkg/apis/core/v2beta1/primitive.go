@@ -17,12 +17,19 @@ package v2beta1
 import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 )
 
 // PrimitiveSpec is the spec for a Primitive
 type PrimitiveSpec struct {
-	Type  string                 `json:"type,omitempty"`
-	Store corev1.ObjectReference `json:"store,omitempty"`
+	Type  string         `json:"type,omitempty"`
+	Store PrimitiveStore `json:"store,omitempty"`
+}
+
+// PrimitiveStore is a primitive store configuration
+type PrimitiveStore struct {
+	corev1.ObjectReference `json:",inline"`
+	Config                 map[string]runtime.RawExtension `json:"config,omitempty"`
 }
 
 // +genclient

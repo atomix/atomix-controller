@@ -51,10 +51,30 @@ func (p *protocolSource) newPluginHandler(eventHandler handler.EventHandler, lim
 	funcs.AddFunc = func(obj interface{}) {
 		if o, ok := obj.(runtime.Object); ok {
 			plugin := o.(*corev2beta1.StoragePlugin)
-			for _, version := range plugin.Spec.Versions {
+			for _, driver := range plugin.Spec.Drivers {
 				gvc := schema.GroupVersionKind{
-					Group:   plugin.Spec.Group,
-					Kind:    plugin.Spec.Kind,
+					Group:   plugin.Spec.Protocol.Group,
+					Kind:    plugin.Spec.Protocol.Kind,
+					Version: driver.Version,
+				}
+				log.Infof("Starting Source %s", gvc)
+				object := &unstructured.Unstructured{}
+				object.SetGroupVersionKind(gvc)
+				kind := &source.Kind{
+					Type: object,
+				}
+				if err := kind.InjectCache(p.cache); err != nil {
+					log.Error(err)
+				} else {
+					if err := kind.Start(eventHandler, limitingInterface, predicate...); err != nil {
+						log.Error(err)
+					}
+				}
+			}
+			for _, version := range plugin.Spec.DeprecatedVersions {
+				gvc := schema.GroupVersionKind{
+					Group:   plugin.Spec.DeprecatedGroup,
+					Kind:    plugin.Spec.DeprecatedKind,
 					Version: version.Name,
 				}
 				log.Infof("Starting Source %s", gvc)

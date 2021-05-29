@@ -7,6 +7,7 @@ metadata:
 spec:
   drivers:
   - raft.storage.atomix.io
+  - gossip.storage.atomix.io
   selector:
     matchLabels:
       app: example

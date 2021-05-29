@@ -5,6 +5,7 @@ metadata:
 spec:
   protocol:
     apiVersion: storage.atomix.io/v2beta1
-    kind: DynamoProtocol
+    kind: GossipProtocol
     spec:
-      partitions: 30
+      partitions: 1
+      replicas: 3

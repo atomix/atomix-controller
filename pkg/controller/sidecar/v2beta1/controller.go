@@ -26,6 +26,9 @@ func AddControllers(mgr manager.Manager) error {
 	if err := addBrokerController(mgr); err != nil {
 		return err
 	}
+	if err := addProfileController(mgr); err != nil {
+		return err
+	}
 	if err := addDriverController(mgr); err != nil {
 		return err
 	}

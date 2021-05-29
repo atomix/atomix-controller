@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"github.com/atomix/atomix-controller/pkg/apis/core/v2beta1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/json"
@@ -41,10 +40,6 @@ const (
 
 const (
 	driverInjectPath = "/inject-drivers"
-)
-
-const (
-	storageProfileAnnotation = "storage.atomix.io/profile"
 )
 
 func addDriverController(mgr manager.Manager) error {
@@ -91,41 +86,12 @@ func (i *DriverInjector) Handle(ctx context.Context, request admission.Request) 
 		return admission.Errored(http.StatusInternalServerError, err)
 	}
 
-	allPlugins := make(map[string]v2beta1.StoragePlugin)
+	plugins := make(map[string]v2beta1.StoragePlugin)
 	for _, plugin := range pluginList.Items {
-		allPlugins[plugin.Name] = plugin
+		plugins[plugin.Name] = plugin
 	}
 
-	injectPlugins := make(map[string]v2beta1.StoragePlugin)
-	profileName, ok := pod.Annotations[storageProfileAnnotation]
-	if ok {
-		profile := &v2beta1.StorageProfile{}
-		profileNamespacedName := types.NamespacedName{
-			Namespace: request.Namespace,
-			Name:      profileName,
-		}
-		if err := i.client.Get(ctx, profileNamespacedName, profile); err != nil {
-			if errors.IsNotFound(err) {
-				return admission.Denied(fmt.Sprintf("StorageProfile %s not found", profileNamespacedName))
-			}
-			return admission.Errored(http.StatusInternalServerError, err)
-		}
-
-		for _, driver := range profile.Spec.Drivers {
-			plugin := v2beta1.StoragePlugin{}
-			pluginNamespacedName := types.NamespacedName{
-				Name: driver,
-			}
-			if err := i.client.Get(ctx, pluginNamespacedName, &plugin); err != nil {
-				if errors.IsNotFound(err) {
-					return admission.Denied(fmt.Sprintf("StoragePlugin %s not found", profileNamespacedName))
-				}
-				return admission.Errored(http.StatusInternalServerError, err)
-			}
-			injectPlugins[plugin.Name] = plugin
-		}
-	}
-
+	injected := false
 	for annotation, value := range pod.Annotations {
 		parts := strings.Split(annotation, "/")
 		if len(parts) != 2 {
@@ -137,103 +103,174 @@ func (i *DriverInjector) Handle(ctx context.Context, request admission.Request) 
 			continue
 		}
 
+		if pod.Annotations[getPluginStatusAnnotation(domain)] == injectedStatus {
+			continue
+		}
+
 		if value != fmt.Sprint(true) {
 			continue
 		}
 
-		if plugin, ok := allPlugins[domain]; ok {
-			injectPlugins[domain] = plugin
+		isDriver := func(pluginName, driverName string) bool {
+			if plugin, ok := plugins[pluginName]; ok {
+				for _, driver := range plugin.Spec.Drivers {
+					if driver.Version == driverName {
+						return true
+					}
+				}
+				for _, version := range plugin.Spec.DeprecatedVersions {
+					if version.Name == driverName {
+						return true
+					}
+				}
+			}
+			return false
 		}
+
+		if plugin, ok := plugins[domain]; ok {
+			for _, driver := range plugin.Spec.Drivers {
+				port, err := i.getNextPort(pod, plugin.Name, driver.Version, isDriver)
+				if err != nil {
+					return admission.Errored(http.StatusBadRequest, err)
+				}
+
+				ok, err := i.injectDriver(pod, plugin.Name, driver.Version, driver.Image, port)
+				if err != nil {
+					return admission.Errored(http.StatusInternalServerError, err)
+				} else if ok {
+					injected = true
+				}
+			}
+			for _, version := range plugin.Spec.DeprecatedVersions {
+				port, err := i.getNextPort(pod, plugin.Name, version.Name, isDriver)
+				if err != nil {
+					return admission.Errored(http.StatusBadRequest, err)
+				}
+
+				ok, err := i.injectDriver(pod, plugin.Name, version.Name, version.Driver.Image, port)
+				if err != nil {
+					return admission.Errored(http.StatusInternalServerError, err)
+				} else if ok {
+					injected = true
+				}
+			}
+		}
+		pod.Annotations[getPluginStatusAnnotation(domain)] = injectedStatus
 	}
 
-	for _, plugin := range injectPlugins {
-		for _, version := range plugin.Spec.Versions {
-			driverQualifiedName := fmt.Sprintf("%s.%s", version.Name, plugin.Name)
-			pluginName := plugin.Name[len(plugin.Name)-len(plugin.Spec.Group):]
-			statusAnnotation := fmt.Sprintf("%s/status", driverQualifiedName)
-			statusValue := pod.Annotations[statusAnnotation]
-			if statusValue == injectedStatus {
+	if !injected {
+		return admission.Allowed("No drivers to inject")
+	}
+
+	// Marshal the pod and return a patch response
+	marshaledPod, err := json.Marshal(pod)
+	if err != nil {
+		log.Errorf("Driver injection failed for Pod '%s'", types.NamespacedName{Namespace: pod.Namespace, Name: pod.Name}, err)
+		return admission.Errored(http.StatusInternalServerError, err)
+	}
+	return admission.PatchResponseFromRaw(request.Object.Raw, marshaledPod)
+}
+
+func (i *DriverInjector) getNextPort(pod *corev1.Pod, plugin, driver string, isDriver func(plugin, name string) bool) (int, error) {
+	if portValue, ok := pod.Annotations[getDriverPortAnnotation(plugin, driver)]; ok {
+		return strconv.Atoi(portValue)
+	}
+
+	port := 5680
+	for a, v := range pod.Annotations {
+		parts := strings.Split(a, "/")
+		if len(parts) != 2 {
+			continue
+		}
+
+		domain, path := parts[0], parts[1]
+		if path != "port" {
+			continue
+		}
+
+		if i := strings.Index(domain, "."); i != -1 {
+			portDriver, portPlugin := domain[:i], domain[i+1:]
+			if !isDriver(portPlugin, portDriver) {
 				continue
 			}
+		}
 
-			port := 5680
-			for a, v := range pod.Annotations {
-				parts := strings.Split(a, "/")
-				if len(parts) != 2 {
-					continue
-				}
-
-				domain, path := parts[0], parts[1]
-				if path != "port" {
-					continue
-				}
-
-				_, ok := injectPlugins[domain]
-				if !ok {
-					continue
-				}
-
-				i, err := strconv.Atoi(v)
-				if err != nil {
-					log.Errorf("Could not decode port annotation '%s'", a, err)
-					return admission.Errored(http.StatusInternalServerError, err)
-				} else if i > port {
-					port = i + 1
-				}
-			}
-
-			container := corev1.Container{
-				Name:            strings.ReplaceAll(fmt.Sprintf("driver-%s-%s", pluginName, version.Name), ".", "-"),
-				Image:           version.Driver.Image,
-				ImagePullPolicy: corev1.PullIfNotPresent,
-				Args: []string{
-					fmt.Sprintf(":%d", port),
-				},
-				Ports: []corev1.ContainerPort{
-					{
-						Name:          "driver",
-						ContainerPort: int32(port),
-					},
-				},
-				Env: []corev1.EnvVar{
-					{
-						Name:  driverTypeEnv,
-						Value: driverQualifiedName,
-					},
-					{
-						Name:  driverNamespaceEnv,
-						Value: namespacedName.Namespace,
-					},
-					{
-						Name:  driverNameEnv,
-						Value: namespacedName.Name,
-					},
-					{
-						Name: driverNodeEnv,
-						ValueFrom: &corev1.EnvVarSource{
-							FieldRef: &corev1.ObjectFieldSelector{
-								FieldPath: "spec.nodeName",
-							},
-						},
-					},
-				},
-			}
-			pod.Spec.Containers = append(pod.Spec.Containers, container)
-
-			pod.Annotations[statusAnnotation] = injectedStatus
-			portAnnotation := fmt.Sprintf("%s/port", driverQualifiedName)
-			pod.Annotations[portAnnotation] = fmt.Sprint(port)
-
-			// Marshal the pod and return a patch response
-			marshaledPod, err := json.Marshal(pod)
-			if err != nil {
-				log.Errorf("Driver injection failed for Pod '%s'", namespacedName, err)
-				return admission.Errored(http.StatusInternalServerError, err)
-			}
-			return admission.PatchResponseFromRaw(request.Object.Raw, marshaledPod)
+		i, err := strconv.Atoi(v)
+		if err != nil {
+			log.Errorf("Could not decode port annotation '%s'", a, err)
+			return 0, err
+		} else if i > port {
+			port = i + 1
 		}
 	}
-	return admission.Allowed("No drivers to inject")
+	return port, nil
+}
+
+func (i *DriverInjector) injectDriver(pod *corev1.Pod, plugin, driver, image string, port int) (bool, error) {
+	driverQualifiedName := fmt.Sprintf("%s.%s", driver, plugin)
+	pluginName := plugin[:strings.Index(plugin, ".")]
+	statusValue := pod.Annotations[getDriverStatusAnnotation(plugin, driver)]
+	if statusValue == injectedStatus {
+		return false, nil
+	}
+
+	container := corev1.Container{
+		Name:            strings.ReplaceAll(fmt.Sprintf("driver-%s-%s", pluginName, driver), ".", "-"),
+		Image:           image,
+		ImagePullPolicy: corev1.PullIfNotPresent,
+		Args: []string{
+			fmt.Sprintf(":%d", port),
+		},
+		Ports: []corev1.ContainerPort{
+			{
+				Name:          "driver",
+				ContainerPort: int32(port),
+			},
+		},
+		Env: []corev1.EnvVar{
+			{
+				Name:  driverTypeEnv,
+				Value: driverQualifiedName,
+			},
+			{
+				Name:  driverNamespaceEnv,
+				Value: pod.Namespace,
+			},
+			{
+				Name:  driverNameEnv,
+				Value: pod.Name,
+			},
+			{
+				Name: driverNodeEnv,
+				ValueFrom: &corev1.EnvVarSource{
+					FieldRef: &corev1.ObjectFieldSelector{
+						FieldPath: "spec.nodeName",
+					},
+				},
+			},
+		},
+	}
+	pod.Spec.Containers = append(pod.Spec.Containers, container)
+
+	pod.Annotations[getDriverStatusAnnotation(plugin, driver)] = injectedStatus
+	pod.Annotations[getDriverPortAnnotation(plugin, driver)] = fmt.Sprint(port)
+	return true, nil
+}
+
+func getPluginStatusAnnotation(plugin string) string {
+	return fmt.Sprintf("%s/status", plugin)
+}
+
+func getDriverStatusAnnotation(plugin, driver string) string {
+	return fmt.Sprintf("%s/status", getDriverDomain(plugin, driver))
+}
+
+func getDriverPortAnnotation(plugin, driver string) string {
+	return fmt.Sprintf("%s/port", getDriverDomain(plugin, driver))
+}
+
+func getDriverDomain(plugin, driver string) string {
+	return fmt.Sprintf("%s.%s", driver, plugin)
 }
 
 var _ admission.Handler = &DriverInjector{}

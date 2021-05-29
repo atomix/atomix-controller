@@ -38,6 +38,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 	"sort"
+	"strings"
 )
 
 const (
@@ -316,6 +317,12 @@ func (r *PodReconciler) reconcilePrimitive(pod *corev1.Pod, primitive v2beta1.Pr
 			return false, err
 		}
 
+		config, err := r.getProtocolConfig(primitive, *store)
+		if err != nil {
+			log.Error(err)
+			return false, err
+		}
+
 		proxy = &sidecarv2beta1.Proxy{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: proxyName.Namespace,
@@ -334,6 +341,7 @@ func (r *PodReconciler) reconcilePrimitive(pod *corev1.Pod, primitive v2beta1.Pr
 					Read:  read,
 					Write: write,
 				},
+				Config: config,
 			},
 		}
 		if err := controllerutil.SetControllerReference(pod, proxy, r.scheme); err != nil {
@@ -483,8 +491,18 @@ func (r *PodReconciler) isProtocolSupported(pod *corev1.Pod, store v2beta1.Store
 	}
 
 	for _, plugin := range plugins.Items {
-		if plugin.Spec.Group == gvc.Group && plugin.Spec.Kind == gvc.Kind {
-			for _, version := range plugin.Spec.Versions {
+		if plugin.Spec.Protocol.Group == gvc.Group && plugin.Spec.Protocol.Kind == gvc.Kind {
+			for _, driver := range plugin.Spec.Drivers {
+				if driver.Version == gvc.Version {
+					statusAnnotation := fmt.Sprintf("%s.%s/status", driver.Version, plugin.Name)
+					return pod.Annotations[statusAnnotation] == injectedStatus, nil
+				}
+			}
+			log.Errorf("Could not find plugin for %s", gvc)
+			return false, nil
+		}
+		if plugin.Spec.DeprecatedGroup == gvc.Group && plugin.Spec.DeprecatedKind == gvc.Kind {
+			for _, version := range plugin.Spec.DeprecatedVersions {
 				if version.Name == gvc.Version {
 					statusAnnotation := fmt.Sprintf("%s.%s/status", version.Name, plugin.Name)
 					return pod.Annotations[statusAnnotation] == injectedStatus, nil
@@ -496,6 +514,53 @@ func (r *PodReconciler) isProtocolSupported(pod *corev1.Pod, store v2beta1.Store
 	}
 	log.Errorf("Could not find plugin for %s", gvc)
 	return false, nil
+}
+
+func (r *PodReconciler) getProtocolConfig(primitive v2beta1.Primitive, store v2beta1.Store) (*runtime.RawExtension, error) {
+	object, err := runtime.Decode(unstructured.UnstructuredJSONScheme, store.Spec.Protocol.Raw)
+	if err != nil {
+		log.Error(err)
+		return nil, err
+	}
+
+	gvc := object.GetObjectKind().GroupVersionKind()
+
+	plugins := &v2beta1.StoragePluginList{}
+	err = r.client.List(context.TODO(), plugins)
+	if err != nil {
+		log.Error(err)
+		return nil, err
+	}
+
+	for _, plugin := range plugins.Items {
+		if plugin.Spec.Protocol.Group == gvc.Group && plugin.Spec.Protocol.Kind == gvc.Kind {
+			for _, driver := range plugin.Spec.Drivers {
+				if driver.Version == gvc.Version {
+					if config, ok := primitive.Spec.Store.Config[plugin.Name]; ok {
+						return &config, nil
+					}
+					if config, ok := primitive.Spec.Store.Config[plugin.Name[:strings.Index(plugin.Name, ".")]]; ok {
+						return &config, nil
+					}
+					return nil, nil
+				}
+			}
+		}
+		if plugin.Spec.DeprecatedGroup == gvc.Group && plugin.Spec.DeprecatedKind == gvc.Kind {
+			for _, version := range plugin.Spec.DeprecatedVersions {
+				if version.Name == gvc.Version {
+					if config, ok := primitive.Spec.Store.Config[plugin.Name]; ok {
+						return &config, nil
+					}
+					if config, ok := primitive.Spec.Store.Config[plugin.Name[:strings.Index(plugin.Name, ".")]]; ok {
+						return &config, nil
+					}
+					return nil, nil
+				}
+			}
+		}
+	}
+	return nil, nil
 }
 
 func (r *PodReconciler) isSelected(pod *corev1.Pod, primitive v2beta1.Primitive) (bool, error) {

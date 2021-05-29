@@ -20,19 +20,41 @@ import (
 
 // PluginSpec is a storage plugin specification
 type PluginSpec struct {
-	Group    string          `json:"group,omitempty"`
-	Kind     string          `json:"kind,omitempty"`
-	Versions []PluginVersion `json:"versions,omitempty"`
+	Protocol PluginProtocol `json:"protocol,omitempty"`
+	Drivers  []PluginDriver `json:"drivers,omitempty"`
+
+	DeprecatedGroup    string                    `json:"group,omitempty"`
+	DeprecatedKind     string                    `json:"kind,omitempty"`
+	DeprecatedVersions []DeprecatedPluginVersion `json:"versions,omitempty"`
 }
 
-// PluginVersion is a storage plugin version
-type PluginVersion struct {
-	Name   string       `json:"name,omitempty"`
-	Driver PluginDriver `json:"driver,omitempty"`
+// PluginProtocol describes a storage protocol CRD
+type PluginProtocol struct {
+	Group string `json:"group,omitempty"`
+	Kind  string `json:"kind,omitempty"`
 }
 
 // PluginDriver is storage plugin driver information
 type PluginDriver struct {
+	Version string        `json:"version,omitempty"`
+	Image   string        `json:"image,omitempty"`
+	Config  *DriverConfig `json:"config,omitempty"`
+}
+
+// DriverConfig describes a driver configuration CRD
+type DriverConfig struct {
+	Group string `json:"group,omitempty"`
+	Kind  string `json:"kind,omitempty"`
+}
+
+// DeprecatedPluginVersion is a storage plugin version
+type DeprecatedPluginVersion struct {
+	Name   string                 `json:"name,omitempty"`
+	Driver DeprecatedPluginDriver `json:"driver,omitempty"`
+}
+
+// DeprecatedPluginDriver is storage plugin driver information
+type DeprecatedPluginDriver struct {
 	Image string `json:"image,omitempty"`
 }
 

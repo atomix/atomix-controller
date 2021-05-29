@@ -25,10 +25,59 @@ spec:
               The specification for the storage plugin. The plugin must point to a custom resource definition (CRD)
               used to implement the storage.
             type: object
-            required:
-            - group
-            - kind
             properties:
+              protocol:
+                type: object
+                required:
+                - group
+                - kind
+                properties:
+                  group:
+                    description: |-
+                      The API group of the custom resource definition (CRD) used to implement storage. This must
+                      match a group defined as a CRD.
+                    type: string
+                  kind:
+                    description: |-
+                      The API kind of the custom resource definition (CRD) used to implement storage. This must
+                      match a kind defined as a CRD.
+                    type: string
+              drivers:
+                type: array
+                items:
+                  description: |-
+                    A specification for the driver used to access this version of the storage plugin API.
+                    The driver will be injected into pods to manage access to stores running this version of
+                    the plugin API.
+                  type: object
+                  required:
+                  - version
+                  - image
+                  properties:
+                    version:
+                      description: |-
+                        The driver version name.
+                      type: string
+                    image:
+                      description: |-
+                        The driver image to inject into pods to acecss this version of the store.
+                      type: string
+                    config:
+                      type: object
+                      required:
+                      - group
+                      - kind
+                      properties:
+                        group:
+                          description: |-
+                            The API group of the custom resource definition (CRD) used to configure the driver. This
+                            must match a group defined as a CRD.
+                          type: string
+                        kind:
+                          description: |-
+                            The API kind of the custom resource definition (CRD) used to configure the driver. This
+                            must match a kind defined as a CRD.
+                          type: string
               group:
                 description: |-
                   The API group of the custom resource definition (CRD) used to implement storage. This must
@@ -222,6 +271,12 @@ spec:
                   store.
                 type: object
                 x-kubernetes-preserve-unknown-fields: true
+                properties:
+                  config:
+                    type: object
+                    additionalProperties:
+                      type: object
+                      x-kubernetes-preserve-unknown-fields: true
     additionalPrinterColumns:
     - name: Type
       type: string
@@ -402,6 +457,9 @@ spec:
                     type: boolean
                   write:
                     type: boolean
+              config:
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
           status:
             type: object
             properties:
@@ -469,6 +527,11 @@ spec:
                     type: string
                   name:
                     type: string
+                  config:
+                    type: object
+                    additionalProperties:
+                      type: object
+                      x-kubernetes-preserve-unknown-fields: true
     additionalPrinterColumns:
     - name: Store
       type: string
@@ -515,6 +578,11 @@ spec:
                     type: string
                   name:
                     type: string
+                  config:
+                    type: object
+                    additionalProperties:
+                      type: object
+                      x-kubernetes-preserve-unknown-fields: true
     additionalPrinterColumns:
     - name: Store
       type: string
@@ -561,6 +629,11 @@ spec:
                     type: string
                   name:
                     type: string
+                  config:
+                    type: object
+                    additionalProperties:
+                      type: object
+                      x-kubernetes-preserve-unknown-fields: true
     additionalPrinterColumns:
     - name: Store
       type: string
@@ -607,6 +680,11 @@ spec:
                     type: string
                   name:
                     type: string
+                  config:
+                    type: object
+                    additionalProperties:
+                      type: object
+                      x-kubernetes-preserve-unknown-fields: true
     additionalPrinterColumns:
     - name: Store
       type: string
@@ -653,6 +731,11 @@ spec:
                     type: string
                   name:
                     type: string
+                  config:
+                    type: object
+                    additionalProperties:
+                      type: object
+                      x-kubernetes-preserve-unknown-fields: true
     additionalPrinterColumns:
     - name: Store
       type: string
@@ -699,6 +782,11 @@ spec:
                     type: string
                   name:
                     type: string
+                  config:
+                    type: object
+                    additionalProperties:
+                      type: object
+                      x-kubernetes-preserve-unknown-fields: true
     additionalPrinterColumns:
     - name: Store
       type: string
@@ -745,6 +833,11 @@ spec:
                     type: string
                   name:
                     type: string
+                  config:
+                    type: object
+                    additionalProperties:
+                      type: object
+                      x-kubernetes-preserve-unknown-fields: true
     additionalPrinterColumns:
     - name: Store
       type: string
@@ -791,6 +884,11 @@ spec:
                     type: string
                   name:
                     type: string
+                  config:
+                    type: object
+                    additionalProperties:
+                      type: object
+                      x-kubernetes-preserve-unknown-fields: true
     additionalPrinterColumns:
     - name: Store
       type: string
@@ -920,10 +1018,6 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: metadata.namespace
-        - name: WEBHOOK_NAME
-          value: injector.broker.atomix.io
-        - name: WEBHOOK_PATH
-          value: /inject-broker
         - name: POD_NAME
           valueFrom:
             fieldRef:
@@ -1006,6 +1100,22 @@ webhooks:
       name: atomix-controller
       namespace: kube-system
       path: /inject-broker
+  admissionReviewVersions: ["v1beta1"]
+  sideEffects: None
+  failurePolicy: Ignore
+  timeoutSeconds: 10
+- name: injector.profile.atomix.io
+  rules:
+  - operations: ["CREATE"]
+    apiGroups: [""]
+    apiVersions: ["v1"]
+    resources: ["pods"]
+    scope: Namespaced
+  clientConfig:
+    service:
+      name: atomix-controller
+      namespace: kube-system
+      path: /inject-profile
   admissionReviewVersions: ["v1beta1"]
   sideEffects: None
   failurePolicy: Ignore

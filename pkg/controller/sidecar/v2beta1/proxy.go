@@ -176,6 +176,11 @@ func (r *ProxyReconciler) reconcileCreate(proxy *sidecarv2beta1.Proxy) (reconcil
 		return reconcile.Result{}, nil
 	}
 
+	var config []byte
+	if proxy.Spec.Config != nil {
+		config = proxy.Spec.Config.Raw
+	}
+
 	log.Infof("Connecting to agent %s", agentName)
 	agentConn, err := grpc.Dial(fmt.Sprintf("%s:%d", pod.Status.PodIP, agent.Spec.Port), grpc.WithInsecure())
 	if err != nil {
@@ -194,8 +199,9 @@ func (r *ProxyReconciler) reconcileCreate(proxy *sidecarv2beta1.Proxy) (reconcil
 			},
 		},
 		Options: driverapi.ProxyOptions{
-			Read:  proxy.Spec.Permissions.Read,
-			Write: proxy.Spec.Permissions.Write,
+			Read:   proxy.Spec.Permissions.Read,
+			Write:  proxy.Spec.Permissions.Write,
+			Config: config,
 		},
 	}
 	_, err = agentClient.CreateProxy(context.TODO(), createProxyRequest)

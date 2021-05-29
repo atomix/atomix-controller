@@ -17,6 +17,7 @@ package v2beta1
 import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 )
 
 // ProxySpec is a proxy specification
@@ -25,6 +26,7 @@ type ProxySpec struct {
 	Primitive   corev1.ObjectReference `json:"primitive,omitempty"`
 	Agent       corev1.ObjectReference `json:"agent,omitempty"`
 	Permissions ProxyPermissions       `json:"permissions,omitempty"`
+	Config      *runtime.RawExtension  `json:"config,omitempty"`
 }
 
 // ProxyStatus is a proxy status

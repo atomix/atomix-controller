@@ -325,10 +325,23 @@ func (r *AgentReconciler) getDriverPort(pod *corev1.Pod, store *corev2beta1.Stor
 	}
 
 	for _, plugin := range plugins.Items {
-		if plugin.Spec.Group == gvc.Group && plugin.Spec.Kind == gvc.Kind {
-			for _, version := range plugin.Spec.Versions {
+		if plugin.Spec.Protocol.Group == gvc.Group && plugin.Spec.Protocol.Kind == gvc.Kind {
+			for _, driver := range plugin.Spec.Drivers {
+				if driver.Version == gvc.Version {
+					portAnnotation := getDriverPortAnnotation(plugin.Name, driver.Version)
+					portValue, ok := pod.Annotations[portAnnotation]
+					if !ok {
+						return 0, fmt.Errorf("could not find port for %s", gvc)
+					}
+					return strconv.Atoi(portValue)
+				}
+			}
+			return 0, fmt.Errorf("could not find plugin for %s", gvc)
+		}
+		if plugin.Spec.DeprecatedGroup == gvc.Group && plugin.Spec.DeprecatedKind == gvc.Kind {
+			for _, version := range plugin.Spec.DeprecatedVersions {
 				if version.Name == gvc.Version {
-					portAnnotation := fmt.Sprintf("%s.%s/port", version.Name, plugin.Name)
+					portAnnotation := getDriverPortAnnotation(plugin.Name, version.Name)
 					portValue, ok := pod.Annotations[portAnnotation]
 					if !ok {
 						return 0, fmt.Errorf("could not find port for %s", gvc)

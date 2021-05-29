@@ -4,7 +4,7 @@ go 1.13
 
 require (
 	github.com/atomix/api v0.3.3
-	github.com/atomix/atomix-api/go v0.4.3
+	github.com/atomix/atomix-api/go v0.4.5
 	github.com/atomix/atomix-go-framework v0.6.2
 	github.com/go-logr/logr v0.1.0
 	github.com/google/uuid v1.1.2

@@ -76,6 +76,23 @@ func (r *PrimitiveReconciler) Reconcile(request reconcile.Request) (reconcile.Re
 			return reconcile.Result{}, err
 		}
 
+		config := make(map[string]runtime.RawExtension)
+		if configs, ok, err := unstructured.NestedMap(object.UnstructuredContent(), "spec", "store", "config"); err != nil {
+			log.Errorf("Reconciling %s '%s' failed", r.kind.Kind, request.NamespacedName, err)
+			return reconcile.Result{}, err
+		} else if ok {
+			for key, value := range configs {
+				bytes, err := runtime.Encode(unstructured.UnstructuredJSONScheme, &unstructured.Unstructured{Object: value.(map[string]interface{})})
+				if err != nil {
+					log.Errorf("Reconciling %s '%s' failed", r.kind.Kind, request.NamespacedName, err)
+					return reconcile.Result{}, err
+				}
+				config[key] = runtime.RawExtension{
+					Raw: bytes,
+				}
+			}
+		}
+
 		primitive = &v2beta1.Primitive{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace:   request.Namespace,
@@ -84,8 +101,11 @@ func (r *PrimitiveReconciler) Reconcile(request reconcile.Request) (reconcile.Re
 				Annotations: object.GetAnnotations(),
 			},
 			Spec: v2beta1.PrimitiveSpec{
-				Type:  r.kind.Kind,
-				Store: reference,
+				Type: r.kind.Kind,
+				Store: v2beta1.PrimitiveStore{
+					ObjectReference: reference,
+					Config:          config,
+				},
 			},
 		}
 		if err := controllerutil.SetControllerReference(object, primitive, r.scheme); err != nil {
