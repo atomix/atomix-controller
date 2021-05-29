@@ -21,6 +21,7 @@ import (
 
 var log = logging.GetLogger("atomix", "controller", "sidecar")
 
+// AddControllers adds sidecar controllers to the given manager
 func AddControllers(mgr manager.Manager) error {
 	if err := addBrokerController(mgr); err != nil {
 		return err

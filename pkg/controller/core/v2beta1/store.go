@@ -69,6 +69,7 @@ type StoreReconciler struct {
 	config *rest.Config
 }
 
+// Reconcile reconciles Store resources
 func (r *StoreReconciler) Reconcile(request reconcile.Request) (reconcile.Result, error) {
 	log.Infof("Reconciling Store '%s'", request.NamespacedName)
 	store := &corev2beta1.Store{}
@@ -113,7 +114,7 @@ func (r *StoreReconciler) reconcileProtocol(store *corev2beta1.Store) (bool, err
 			return false, err
 		}
 
-		log.Infof("Creating protocol for Store %s", types.NamespacedName{store.Namespace, store.Name})
+		log.Infof("Creating protocol for Store %s", types.NamespacedName{Namespace: store.Namespace, Name: store.Name})
 		protocol.SetNamespace(store.Namespace)
 		protocol.SetName(store.Name)
 
@@ -130,8 +131,10 @@ func (r *StoreReconciler) reconcileProtocol(store *corev2beta1.Store) (bool, err
 			return false, err
 		}
 	}
+	return r.reconcileProtocolStatus(store, stored)
+}
 
-	protocol = stored
+func (r *StoreReconciler) reconcileProtocolStatus(store *corev2beta1.Store, protocol *unstructured.Unstructured) (bool, error) {
 	revision, ok, err := unstructured.NestedInt64(protocol.UnstructuredContent(), "status", "revision")
 	if err != nil {
 		log.Error(err)
@@ -147,24 +150,28 @@ func (r *StoreReconciler) reconcileProtocol(store *corev2beta1.Store) (bool, err
 
 		var readyReplicas int32
 		replicas, ok, err := unstructured.NestedSlice(protocol.UnstructuredContent(), "status", "replicas")
-		if ok {
+		if err != nil {
+			return false, err
+		} else if ok {
 			for _, r := range replicas {
 				replicaObj := r.(map[string]interface{})
 				replica := corev2beta1.ReplicaStatus{}
-				id, _, err := unstructured.NestedString(replicaObj, "id")
+				id, ok, err := unstructured.NestedString(replicaObj, "id")
 				if err != nil {
 					log.Error(err)
 					return false, err
-				} else {
+				} else if ok {
 					replica.ID = id
 				}
-				nodeID, _, err := unstructured.NestedString(replicaObj, "nodeId")
+
+				nodeID, ok, err := unstructured.NestedString(replicaObj, "nodeId")
 				if err != nil {
 					log.Error(err)
 					return false, err
-				} else {
+				} else if ok {
 					replica.NodeID = nodeID
 				}
+
 				host, ok, err := unstructured.NestedString(replicaObj, "host")
 				if err != nil {
 					log.Error(err)
@@ -172,6 +179,7 @@ func (r *StoreReconciler) reconcileProtocol(store *corev2beta1.Store) (bool, err
 				} else if ok {
 					replica.Host = pointer.StringPtr(host)
 				}
+
 				port, ok, err := unstructured.NestedInt64(replicaObj, "port")
 				if err != nil {
 					log.Error(err)
@@ -179,6 +187,7 @@ func (r *StoreReconciler) reconcileProtocol(store *corev2beta1.Store) (bool, err
 				} else if ok {
 					replica.Port = pointer.Int32Ptr(int32(port))
 				}
+
 				extraPorts, ok, err := unstructured.NestedMap(replicaObj, "extraPorts")
 				if err != nil {
 					log.Error(err)
@@ -195,6 +204,7 @@ func (r *StoreReconciler) reconcileProtocol(store *corev2beta1.Store) (bool, err
 						}
 					}
 				}
+
 				ready, _, err := unstructured.NestedBool(replicaObj, "ready")
 				if err != nil {
 					log.Error(err)
@@ -203,23 +213,27 @@ func (r *StoreReconciler) reconcileProtocol(store *corev2beta1.Store) (bool, err
 					replica.Ready = ready
 					readyReplicas++
 				}
+
 				protocolStatus.Replicas = append(protocolStatus.Replicas, replica)
 			}
 		}
 
 		var readyPartitions int32
 		partitions, ok, err := unstructured.NestedSlice(protocol.UnstructuredContent(), "status", "partitions")
-		if ok {
+		if err != nil {
+			return false, err
+		} else if ok {
 			for _, p := range partitions {
 				partitionObj := p.(map[string]interface{})
 				partition := corev2beta1.PartitionStatus{}
-				id, _, err := unstructured.NestedInt64(partitionObj, "id")
+				id, ok, err := unstructured.NestedInt64(partitionObj, "id")
 				if err != nil {
 					log.Error(err)
 					return false, err
-				} else {
+				} else if ok {
 					partition.ID = uint32(id)
 				}
+
 				replicas, ok, err := unstructured.NestedSlice(partitionObj, "replicas")
 				if err != nil {
 					log.Error(err)
@@ -229,6 +243,7 @@ func (r *StoreReconciler) reconcileProtocol(store *corev2beta1.Store) (bool, err
 						partition.Replicas = append(partition.Replicas, replica.(string))
 					}
 				}
+
 				ready, _, err := unstructured.NestedBool(partitionObj, "ready")
 				if err != nil {
 					log.Error(err)
@@ -245,7 +260,7 @@ func (r *StoreReconciler) reconcileProtocol(store *corev2beta1.Store) (bool, err
 			return false, nil
 		}
 
-		log.Infof("Protocol status changed for Store %s", types.NamespacedName{store.Namespace, store.Name})
+		log.Infof("Protocol status changed for Store %s", types.NamespacedName{Namespace: store.Namespace, Name: store.Name})
 		store.Status.Protocol = protocolStatus
 		store.Status.Replicas = int32(len(store.Status.Protocol.Replicas))
 		store.Status.ReadyReplicas = readyReplicas

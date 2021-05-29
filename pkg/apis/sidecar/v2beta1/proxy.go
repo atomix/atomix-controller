@@ -29,7 +29,7 @@ type ProxySpec struct {
 
 // ProxyStatus is a proxy status
 type ProxyStatus struct {
-	Ready    bool  `json:"ready,omitempty"`
+	Ready bool `json:"ready,omitempty"`
 }
 
 // ProxyPermissions is a proxy permissions status

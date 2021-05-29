@@ -22,7 +22,6 @@ import (
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -62,6 +61,7 @@ type PrimitiveReconciler struct {
 	config *rest.Config
 }
 
+// Reconcile reconciles Primitive resources
 func (r *PrimitiveReconciler) Reconcile(request reconcile.Request) (reconcile.Result, error) {
 	log.Infof("Reconciling Primitive '%s'", request.NamespacedName)
 	primitive := &corev2beta1.Primitive{}
@@ -76,7 +76,7 @@ func (r *PrimitiveReconciler) Reconcile(request reconcile.Request) (reconcile.Re
 
 	if primitive.DeletionTimestamp == nil {
 		if !k8s.HasFinalizer(primitive.Finalizers, primitiveFinalizer) {
-			log.Infof("Adding finalizer to Primitive %s", types.NamespacedName{primitive.Namespace, primitive.Name})
+			log.Infof("Adding finalizer to Primitive %s", request.NamespacedName)
 			primitive.Finalizers = k8s.AddFinalizer(primitive.Finalizers, primitiveFinalizer)
 			if err := r.client.Update(context.TODO(), primitive); err != nil {
 				log.Error(err)
@@ -89,7 +89,7 @@ func (r *PrimitiveReconciler) Reconcile(request reconcile.Request) (reconcile.Re
 			return reconcile.Result{}, nil
 		}
 
-		log.Infof("Deleting Proxy's for Primitive %s", types.NamespacedName{primitive.Namespace, primitive.Name})
+		log.Infof("Deleting Proxy's for Primitive %s", request.NamespacedName)
 		options := &client.DeleteAllOfOptions{
 			ListOptions: client.ListOptions{
 				Namespace: primitive.Namespace,
@@ -105,7 +105,7 @@ func (r *PrimitiveReconciler) Reconcile(request reconcile.Request) (reconcile.Re
 			}
 		}
 
-		log.Infof("Removing finalizer from Primitive %s", types.NamespacedName{primitive.Namespace, primitive.Name})
+		log.Infof("Removing finalizer from Primitive %s", request.NamespacedName)
 		primitive.Finalizers = k8s.RemoveFinalizer(primitive.Finalizers, primitiveFinalizer)
 		if err := r.client.Update(context.TODO(), primitive); err != nil {
 			log.Error(err)

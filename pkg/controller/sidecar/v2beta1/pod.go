@@ -111,6 +111,7 @@ type PodReconciler struct {
 	config *rest.Config
 }
 
+// Reconcile reconciles Pod resources
 func (r *PodReconciler) Reconcile(request reconcile.Request) (reconcile.Result, error) {
 	log.Infof("Reconciling Pod '%s'", request.NamespacedName)
 	pod := &corev1.Pod{}
@@ -413,7 +414,7 @@ func (r *PodReconciler) setAtomixCondition(pod *corev1.Pod, status corev1.Condit
 				return false, nil
 			}
 			log.Infof("Updating Pod %s condition: status=%s, reason=%s, message=%s",
-				types.NamespacedName{pod.Namespace, pod.Name}, status, reason, message)
+				types.NamespacedName{Namespace: pod.Namespace, Name: pod.Name}, status, reason, message)
 			if condition.Status != status {
 				condition.LastTransitionTime = metav1.Now()
 			}
@@ -430,7 +431,7 @@ func (r *PodReconciler) setAtomixCondition(pod *corev1.Pod, status corev1.Condit
 	}
 
 	log.Infof("Initializing Pod %s condition: status=%s, reason=%s, message=%s",
-		types.NamespacedName{pod.Namespace, pod.Name}, status, reason, message)
+		types.NamespacedName{Namespace: pod.Namespace, Name: pod.Name}, status, reason, message)
 	pod.Status.Conditions = append(pod.Status.Conditions, corev1.PodCondition{
 		Type:               atomixReadyCondition,
 		Status:             status,
@@ -538,6 +539,31 @@ func (r *PodReconciler) getPermissions(pod *corev1.Pod, primitive v2beta1.Primit
 		return false, false, nil
 	}
 
+	rp, wp, err := r.getNamespaceScopedPermissions(pod, primitive)
+	if err != nil {
+		return false, false, err
+	}
+	if rp {
+		read = true
+	}
+	if wp {
+		write = true
+	}
+
+	rp, wp, err = r.getClusterScopedPermissions(pod, primitive)
+	if err != nil {
+		return false, false, err
+	}
+	if rp {
+		read = true
+	}
+	if wp {
+		write = true
+	}
+	return read, write, nil
+}
+
+func (r *PodReconciler) getNamespaceScopedPermissions(pod *corev1.Pod, primitive v2beta1.Primitive) (read bool, write bool, err error) {
 	owner := primitive.OwnerReferences[0]
 	groupVersion, err := schema.ParseGroupVersion(owner.APIVersion)
 	if err != nil {
@@ -607,6 +633,30 @@ func (r *PodReconciler) getPermissions(pod *corev1.Pod, primitive v2beta1.Primit
 				}
 			}
 		}
+	}
+	return read, write, err
+}
+
+func (r *PodReconciler) getClusterScopedPermissions(pod *corev1.Pod, primitive v2beta1.Primitive) (read bool, write bool, err error) {
+	owner := primitive.OwnerReferences[0]
+	groupVersion, err := schema.ParseGroupVersion(owner.APIVersion)
+	if err != nil {
+		return false, false, err
+	}
+	primitiveKind := schema.GroupVersionKind{
+		Group:   groupVersion.Group,
+		Version: groupVersion.Version,
+		Kind:    owner.Kind,
+	}
+
+	clusterRoleKind, err := getGroupVersionKind(r.scheme, &rbacv1.ClusterRole{})
+	if err != nil {
+		return false, false, err
+	}
+
+	roleKind, err := getGroupVersionKind(r.scheme, &rbacv1.Role{})
+	if err != nil {
+		return false, false, err
 	}
 
 	clusterRoleBindings := &rbacv1.RoleBindingList{}

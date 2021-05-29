@@ -43,28 +43,34 @@ func getFields(keysAndValues ...interface{}) []logging.Field {
 	return fields
 }
 
+// Enabled returns whether the logger is enabled
 func (l *ControllerLogger) Enabled() bool {
 	return true
 }
 
+// Info logs an info level message
 func (l *ControllerLogger) Info(msg string, keysAndValues ...interface{}) {
 	l.log.WithFields(getFields(keysAndValues...)...).Info(msg)
 }
 
+// Error logs an error level message
 func (l *ControllerLogger) Error(err error, msg string, keysAndValues ...interface{}) {
 	l.log.WithFields(getFields(keysAndValues...)...).Error(err, msg)
 }
 
+// V sets the verbosity level
 func (l *ControllerLogger) V(level int) logr.InfoLogger {
 	return l
 }
 
+// WithValues sets the log values
 func (l *ControllerLogger) WithValues(keysAndValues ...interface{}) logr.Logger {
 	return &ControllerLogger{
 		log: l.log.WithFields(getFields(keysAndValues...)...),
 	}
 }
 
+// WithName sets the logger name
 func (l *ControllerLogger) WithName(name string) logr.Logger {
 	return &ControllerLogger{
 		log: l.log.GetLogger(name),

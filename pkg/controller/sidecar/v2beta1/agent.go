@@ -79,6 +79,7 @@ type AgentReconciler struct {
 	config *rest.Config
 }
 
+// Reconcile reconciles Agent resources
 func (r *AgentReconciler) Reconcile(request reconcile.Request) (reconcile.Result, error) {
 	log.Infof("Reconciling Agent '%s'", request.NamespacedName)
 	agent := &sidecarv2beta1.Agent{}
@@ -90,11 +91,10 @@ func (r *AgentReconciler) Reconcile(request reconcile.Request) (reconcile.Result
 		return reconcile.Result{}, err
 	}
 
-	if agent.DeletionTimestamp == nil {
-		return r.reconcileCreate(agent)
-	} else {
+	if agent.DeletionTimestamp != nil {
 		return r.reconcileDelete(agent)
 	}
+	return r.reconcileCreate(agent)
 }
 
 func (r *AgentReconciler) reconcileCreate(agent *sidecarv2beta1.Agent) (reconcile.Result, error) {
@@ -246,7 +246,7 @@ func (r *AgentReconciler) reconcileDelete(agent *sidecarv2beta1.Agent) (reconcil
 		return reconcile.Result{}, nil
 	}
 
-	log.Infof("Finalizing Agent %s", types.NamespacedName{agent.Namespace, agent.Name})
+	log.Infof("Finalizing Agent %s", types.NamespacedName{Namespace: agent.Namespace, Name: agent.Name})
 	pod, err := r.getPod(agent)
 	if err != nil {
 		return reconcile.Result{}, err

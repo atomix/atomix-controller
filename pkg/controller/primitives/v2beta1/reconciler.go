@@ -29,6 +29,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
+// PrimitiveReconciler is a reconciler for Primitive resources
 type PrimitiveReconciler struct {
 	client client.Client
 	scheme *runtime.Scheme

@@ -57,17 +57,20 @@ func addDriverController(mgr manager.Manager) error {
 	return nil
 }
 
+// DriverInjector is a mutating webhook that injects driver containers into pods
 type DriverInjector struct {
 	client  client.Client
 	scheme  *runtime.Scheme
 	decoder *admission.Decoder
 }
 
+// InjectDecoder :
 func (i *DriverInjector) InjectDecoder(decoder *admission.Decoder) error {
 	i.decoder = decoder
 	return nil
 }
 
+// Handle :
 func (i *DriverInjector) Handle(ctx context.Context, request admission.Request) admission.Response {
 	namespacedName := types.NamespacedName{
 		Namespace: request.Namespace,

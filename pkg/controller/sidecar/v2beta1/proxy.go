@@ -86,6 +86,7 @@ type ProxyReconciler struct {
 	config *rest.Config
 }
 
+// Reconcile reconciles Proxy resources
 func (r *ProxyReconciler) Reconcile(request reconcile.Request) (reconcile.Result, error) {
 	log.Infof("Reconciling Proxy '%s'", request.NamespacedName)
 	proxy := &sidecarv2beta1.Proxy{}
@@ -97,11 +98,10 @@ func (r *ProxyReconciler) Reconcile(request reconcile.Request) (reconcile.Result
 		return reconcile.Result{}, err
 	}
 
-	if proxy.DeletionTimestamp == nil {
-		return r.reconcileCreate(proxy)
-	} else {
+	if proxy.DeletionTimestamp != nil {
 		return r.reconcileDelete(proxy)
 	}
+	return r.reconcileCreate(proxy)
 }
 
 func (r *ProxyReconciler) reconcileCreate(proxy *sidecarv2beta1.Proxy) (reconcile.Result, error) {

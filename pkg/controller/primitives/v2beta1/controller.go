@@ -29,6 +29,7 @@ import (
 
 var log = logging.GetLogger("atomix", "controller", "primitives")
 
+// AddControllers adds primitive controllers to the given manager
 func AddControllers(mgr manager.Manager) error {
 	if err := addController(mgr, &primitivesv2beta1.Counter{}); err != nil {
 		return err

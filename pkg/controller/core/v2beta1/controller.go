@@ -21,6 +21,7 @@ import (
 
 var log = logging.GetLogger("atomix", "controller", "core")
 
+// AddControllers adds core controllers to the given manager
 func AddControllers(mgr manager.Manager) error {
 	if err := addStoreController(mgr); err != nil {
 		return err

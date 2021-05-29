@@ -67,17 +67,20 @@ func addBrokerController(mgr manager.Manager) error {
 	return nil
 }
 
+// BrokerInjector is a mutating webhook that injects the broker container into pods
 type BrokerInjector struct {
 	client  client.Client
 	scheme  *runtime.Scheme
 	decoder *admission.Decoder
 }
 
+// InjectDecoder :
 func (i *BrokerInjector) InjectDecoder(decoder *admission.Decoder) error {
 	i.decoder = decoder
 	return nil
 }
 
+// Handle :
 func (i *BrokerInjector) Handle(ctx context.Context, request admission.Request) admission.Response {
 	podNamespacedName := types.NamespacedName{
 		Namespace: request.Namespace,

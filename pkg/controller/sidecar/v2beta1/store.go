@@ -62,6 +62,7 @@ type StoreReconciler struct {
 	config *rest.Config
 }
 
+// Reconcile reconciles Store resources
 func (r *StoreReconciler) Reconcile(request reconcile.Request) (reconcile.Result, error) {
 	log.Infof("Reconciling Store '%s'", request.NamespacedName)
 	store := &corev2beta1.Store{}
@@ -74,16 +75,15 @@ func (r *StoreReconciler) Reconcile(request reconcile.Request) (reconcile.Result
 		return reconcile.Result{}, err
 	}
 
-	if store.DeletionTimestamp == nil {
-		return r.reconcileCreate(store)
-	} else {
+	if store.DeletionTimestamp != nil {
 		return r.reconcileDelete(store)
 	}
+	return r.reconcileCreate(store)
 }
 
 func (r *StoreReconciler) reconcileCreate(store *corev2beta1.Store) (reconcile.Result, error) {
 	if !k8s.HasFinalizer(store.Finalizers, storeFinalizer) {
-		log.Infof("Adding finalizer to Store %s", types.NamespacedName{store.Namespace, store.Name})
+		log.Infof("Adding finalizer to Store %s", types.NamespacedName{Namespace: store.Namespace, Name: store.Name})
 		store.Finalizers = k8s.AddFinalizer(store.Finalizers, storeFinalizer)
 		if err := r.client.Update(context.TODO(), store); err != nil {
 			log.Error(err)
@@ -98,7 +98,7 @@ func (r *StoreReconciler) reconcileDelete(store *corev2beta1.Store) (reconcile.R
 		return reconcile.Result{}, nil
 	}
 
-	log.Infof("Deleting Agents for Store %s", types.NamespacedName{store.Namespace, store.Name})
+	log.Infof("Deleting Agents for Store %s", types.NamespacedName{Namespace: store.Namespace, Name: store.Name})
 	options := &client.DeleteAllOfOptions{
 		ListOptions: client.ListOptions{
 			LabelSelector: labels.SelectorFromSet(map[string]string{
@@ -113,7 +113,7 @@ func (r *StoreReconciler) reconcileDelete(store *corev2beta1.Store) (reconcile.R
 		}
 	}
 
-	log.Infof("Removing finalizer from Store %s", types.NamespacedName{store.Namespace, store.Name})
+	log.Infof("Removing finalizer from Store %s", types.NamespacedName{Namespace: store.Namespace, Name: store.Name})
 	store.Finalizers = k8s.RemoveFinalizer(store.Finalizers, storeFinalizer)
 	if err := r.client.Update(context.TODO(), store); err != nil {
 		log.Error(err)
