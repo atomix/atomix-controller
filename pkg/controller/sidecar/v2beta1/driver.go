@@ -67,18 +67,18 @@ func (i *DriverInjector) InjectDecoder(decoder *admission.Decoder) error {
 
 // Handle :
 func (i *DriverInjector) Handle(ctx context.Context, request admission.Request) admission.Response {
-	namespacedName := types.NamespacedName{
-		Namespace: request.Namespace,
-		Name:      request.Name,
-	}
-	log.Infof("Received admission request for Pod '%s'", namespacedName)
-
 	// Decode the pod
 	pod := &corev1.Pod{}
 	if err := i.decoder.Decode(request, pod); err != nil {
-		log.Errorf("Could not decode Pod '%s'", namespacedName, err)
+		log.Error("Could not decode Pod", err)
 		return admission.Errored(http.StatusBadRequest, err)
 	}
+
+	namespacedName := types.NamespacedName{
+		Namespace: request.Namespace,
+		Name:      pod.Name,
+	}
+	log.Infof("Received admission request for Pod '%s'", namespacedName)
 
 	pluginList := &v2beta1.StoragePluginList{}
 	if err := i.client.List(ctx, pluginList); err != nil {
@@ -134,7 +134,7 @@ func (i *DriverInjector) Handle(ctx context.Context, request admission.Request) 
 					return admission.Errored(http.StatusBadRequest, err)
 				}
 
-				ok, err := i.injectDriver(pod, plugin.Name, driver.Version, driver.Image, port)
+				ok, err := i.injectDriver(namespacedName, pod, plugin.Name, driver.Version, driver.Image, port)
 				if err != nil {
 					return admission.Errored(http.StatusInternalServerError, err)
 				} else if ok {
@@ -147,7 +147,7 @@ func (i *DriverInjector) Handle(ctx context.Context, request admission.Request) 
 					return admission.Errored(http.StatusBadRequest, err)
 				}
 
-				ok, err := i.injectDriver(pod, plugin.Name, version.Name, version.Driver.Image, port)
+				ok, err := i.injectDriver(namespacedName, pod, plugin.Name, version.Name, version.Driver.Image, port)
 				if err != nil {
 					return admission.Errored(http.StatusInternalServerError, err)
 				} else if ok {
@@ -165,7 +165,7 @@ func (i *DriverInjector) Handle(ctx context.Context, request admission.Request) 
 	// Marshal the pod and return a patch response
 	marshaledPod, err := json.Marshal(pod)
 	if err != nil {
-		log.Errorf("Driver injection failed for Pod '%s'", types.NamespacedName{Namespace: pod.Namespace, Name: pod.Name}, err)
+		log.Errorf("Driver injection failed for Pod '%s'", namespacedName, err)
 		return admission.Errored(http.StatusInternalServerError, err)
 	}
 	return admission.PatchResponseFromRaw(request.Object.Raw, marshaledPod)
@@ -206,7 +206,7 @@ func (i *DriverInjector) getNextPort(pod *corev1.Pod, plugin, driver string, isD
 	return port, nil
 }
 
-func (i *DriverInjector) injectDriver(pod *corev1.Pod, plugin, driver, image string, port int) (bool, error) {
+func (i *DriverInjector) injectDriver(name types.NamespacedName, pod *corev1.Pod, plugin, driver, image string, port int) (bool, error) {
 	driverQualifiedName := fmt.Sprintf("%s.%s", driver, plugin)
 	pluginName := plugin[:strings.Index(plugin, ".")]
 	statusValue := pod.Annotations[getDriverStatusAnnotation(plugin, driver)]
@@ -234,11 +234,11 @@ func (i *DriverInjector) injectDriver(pod *corev1.Pod, plugin, driver, image str
 			},
 			{
 				Name:  driverNamespaceEnv,
-				Value: pod.Namespace,
+				Value: name.Namespace,
 			},
 			{
 				Name:  driverNameEnv,
-				Value: pod.Name,
+				Value: name.Name,
 			},
 			{
 				Name: driverNodeEnv,
