@@ -1,190 +1,6 @@
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
-  name: databases.cloud.atomix.io
-spec:
-  group: cloud.atomix.io
-  scope: Namespaced
-  names:
-    kind: Database
-    listKind: DatabaseList
-    plural: databases
-    singular: database
-    shortNames:
-    - db
-  versions:
-  - name: v1beta3
-    served: true
-    storage: true
-    subresources:
-      status: {}
-    schema:
-      openAPIV3Schema:
-        type: object
-        required:
-        - spec
-        properties:
-          spec:
-            type: object
-            required:
-            - storageClass
-            properties:
-              partitions:
-                type: integer
-                minimum: 1
-                maximum: 1024
-                default: 1
-              storageClass:
-                type: object
-                required:
-                - name
-                properties:
-                  class:
-                    type: string
-                  group:
-                    type: string
-                  version:
-                    type: string
-                  kind:
-                    type: string
-                  namespace:
-                    type: string
-                  name:
-                    type: string
-          status:
-            type: object
-            properties:
-              readyPartitions:
-                type: integer
----
-apiVersion: apiextensions.k8s.io/v1
-kind: CustomResourceDefinition
-metadata:
-  name: partitions.cloud.atomix.io
-spec:
-  group: cloud.atomix.io
-  scope: Namespaced
-  names:
-    kind: Partition
-    listKind: PartitionList
-    plural: partitions
-    singular: partition
-  versions:
-  - name: v1beta3
-    served: true
-    storage: true
-    subresources:
-      status: {}
-    schema:
-      openAPIV3Schema:
-        type: object
-        properties:
-          spec:
-            type: object
-            required:
-            - partitionId
-            - serviceName
-            properties:
-              partitionId:
-                type: integer
-                minimum: 1
-              serviceName:
-                type: string
-          status:
-            type: object
-            properties:
-              ready:
-                type: boolean
----
-apiVersion: apiextensions.k8s.io/v1
-kind: CustomResourceDefinition
-metadata:
-  name: members.cloud.atomix.io
-spec:
-  group: cloud.atomix.io
-  scope: Namespaced
-  names:
-    kind: Member
-    listKind: MemberList
-    plural: members
-    singular: member
-  versions:
-  - name: v1beta3
-    served: true
-    storage: true
-    schema:
-      openAPIV3Schema:
-        type: object
-        required:
-        - properties
-        properties:
-          properties:
-            type: object
-            required:
-            - metadata
-            - service
-            - port
-            properties:
-              metadata:
-                type: object
-                required:
-                - name
-                properties:
-                  namespace:
-                    type: string
-                  name:
-                    type: string
-              service:
-                type: string
-              port:
-                type: integer
----
-apiVersion: apiextensions.k8s.io/v1
-kind: CustomResourceDefinition
-metadata:
-  name: primitives.cloud.atomix.io
-spec:
-  group: cloud.atomix.io
-  scope: Namespaced
-  names:
-    kind: Primitive
-    listKind: PrimitiveList
-    plural: primitives
-    singular: primitive
-  versions:
-  - name: v1beta3
-    served: true
-    storage: true
-    schema:
-      openAPIV3Schema:
-        type: object
-        required:
-        - properties
-        properties:
-          properties:
-            type: object
-            required:
-            - metadata
-            - database
-            - type
-            properties:
-              metadata:
-                type: object
-                required:
-                - name
-                properties:
-                  namespace:
-                    type: string
-                  name:
-                    type: string
-              database:
-                type: string
-              type:
-                type: string
----
-apiVersion: apiextensions.k8s.io/v1
-kind: CustomResourceDefinition
-metadata:
   name: storageplugins.atomix.io
 spec:
   group: atomix.io
@@ -205,16 +21,77 @@ spec:
         - spec
         properties:
           spec:
+            description: |-
+              The specification for the storage plugin. The plugin must point to a custom resource definition (CRD)
+              used to implement the storage.
             type: object
-            required:
-            - group
-            - kind
             properties:
+              protocol:
+                type: object
+                required:
+                - group
+                - kind
+                properties:
+                  group:
+                    description: |-
+                      The API group of the custom resource definition (CRD) used to implement storage. This must
+                      match a group defined as a CRD.
+                    type: string
+                  kind:
+                    description: |-
+                      The API kind of the custom resource definition (CRD) used to implement storage. This must
+                      match a kind defined as a CRD.
+                    type: string
+              drivers:
+                type: array
+                items:
+                  description: |-
+                    A specification for the driver used to access this version of the storage plugin API.
+                    The driver will be injected into pods to manage access to stores running this version of
+                    the plugin API.
+                  type: object
+                  required:
+                  - version
+                  - image
+                  properties:
+                    version:
+                      description: |-
+                        The driver version name.
+                      type: string
+                    image:
+                      description: |-
+                        The driver image to inject into pods to acecss this version of the store.
+                      type: string
+                    config:
+                      type: object
+                      required:
+                      - group
+                      - kind
+                      properties:
+                        group:
+                          description: |-
+                            The API group of the custom resource definition (CRD) used to configure the driver. This
+                            must match a group defined as a CRD.
+                          type: string
+                        kind:
+                          description: |-
+                            The API kind of the custom resource definition (CRD) used to configure the driver. This
+                            must match a kind defined as a CRD.
+                          type: string
               group:
+                description: |-
+                  The API group of the custom resource definition (CRD) used to implement storage. This must
+                  match a group defined as a CRD.
                 type: string
               kind:
+                description: |-
+                  The API kind of the custom resource definition (CRD) used to implement storage. This must
+                  match a kind defined as a CRD.
                 type: string
               versions:
+                description: |-
+                  A list of API versions supported by the storage custom resource definition (CRD). These must
+                  match versions defined by the CRD specification.
                 type: array
                 items:
                   type: object
@@ -223,13 +100,21 @@ spec:
                   - driver
                   properties:
                     name:
+                      description: |-
+                        The version name as defined in the CRD specification.
                       type: string
                     driver:
+                      description: |-
+                        A specification for the driver used to access this version of the storage plugin API.
+                        The driver will be injected into pods to manage access to stores running this version of
+                        the plugin API.
                       type: object
                       required:
                       - image
                       properties:
                         image:
+                          description: |-
+                            The driver image to inject into pods to acecss this version of the store.
                           type: string
 ---
 apiVersion: apiextensions.k8s.io/v1
@@ -257,9 +142,16 @@ spec:
         - spec
         properties:
           spec:
+            description: |-
+              The specification for the store. The spec must include a protocol configuration describing how the
+              store should be implemented.
             type: object
             properties:
               protocol:
+                description: |-
+                  The configuration for the protocol to be used to implement the store. The protocol is a complete
+                  Kubernetes resource configuration, including the 'apiVersion' and 'kind'. The protocol kind must
+                  match a custom resource defined by one of the StoragePlugins.
                 type: object
                 x-kubernetes-embedded-resource: true
                 x-kubernetes-preserve-unknown-fields: true
@@ -362,16 +254,29 @@ spec:
         - spec
         properties:
           spec:
+            description: |-
+              The primitive specification describes how a primitive is stored and accessed.
             type: object
             required:
             - type
             - store
             properties:
               type:
+                description: |-
+                  The primitive type name.
                 type: string
               store:
+                description: |-
+                  A reference to the Store used to manage the primitive state. This must include the UID of a valid
+                  store.
                 type: object
                 x-kubernetes-preserve-unknown-fields: true
+                properties:
+                  config:
+                    type: object
+                    additionalProperties:
+                      type: object
+                      x-kubernetes-preserve-unknown-fields: true
     additionalPrinterColumns:
     - name: Type
       type: string
@@ -381,6 +286,69 @@ spec:
       type: string
       description: The primitive store
       jsonPath: .spec.store.name
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: storageprofiles.atomix.io
+spec:
+  group: atomix.io
+  scope: Namespaced
+  names:
+    kind: StorageProfile
+    listKind: StorageProfileList
+    plural: storageprofiles
+    singular: storageprofile
+    shortNames:
+    - profiles
+    - profile
+  versions:
+  - name: v2beta1
+    served: true
+    storage: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        required:
+        - spec
+        properties:
+          spec:
+            description: |-
+              The primitive specification describes how a primitive is stored and accessed.
+            type: object
+            required:
+            - selector
+            - drivers
+            properties:
+              drivers:
+                description: |-
+                  A list of drivers required by the profile.
+                type: array
+                items:
+                  type: string
+              selector:
+                description: |-
+                  An optional label selector used to limit the scope of the primitive to pods with labels matching
+                  those in the selector. The selector operates similarly to the Service selector.
+                type: object
+                properties:
+                  matchLabels:
+                    type: object
+                    additionalProperties:
+                      type: string
+                  matchExpressions:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        key:
+                          type: string
+                        operator:
+                          type: string
+                        values:
+                          type: array
+                          items:
+                            type: string
 ---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
@@ -489,6 +457,9 @@ spec:
                     type: boolean
                   write:
                     type: boolean
+              config:
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
           status:
             type: object
             properties:
@@ -544,6 +515,10 @@ spec:
             - store
             properties:
               store:
+                description: |-
+                  A reference to the Store used to manage the primitive state. A Store 'name' must be
+                  provided. The 'namespace' is optional. If no 'namespace' is specified, the local namespace
+                  will be used.
                 type: object
                 required:
                 - name
@@ -552,6 +527,11 @@ spec:
                     type: string
                   name:
                     type: string
+                  config:
+                    type: object
+                    additionalProperties:
+                      type: object
+                      x-kubernetes-preserve-unknown-fields: true
     additionalPrinterColumns:
     - name: Store
       type: string
@@ -586,6 +566,10 @@ spec:
             - store
             properties:
               store:
+                description: |-
+                  A reference to the Store used to manage the primitive state. A Store 'name' must be
+                  provided. The 'namespace' is optional. If no 'namespace' is specified, the local namespace
+                  will be used.
                 type: object
                 required:
                 - name
@@ -594,6 +578,11 @@ spec:
                     type: string
                   name:
                     type: string
+                  config:
+                    type: object
+                    additionalProperties:
+                      type: object
+                      x-kubernetes-preserve-unknown-fields: true
     additionalPrinterColumns:
     - name: Store
       type: string
@@ -628,6 +617,10 @@ spec:
             - store
             properties:
               store:
+                description: |-
+                  A reference to the Store used to manage the primitive state. A Store 'name' must be
+                  provided. The 'namespace' is optional. If no 'namespace' is specified, the local namespace
+                  will be used.
                 type: object
                 required:
                 - name
@@ -636,6 +629,11 @@ spec:
                     type: string
                   name:
                     type: string
+                  config:
+                    type: object
+                    additionalProperties:
+                      type: object
+                      x-kubernetes-preserve-unknown-fields: true
     additionalPrinterColumns:
     - name: Store
       type: string
@@ -670,6 +668,10 @@ spec:
             - store
             properties:
               store:
+                description: |-
+                  A reference to the Store used to manage the primitive state. A Store 'name' must be
+                  provided. The 'namespace' is optional. If no 'namespace' is specified, the local namespace
+                  will be used.
                 type: object
                 required:
                 - name
@@ -678,6 +680,11 @@ spec:
                     type: string
                   name:
                     type: string
+                  config:
+                    type: object
+                    additionalProperties:
+                      type: object
+                      x-kubernetes-preserve-unknown-fields: true
     additionalPrinterColumns:
     - name: Store
       type: string
@@ -712,6 +719,10 @@ spec:
             - store
             properties:
               store:
+                description: |-
+                  A reference to the Store used to manage the primitive state. A Store 'name' must be
+                  provided. The 'namespace' is optional. If no 'namespace' is specified, the local namespace
+                  will be used.
                 type: object
                 required:
                 - name
@@ -720,6 +731,11 @@ spec:
                     type: string
                   name:
                     type: string
+                  config:
+                    type: object
+                    additionalProperties:
+                      type: object
+                      x-kubernetes-preserve-unknown-fields: true
     additionalPrinterColumns:
     - name: Store
       type: string
@@ -754,6 +770,10 @@ spec:
             - store
             properties:
               store:
+                description: |-
+                  A reference to the Store used to manage the primitive state. A Store 'name' must be
+                  provided. The 'namespace' is optional. If no 'namespace' is specified, the local namespace
+                  will be used.
                 type: object
                 required:
                 - name
@@ -762,6 +782,11 @@ spec:
                     type: string
                   name:
                     type: string
+                  config:
+                    type: object
+                    additionalProperties:
+                      type: object
+                      x-kubernetes-preserve-unknown-fields: true
     additionalPrinterColumns:
     - name: Store
       type: string
@@ -796,6 +821,10 @@ spec:
             - store
             properties:
               store:
+                description: |-
+                  A reference to the Store used to manage the primitive state. A Store 'name' must be
+                  provided. The 'namespace' is optional. If no 'namespace' is specified, the local namespace
+                  will be used.
                 type: object
                 required:
                 - name
@@ -804,6 +833,11 @@ spec:
                     type: string
                   name:
                     type: string
+                  config:
+                    type: object
+                    additionalProperties:
+                      type: object
+                      x-kubernetes-preserve-unknown-fields: true
     additionalPrinterColumns:
     - name: Store
       type: string
@@ -838,6 +872,10 @@ spec:
             - store
             properties:
               store:
+                description: |-
+                  A reference to the Store used to manage the primitive state. A Store 'name' must be
+                  provided. The 'namespace' is optional. If no 'namespace' is specified, the local namespace
+                  will be used.
                 type: object
                 required:
                 - name
@@ -846,6 +884,11 @@ spec:
                     type: string
                   name:
                     type: string
+                  config:
+                    type: object
+                    additionalProperties:
+                      type: object
+                      x-kubernetes-preserve-unknown-fields: true
     additionalPrinterColumns:
     - name: Store
       type: string
