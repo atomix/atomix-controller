@@ -32,37 +32,41 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
+	"time"
 )
 
 const proxyFinalizer = "proxy"
 
 func addProxyController(mgr manager.Manager) error {
-	r := &ProxyReconciler{
-		client: mgr.GetClient(),
-		scheme: mgr.GetScheme(),
-		config: mgr.GetConfig(),
-	}
-
 	// Create a new controller
-	c, err := controller.New("proxy-controller", mgr, controller.Options{Reconciler: r})
+	options := controller.Options{
+		Reconciler: &ProxyReconciler{
+			client: mgr.GetClient(),
+			scheme: mgr.GetScheme(),
+			config: mgr.GetConfig(),
+		},
+		RateLimiter: workqueue.NewItemExponentialFailureRateLimiter(time.Millisecond*10, time.Second*5),
+	}
+	controller, err := controller.New("proxy-controller", mgr, options)
 	if err != nil {
 		return err
 	}
 
 	// Watch for changes to Proxy's
-	err = c.Watch(&source.Kind{Type: &sidecarv2beta1.Proxy{}}, &handler.EnqueueRequestForObject{})
+	err = controller.Watch(&source.Kind{Type: &sidecarv2beta1.Proxy{}}, &handler.EnqueueRequestForObject{})
 	if err != nil {
 		return err
 	}
 
 	// Watch for changes to Primitives
-	err = c.Watch(&source.Kind{Type: &corev2beta1.Primitive{}}, &handler.EnqueueRequestsFromMapFunc{
+	err = controller.Watch(&source.Kind{Type: &corev2beta1.Primitive{}}, &handler.EnqueueRequestsFromMapFunc{
 		ToRequests: newPrimitiveProxyMapper(mgr),
 	})
 	if err != nil {
@@ -70,7 +74,7 @@ func addProxyController(mgr manager.Manager) error {
 	}
 
 	// Watch for changes to ProtocolAgents
-	err = c.Watch(&source.Kind{Type: &sidecarv2beta1.Agent{}}, &handler.EnqueueRequestsFromMapFunc{
+	err = controller.Watch(&source.Kind{Type: &sidecarv2beta1.Agent{}}, &handler.EnqueueRequestsFromMapFunc{
 		ToRequests: newAgentProxyMapper(mgr),
 	})
 	if err != nil {

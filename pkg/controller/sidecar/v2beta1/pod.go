@@ -30,6 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/reference"
+	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -39,6 +40,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 	"sort"
 	"strings"
+	"time"
 )
 
 const (
@@ -51,26 +53,28 @@ const (
 )
 
 func addPodController(mgr manager.Manager) error {
-	r := &PodReconciler{
-		client: mgr.GetClient(),
-		scheme: mgr.GetScheme(),
-		config: mgr.GetConfig(),
-	}
-
 	// Create a new controller
-	c, err := controller.New("pod-controller", mgr, controller.Options{Reconciler: r})
+	options := controller.Options{
+		Reconciler: &PodReconciler{
+			client: mgr.GetClient(),
+			scheme: mgr.GetScheme(),
+			config: mgr.GetConfig(),
+		},
+		RateLimiter: workqueue.NewItemExponentialFailureRateLimiter(time.Millisecond*10, time.Second*5),
+	}
+	controller, err := controller.New("pod-controller", mgr, options)
 	if err != nil {
 		return err
 	}
 
 	// Watch for changes to Pods
-	err = c.Watch(&source.Kind{Type: &corev1.Pod{}}, &handler.EnqueueRequestForObject{})
+	err = controller.Watch(&source.Kind{Type: &corev1.Pod{}}, &handler.EnqueueRequestForObject{})
 	if err != nil {
 		return err
 	}
 
 	// Watch for changes to Agents
-	err = c.Watch(&source.Kind{Type: &sidecarv2beta1.Agent{}}, &handler.EnqueueRequestForOwner{
+	err = controller.Watch(&source.Kind{Type: &sidecarv2beta1.Agent{}}, &handler.EnqueueRequestForOwner{
 		OwnerType:    &corev1.Pod{},
 		IsController: true,
 	})
@@ -79,7 +83,7 @@ func addPodController(mgr manager.Manager) error {
 	}
 
 	// Watch for changes to Proxy's
-	err = c.Watch(&source.Kind{Type: &sidecarv2beta1.Proxy{}}, &handler.EnqueueRequestForOwner{
+	err = controller.Watch(&source.Kind{Type: &sidecarv2beta1.Proxy{}}, &handler.EnqueueRequestForOwner{
 		OwnerType:    &corev1.Pod{},
 		IsController: true,
 	})
@@ -88,7 +92,7 @@ func addPodController(mgr manager.Manager) error {
 	}
 
 	// Watch for changes to Stores
-	err = c.Watch(&source.Kind{Type: &v2beta1.Store{}}, &handler.EnqueueRequestsFromMapFunc{
+	err = controller.Watch(&source.Kind{Type: &v2beta1.Store{}}, &handler.EnqueueRequestsFromMapFunc{
 		ToRequests: newStorePodMapper(mgr),
 	})
 	if err != nil {
@@ -96,7 +100,7 @@ func addPodController(mgr manager.Manager) error {
 	}
 
 	// Watch for changes to Primitives
-	err = c.Watch(&source.Kind{Type: &v2beta1.Primitive{}}, &handler.EnqueueRequestsFromMapFunc{
+	err = controller.Watch(&source.Kind{Type: &v2beta1.Primitive{}}, &handler.EnqueueRequestsFromMapFunc{
 		ToRequests: newPrimitivePodMapper(mgr),
 	})
 	if err != nil {

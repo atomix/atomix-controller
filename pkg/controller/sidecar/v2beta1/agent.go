@@ -32,6 +32,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -39,31 +40,34 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 	"strconv"
+	"time"
 )
 
 const agentFinalizer = "agent"
 
 func addAgentController(mgr manager.Manager) error {
-	r := &AgentReconciler{
-		client: mgr.GetClient(),
-		scheme: mgr.GetScheme(),
-		config: mgr.GetConfig(),
-	}
-
 	// Create a new controller
-	c, err := controller.New("agent-controller", mgr, controller.Options{Reconciler: r})
+	options := controller.Options{
+		Reconciler: &AgentReconciler{
+			client: mgr.GetClient(),
+			scheme: mgr.GetScheme(),
+			config: mgr.GetConfig(),
+		},
+		RateLimiter: workqueue.NewItemExponentialFailureRateLimiter(time.Millisecond*10, time.Second*5),
+	}
+	controller, err := controller.New("agent-controller", mgr, options)
 	if err != nil {
 		return err
 	}
 
 	// Watch for changes to ProtocolAgents
-	err = c.Watch(&source.Kind{Type: &sidecarv2beta1.Agent{}}, &handler.EnqueueRequestForObject{})
+	err = controller.Watch(&source.Kind{Type: &sidecarv2beta1.Agent{}}, &handler.EnqueueRequestForObject{})
 	if err != nil {
 		return err
 	}
 
 	// Watch for changes to Stores
-	err = c.Watch(&source.Kind{Type: &corev2beta1.Store{}}, &handler.EnqueueRequestsFromMapFunc{
+	err = controller.Watch(&source.Kind{Type: &corev2beta1.Store{}}, &handler.EnqueueRequestsFromMapFunc{
 		ToRequests: newStoreAgentMapper(mgr),
 	})
 	if err != nil {

@@ -35,20 +35,21 @@ import (
 const storeFinalizer = "agent"
 
 func addStoreController(mgr manager.Manager) error {
-	r := &StoreReconciler{
-		client: mgr.GetClient(),
-		scheme: mgr.GetScheme(),
-		config: mgr.GetConfig(),
-	}
-
 	// Create a new controller
-	c, err := controller.New("store-controller", mgr, controller.Options{Reconciler: r})
+	options := controller.Options{
+		Reconciler: &StoreReconciler{
+			client: mgr.GetClient(),
+			scheme: mgr.GetScheme(),
+			config: mgr.GetConfig(),
+		},
+	}
+	controller, err := controller.New("store-controller", mgr, options)
 	if err != nil {
 		return err
 	}
 
 	// Watch for changes to Stores
-	err = c.Watch(&source.Kind{Type: &corev2beta1.Store{}}, &handler.EnqueueRequestForObject{})
+	err = controller.Watch(&source.Kind{Type: &corev2beta1.Store{}}, &handler.EnqueueRequestForObject{})
 	if err != nil {
 		return err
 	}

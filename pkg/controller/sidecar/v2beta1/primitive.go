@@ -34,20 +34,21 @@ import (
 const primitiveFinalizer = "proxy"
 
 func addPrimitiveController(mgr manager.Manager) error {
-	r := &PrimitiveReconciler{
-		client: mgr.GetClient(),
-		scheme: mgr.GetScheme(),
-		config: mgr.GetConfig(),
-	}
-
 	// Create a new controller
-	c, err := controller.New("primitive-controller", mgr, controller.Options{Reconciler: r})
+	options := controller.Options{
+		Reconciler: &PrimitiveReconciler{
+			client: mgr.GetClient(),
+			scheme: mgr.GetScheme(),
+			config: mgr.GetConfig(),
+		},
+	}
+	controller, err := controller.New("primitive-controller", mgr, options)
 	if err != nil {
 		return err
 	}
 
 	// Watch for changes to Primitives
-	err = c.Watch(&source.Kind{Type: &corev2beta1.Primitive{}}, &handler.EnqueueRequestForObject{})
+	err = controller.Watch(&source.Kind{Type: &corev2beta1.Primitive{}}, &handler.EnqueueRequestForObject{})
 	if err != nil {
 		return err
 	}
