@@ -8,6 +8,8 @@ spec:
   store:
     name: example-store
     config:
+      raft:
+        syncReads: false
       gossip:
         clock:
           logical: {}

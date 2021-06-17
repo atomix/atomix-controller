@@ -32,6 +32,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -52,6 +53,7 @@ func addAgentController(mgr manager.Manager) error {
 			client: mgr.GetClient(),
 			scheme: mgr.GetScheme(),
 			config: mgr.GetConfig(),
+			events: mgr.GetEventRecorderFor("atomix"),
 		},
 		RateLimiter: workqueue.NewItemExponentialFailureRateLimiter(time.Millisecond*10, time.Second*5),
 	}
@@ -81,6 +83,7 @@ type AgentReconciler struct {
 	client client.Client
 	scheme *runtime.Scheme
 	config *rest.Config
+	events record.EventRecorder
 }
 
 // Reconcile reconciles Agent resources
@@ -167,6 +170,7 @@ func (r *AgentReconciler) reconcileCreate(agent *sidecarv2beta1.Agent) (reconcil
 
 	if !agent.Status.Ready {
 		log.Info("Starting protocol agent")
+		r.events.Eventf(pod, "Normal", "StartingAgent", "Starting agent for store '%s'", agent.Spec.Store.Name)
 		startAgentRequest := &driverapi.StartAgentRequest{
 			AgentID: driverapi.AgentId{
 				Namespace: store.Namespace,
@@ -182,10 +186,13 @@ func (r *AgentReconciler) reconcileCreate(agent *sidecarv2beta1.Agent) (reconcil
 		_, err = driverClient.StartAgent(context.TODO(), startAgentRequest)
 		if err != nil && status.Code(err) != codes.AlreadyExists {
 			log.Error(err, "Starting protocol agent")
+			r.events.Eventf(pod, "Warning", "StartingAgentFailed", "Failed starting agent for store '%s': %s", agent.Spec.Store.Name, err)
 			return reconcile.Result{}, err
 		}
+		r.events.Eventf(pod, "Normal", "StartedAgent", "Started agent for store '%s'", agent.Spec.Store.Name)
 	} else {
 		log.Info("Configuring protocol agent")
+		r.events.Eventf(pod, "Normal", "ReconfiguringAgent", "Reconfiguring agent for store '%s'", agent.Spec.Store.Name)
 		configureAgentRequest := &driverapi.ConfigureAgentRequest{
 			AgentID: driverapi.AgentId{
 				Namespace: store.Namespace,
@@ -198,8 +205,10 @@ func (r *AgentReconciler) reconcileCreate(agent *sidecarv2beta1.Agent) (reconcil
 		_, err = driverClient.ConfigureAgent(context.TODO(), configureAgentRequest)
 		if err != nil {
 			log.Error(err, "Configuring protocol agent")
+			r.events.Eventf(pod, "Warning", "ReconfiguringAgentFailed", "Failed reconfiguring agent for store '%s': %s", agent.Spec.Store.Name, err)
 			return reconcile.Result{}, err
 		}
+		r.events.Eventf(pod, "Normal", "ReconfiguredAgent", "Reconfigured agent for store '%s'", agent.Spec.Store.Name)
 	}
 
 	agent.Status.Ready = true
@@ -280,6 +289,7 @@ func (r *AgentReconciler) reconcileDelete(agent *sidecarv2beta1.Agent) (reconcil
 	driverClient := driverapi.NewDriverClient(driverConn)
 
 	log.Info("Stopping protocol agent")
+	r.events.Eventf(pod, "Normal", "StoppingAgent", "Stopping agent for store '%s'", agent.Spec.Store.Name)
 	stopAgentRequest := &driverapi.StopAgentRequest{
 		AgentID: driverapi.AgentId{
 			Namespace: store.Namespace,
@@ -289,8 +299,10 @@ func (r *AgentReconciler) reconcileDelete(agent *sidecarv2beta1.Agent) (reconcil
 	_, err = driverClient.StopAgent(context.TODO(), stopAgentRequest)
 	if err != nil && status.Code(err) != codes.NotFound {
 		log.Error(err, "Stopping protocol agent")
+		r.events.Eventf(pod, "Warning", "StoppingAgentFailed", "Failed stopping agent for store '%s': %s", agent.Spec.Store.Name, err)
 		return reconcile.Result{}, err
 	}
+	r.events.Eventf(pod, "Normal", "StoppedAgent", "Stopped agent for store '%s'", agent.Spec.Store.Name)
 	return reconcile.Result{}, r.removeFinalizer(agent)
 }
 

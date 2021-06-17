@@ -32,6 +32,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -51,6 +52,7 @@ func addProxyController(mgr manager.Manager) error {
 			client: mgr.GetClient(),
 			scheme: mgr.GetScheme(),
 			config: mgr.GetConfig(),
+			events: mgr.GetEventRecorderFor("atomix"),
 		},
 		RateLimiter: workqueue.NewItemExponentialFailureRateLimiter(time.Millisecond*10, time.Second*5),
 	}
@@ -88,6 +90,7 @@ type ProxyReconciler struct {
 	client client.Client
 	scheme *runtime.Scheme
 	config *rest.Config
+	events record.EventRecorder
 }
 
 // Reconcile reconciles Proxy resources
@@ -194,6 +197,7 @@ func (r *ProxyReconciler) reconcileCreate(proxy *sidecarv2beta1.Proxy) (reconcil
 	agentClient := driverapi.NewAgentClient(agentConn)
 
 	log.Infof("Creating Primitive %s proxy", primitiveName)
+	r.events.Eventf(pod, "Normal", "CreatingProxy", "Creating proxy for primitive '%s'", primitive.Name)
 	createProxyRequest := &driverapi.CreateProxyRequest{
 		ProxyID: driverapi.ProxyId{
 			PrimitiveId: primitiveapi.PrimitiveId{
@@ -211,8 +215,11 @@ func (r *ProxyReconciler) reconcileCreate(proxy *sidecarv2beta1.Proxy) (reconcil
 	_, err = agentClient.CreateProxy(context.TODO(), createProxyRequest)
 	if err != nil && status.Code(err) != codes.AlreadyExists {
 		log.Error(err, "Creating primitive proxy")
+		r.events.Eventf(pod, "Warning", "CreatingProxyFailed", "Failed creating proxy for primitive '%s': %s", primitive.Name, err)
 		return reconcile.Result{}, err
 	}
+
+	r.events.Eventf(pod, "Normal", "CreatedProxy", "Created proxy to '%s' for primitive '%s'", agent.Spec.Store.Name, primitive.Name)
 
 	log.Infof("Connecting to Pod %s broker", podName)
 	brokerConn, err := grpc.Dial(fmt.Sprintf("%s:5678", pod.Status.PodIP), grpc.WithInsecure())
@@ -223,6 +230,7 @@ func (r *ProxyReconciler) reconcileCreate(proxy *sidecarv2beta1.Proxy) (reconcil
 	brokerClient := brokerapi.NewBrokerClient(brokerConn)
 
 	log.Infof("Registering Primitive %s with Pod %s broker", primitiveName, podName)
+	r.events.Eventf(pod, "Normal", "RegisteringPrimitive", "Registering primitive '%s'", primitive.Name)
 	registerPrimitiveRequest := &brokerapi.RegisterPrimitiveRequest{
 		PrimitiveID: brokerapi.PrimitiveId{
 			PrimitiveId: primitiveapi.PrimitiveId{
@@ -239,8 +247,10 @@ func (r *ProxyReconciler) reconcileCreate(proxy *sidecarv2beta1.Proxy) (reconcil
 	_, err = brokerClient.RegisterPrimitive(context.TODO(), registerPrimitiveRequest)
 	if err != nil && status.Code(err) != codes.AlreadyExists {
 		log.Error(err, "Registering primitive with broker")
+		r.events.Eventf(pod, "Warning", "RegisteringPrimitiveFailed", "Failed registering primitive '%s': %s", primitive.Name, err)
 		return reconcile.Result{}, err
 	}
+	r.events.Eventf(pod, "Normal", "RegisteredPrimitive", "Registered primitive '%s' with broker", primitive.Name)
 
 	proxy.Status.Ready = true
 	if err := r.client.Status().Update(context.TODO(), proxy); err != nil {
@@ -291,6 +301,7 @@ func (r *ProxyReconciler) reconcileDelete(proxy *sidecarv2beta1.Proxy) (reconcil
 	brokerClient := brokerapi.NewBrokerClient(brokerConn)
 
 	log.Infof("Unregistering Primitive %s with Pod %s broker", primitiveName, podName)
+	r.events.Eventf(pod, "Normal", "UnregisteringPrimitive", "Unregistering primitive '%s'", primitive.Name)
 	unregisterPrimitiveRequest := &brokerapi.UnregisterPrimitiveRequest{
 		PrimitiveID: brokerapi.PrimitiveId{
 			PrimitiveId: primitiveapi.PrimitiveId{
@@ -303,8 +314,10 @@ func (r *ProxyReconciler) reconcileDelete(proxy *sidecarv2beta1.Proxy) (reconcil
 	_, err = brokerClient.UnregisterPrimitive(context.TODO(), unregisterPrimitiveRequest)
 	if err != nil && status.Code(err) != codes.NotFound {
 		log.Error(err, "Unregistering primitive with broker")
+		r.events.Eventf(pod, "Warning", "UnregisteringPrimitiveFailed", "Failed unregistering primitive '%s': %s", primitive.Name, err)
 		return reconcile.Result{}, err
 	}
+	r.events.Eventf(pod, "Normal", "UnregisteredPrimitive", "Unregistered primitive '%s' with broker", primitive.Name)
 
 	agentName := types.NamespacedName{
 		Namespace: proxy.Spec.Agent.Namespace,
@@ -326,6 +339,7 @@ func (r *ProxyReconciler) reconcileDelete(proxy *sidecarv2beta1.Proxy) (reconcil
 	agentClient := driverapi.NewAgentClient(agentConn)
 
 	log.Info("Destroying Primitive %s proxy", primitiveName)
+	r.events.Eventf(pod, "Normal", "DestroyingProxy", "Destroying proxy for primitive '%s'", primitive.Name)
 	destroyProxyRequest := &driverapi.DestroyProxyRequest{
 		ProxyID: driverapi.ProxyId{
 			PrimitiveId: primitiveapi.PrimitiveId{
@@ -338,8 +352,10 @@ func (r *ProxyReconciler) reconcileDelete(proxy *sidecarv2beta1.Proxy) (reconcil
 	_, err = agentClient.DestroyProxy(context.TODO(), destroyProxyRequest)
 	if err != nil && status.Code(err) != codes.NotFound {
 		log.Error(err, "Destroying primitive proxy")
+		r.events.Eventf(pod, "Warning", "DestroyingProxyFailed", "Failed destroying proxy for primitive '%s': %s", primitive.Name, err)
 		return reconcile.Result{}, err
 	}
+	r.events.Eventf(pod, "Normal", "DestroyedProxy", "Destroyed proxy to '%s' for primitive '%s'", agent.Spec.Store.Name, primitive.Name)
 	return reconcile.Result{}, r.removeFinalizer(proxy)
 }
 
