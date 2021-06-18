@@ -143,7 +143,7 @@ func (r *StoreReconciler) reconcileProtocolStatus(store *corev2beta1.Store, prot
 		return false, nil
 	}
 
-	if store.Status.Protocol.Revision <= revision {
+	if revision > 0 && store.Status.Protocol.Revision <= revision {
 		protocolStatus := corev2beta1.ProtocolStatus{
 			Revision: revision,
 		}
@@ -266,7 +266,8 @@ func (r *StoreReconciler) reconcileProtocolStatus(store *corev2beta1.Store, prot
 		store.Status.ReadyReplicas = readyReplicas
 		store.Status.Partitions = int32(len(store.Status.Protocol.Partitions))
 		store.Status.ReadyPartitions = readyPartitions
-		store.Status.Ready = store.Status.ReadyReplicas == store.Status.Replicas && store.Status.ReadyPartitions == store.Status.Partitions
+		store.Status.Ready = store.Status.ReadyReplicas > 0 && store.Status.ReadyReplicas == store.Status.Replicas &&
+			store.Status.ReadyPartitions > 0 && store.Status.ReadyPartitions == store.Status.Partitions
 
 		err = r.client.Status().Update(context.TODO(), store)
 		if err != nil {

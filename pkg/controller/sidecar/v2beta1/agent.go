@@ -150,7 +150,7 @@ func (r *AgentReconciler) reconcileCreate(agent *sidecarv2beta1.Agent) (reconcil
 		return reconcile.Result{}, nil
 	}
 
-	if store.Status.Ready && agent.Status.Ready && agent.Status.Revision == store.Status.Protocol.Revision {
+	if !store.Status.Ready || (agent.Status.Ready && agent.Status.Revision == store.Status.Protocol.Revision) {
 		return reconcile.Result{}, nil
 	}
 
