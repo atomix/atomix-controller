@@ -22,10 +22,11 @@ import (
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	"os"
 	"os/signal"
+	"syscall"
 )
 
 func main() {
-	logging.SetLevel(logging.DebugLevel)
+	logging.SetLevel(logging.InfoLevel)
 
 	cmd := &cobra.Command{
 		Use: "atomix-broker",
@@ -46,8 +47,8 @@ func main() {
 	}
 
 	// Wait for an interrupt signal
-	ch := make(chan os.Signal, 1)
-	signal.Notify(ch, os.Interrupt)
+	ch := make(chan os.Signal, 2)
+	signal.Notify(ch, os.Interrupt, syscall.SIGTERM)
 	<-ch
 
 	// Stop the node after an interrupt
