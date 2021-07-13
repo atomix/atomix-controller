@@ -1007,7 +1007,7 @@ spec:
       serviceAccountName: atomix-controller
       initContainers:
       - name: init-certs
-        image: atomix/atomix-controller-init-certs:v0.5.9
+        image: atomix/atomix-controller-init-certs:v0.5.10
         imagePullPolicy: IfNotPresent
         securityContext:
           allowPrivilegeEscalation: false
@@ -1035,7 +1035,7 @@ spec:
           mountPath: /etc/webhook/certs
       containers:
       - name: controller
-        image: atomix/atomix-controller:v0.5.9
+        image: atomix/atomix-controller:v0.5.10
         imagePullPolicy: IfNotPresent
         securityContext:
           allowPrivilegeEscalation: false
@@ -1069,7 +1069,7 @@ spec:
             fieldRef:
               fieldPath: metadata.namespace
         - name: DEFAULT_BROKER_IMAGE
-          value: atomix/atomix-broker:v0.5.9
+          value: atomix/atomix-broker:v0.5.10
         volumeMounts:
         - name: certs
           mountPath: /tmp/k8s-webhook-server/serving-certs
