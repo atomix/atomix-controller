@@ -40,8 +40,6 @@ github.com/armon/go-metrics v0.0.0-20180917152333-f0300d1749da/go.mod h1:Q73ZrmV
 github.com/armon/go-radix v0.0.0-20180808171621-7fddfc383310/go.mod h1:ufUuZ+zHj4x4TnLV4JWEpy2hxWSpsRywHrMgIH9cCH8=
 github.com/asaskevich/govalidator v0.0.0-20180720115003-f9ffefc3facf/go.mod h1:lB+ZfQJz7igIIfQNfa7Ml4HSf2uFQQRzpGGRXenZAgY=
 github.com/asaskevich/govalidator v0.0.0-20190424111038-f61b66f89f4a/go.mod h1:lB+ZfQJz7igIIfQNfa7Ml4HSf2uFQQRzpGGRXenZAgY=
-github.com/atomix/api v0.3.3 h1:7iTCHxeTrnkZ5C0S6XTXkBCYjUW4KbTjDd3X4pxD3Us=
-github.com/atomix/api v0.3.3/go.mod h1:G8fCdKYiPhZMYTgfz7QAtw6JqIfY2szigiz/gILNY50=
 github.com/atomix/atomix-api/go v0.4.3 h1:e7HTh2k8xbErtmjEg7FBYvivAoSIC/rJ5p/o13URkwk=
 github.com/atomix/atomix-api/go v0.4.3/go.mod h1:N6gtApjoC9bRS9m7dksdVQIWSKaNArAl5EiOoaTHnmw=
 github.com/atomix/atomix-api/go v0.4.5 h1:LRaDmYZ4j0aeTfKG+dRd+Uei0KmXQ8x+7a0Nv7WSd80=
