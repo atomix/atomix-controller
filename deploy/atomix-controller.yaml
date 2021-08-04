@@ -211,6 +211,10 @@ spec:
                           type: array
                           items:
                             type: string
+                        readReplicas:
+                          type: array
+                          items:
+                            type: string
                         ready:
                           type: boolean
     additionalPrinterColumns:

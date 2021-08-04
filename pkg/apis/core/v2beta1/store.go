@@ -36,9 +36,10 @@ type ReplicaStatus struct {
 
 // PartitionStatus is a storage partition status
 type PartitionStatus struct {
-	ID       uint32   `json:"id,omitempty"`
-	Replicas []string `json:"replicas,omitempty"`
-	Ready    bool     `json:"ready,omitempty"`
+	ID           uint32   `json:"id,omitempty"`
+	Replicas     []string `json:"replicas,omitempty"`
+	ReadReplicas []string `json:"readReplicas,omitempty"`
+	Ready        bool     `json:"ready,omitempty"`
 }
 
 // StoreStatus is a store status
