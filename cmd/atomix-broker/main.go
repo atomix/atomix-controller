@@ -16,7 +16,9 @@ package main
 
 import (
 	"fmt"
+	protocolapi "github.com/atomix/atomix-api/go/atomix/protocol"
 	"github.com/atomix/atomix-go-framework/pkg/atomix/broker"
+	"github.com/atomix/atomix-go-framework/pkg/atomix/cluster"
 	"github.com/atomix/atomix-go-framework/pkg/atomix/logging"
 	"github.com/spf13/cobra"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
@@ -38,7 +40,11 @@ func main() {
 	}
 
 	// Create a new broker node
-	broker := broker.NewBroker()
+	broker := broker.NewBroker(cluster.NewCluster(
+		cluster.NewNetwork(),
+		protocolapi.ProtocolConfig{},
+		cluster.WithMemberID("atomix-broker"),
+		cluster.WithPort(5678)))
 
 	// Start the node
 	if err := broker.Start(); err != nil {

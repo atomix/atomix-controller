@@ -169,6 +169,7 @@ func (r *PodReconciler) reconcilePrimitives(pod *corev1.Pod) (bool, error) {
 	return false, nil
 }
 
+// nolint:gocyclo
 func (r *PodReconciler) reconcilePrimitive(pod *corev1.Pod, primitive v2beta1.Primitive, ready *bool) (bool, error) {
 	podName := types.NamespacedName{
 		Namespace: pod.Namespace,

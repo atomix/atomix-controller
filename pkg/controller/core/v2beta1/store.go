@@ -134,6 +134,7 @@ func (r *StoreReconciler) reconcileProtocol(store *corev2beta1.Store) (bool, err
 	return r.reconcileProtocolStatus(store, stored)
 }
 
+// nolint:gocyclo
 func (r *StoreReconciler) reconcileProtocolStatus(store *corev2beta1.Store, protocol *unstructured.Unstructured) (bool, error) {
 	revision, ok, err := unstructured.NestedInt64(protocol.UnstructuredContent(), "status", "revision")
 	if err != nil {
