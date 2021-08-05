@@ -242,9 +242,20 @@ func (r *AgentReconciler) getProtocolConfig(store *corev2beta1.Store) protocolap
 
 	partitions := make([]protocolapi.ProtocolPartition, len(store.Status.Protocol.Partitions))
 	for i, partition := range store.Status.Protocol.Partitions {
+		var host string
+		if partition.Host != nil {
+			host = *partition.Host
+		}
+		var port int32
+		if partition.Port != nil {
+			port = *partition.Port
+		}
 		partitions[i] = protocolapi.ProtocolPartition{
-			PartitionID: partition.ID,
-			Replicas:    partition.Replicas,
+			PartitionID:  partition.ID,
+			Replicas:     partition.Replicas,
+			ReadReplicas: partition.ReadReplicas,
+			Host:         host,
+			APIPort:      port,
 		}
 	}
 

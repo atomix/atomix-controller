@@ -3,7 +3,7 @@ module github.com/atomix/atomix-controller
 go 1.13
 
 require (
-	github.com/atomix/atomix-api/go v0.4.5
+	github.com/atomix/atomix-api/go v0.4.9
 	github.com/atomix/atomix-go-framework v0.6.2
 	github.com/go-logr/logr v0.1.0
 	github.com/spf13/cobra v0.0.5

@@ -234,6 +234,22 @@ func (r *StoreReconciler) reconcileProtocolStatus(store *corev2beta1.Store, prot
 					partition.ID = uint32(id)
 				}
 
+				host, ok, err := unstructured.NestedString(partitionObj, "host")
+				if err != nil {
+					log.Error(err)
+					return false, err
+				} else if ok {
+					partition.Host = pointer.StringPtr(host)
+				}
+
+				port, ok, err := unstructured.NestedInt64(partitionObj, "port")
+				if err != nil {
+					log.Error(err)
+					return false, err
+				} else if ok {
+					partition.Port = pointer.Int32Ptr(int32(port))
+				}
+
 				replicas, ok, err := unstructured.NestedSlice(partitionObj, "replicas")
 				if err != nil {
 					log.Error(err)
@@ -241,6 +257,16 @@ func (r *StoreReconciler) reconcileProtocolStatus(store *corev2beta1.Store, prot
 				} else if ok {
 					for _, replica := range replicas {
 						partition.Replicas = append(partition.Replicas, replica.(string))
+					}
+				}
+
+				readReplicas, ok, err := unstructured.NestedSlice(partitionObj, "readReplicas")
+				if err != nil {
+					log.Error(err)
+					return false, err
+				} else if ok {
+					for _, readReplica := range readReplicas {
+						partition.ReadReplicas = append(partition.ReadReplicas, readReplica.(string))
 					}
 				}
 
