@@ -7,12 +7,10 @@ spec:
     apiVersion: storage.atomix.io/v2beta2
     kind: MultiRaftProtocol
     spec:
-      cluster:
-        replicas: 3
-        groups: 3
-        template:
-          spec:
-            raftConfig:
-              snapshotStrategy:
-                type: Threshold
-                entryThreshold: 10
+      replicas: 3
+      groups: 10
+      raft:
+        quorumSize: 3
+        readReplicas: 0
+        sessionTimeout: 30s
+        snapshotEntryThreshold: 10000
