@@ -75,6 +75,14 @@ func addAgentController(mgr manager.Manager) error {
 	if err != nil {
 		return err
 	}
+
+	// Watch for changes to Pods
+	err = controller.Watch(&source.Kind{Type: &corev1.Pod{}}, &handler.EnqueueRequestsFromMapFunc{
+		ToRequests: newPodAgentMapper(mgr),
+	})
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -150,15 +158,45 @@ func (r *AgentReconciler) reconcileCreate(agent *sidecarv2beta1.Agent) (reconcil
 		return reconcile.Result{}, nil
 	}
 
-	if !store.Status.Ready || (agent.Status.Ready && agent.Status.Revision == store.Status.Protocol.Revision) {
-		return reconcile.Result{}, nil
-	}
-
 	log.Info("Connecting to driver")
-	driverPort, err := r.getDriverPort(pod, store)
+	driverContainer, driverPort, err := r.getDriverContainerAndPort(pod, store)
 	if err != nil {
 		log.Error(err)
 		return reconcile.Result{}, err
+	}
+
+	// Get the container status for the driver container.
+	var containerStatus *corev1.ContainerStatus
+	for _, cs := range pod.Status.ContainerStatuses {
+		if cs.Name == driverContainer {
+			containerStatus = &cs
+			break
+		}
+	}
+
+	// If no status is found for the driver container, skip reconciliation to wait for the container
+	// status to be populated by Kubernetes.
+	if containerStatus == nil {
+		log.Warnf("Container status not found for driver container '%s'", driverContainer)
+		return reconcile.Result{}, nil
+	}
+
+	// If the agent's container ID is different from the running container ID, update the agent's
+	// container ID and reset the agent status to not ready.
+	if agent.Status.ContainerID != containerStatus.ContainerID {
+		log.Infof("Updating agent %s status for container '%s'", agentName, containerStatus.ContainerID)
+		agent.Status.ContainerID = containerStatus.ContainerID
+		agent.Status.Ready = false
+		agent.Status.Revision = 0
+		if err := r.client.Status().Update(context.TODO(), agent); err != nil {
+			log.Error(err)
+			return reconcile.Result{}, err
+		}
+		return reconcile.Result{}, nil
+	}
+
+	if !store.Status.Ready || (agent.Status.Ready && agent.Status.Revision == store.Status.Protocol.Revision) {
+		return reconcile.Result{}, nil
 	}
 
 	driverConn, err := grpc.Dial(fmt.Sprintf("%s:%d", pod.Status.PodIP, driverPort), grpc.WithInsecure())
@@ -286,7 +324,7 @@ func (r *AgentReconciler) reconcileDelete(agent *sidecarv2beta1.Agent) (reconcil
 	}
 
 	log.Info("Connecting to driver")
-	driverPort, err := r.getDriverPort(pod, store)
+	_, driverPort, err := r.getDriverContainerAndPort(pod, store)
 	if err != nil {
 		log.Error(err)
 		return reconcile.Result{}, err
@@ -335,11 +373,11 @@ func (r *AgentReconciler) removeFinalizer(agent *sidecarv2beta1.Agent) error {
 	return nil
 }
 
-func (r *AgentReconciler) getDriverPort(pod *corev1.Pod, store *corev2beta1.Store) (int, error) {
+func (r *AgentReconciler) getDriverContainerAndPort(pod *corev1.Pod, store *corev2beta1.Store) (string, int, error) {
 	object, err := runtime.Decode(unstructured.UnstructuredJSONScheme, store.Spec.Protocol.Raw)
 	if err != nil {
 		log.Error(err)
-		return 0, err
+		return "", 0, err
 	}
 
 	gvc := object.GetObjectKind().GroupVersionKind()
@@ -348,38 +386,56 @@ func (r *AgentReconciler) getDriverPort(pod *corev1.Pod, store *corev2beta1.Stor
 	err = r.client.List(context.TODO(), plugins)
 	if err != nil {
 		log.Error(err)
-		return 0, err
+		return "", 0, err
 	}
 
 	for _, plugin := range plugins.Items {
 		if plugin.Spec.Protocol.Group == gvc.Group && plugin.Spec.Protocol.Kind == gvc.Kind {
 			for _, driver := range plugin.Spec.Drivers {
 				if driver.Version == gvc.Version {
+					containerAnnotation := getDriverContainerAnnotation(plugin.Name, driver.Version)
+					containerName, ok := pod.Annotations[containerAnnotation]
+					if !ok {
+						return "", 0, fmt.Errorf("could not find container for %s", gvc)
+					}
 					portAnnotation := getDriverPortAnnotation(plugin.Name, driver.Version)
 					portValue, ok := pod.Annotations[portAnnotation]
 					if !ok {
-						return 0, fmt.Errorf("could not find port for %s", gvc)
+						return "", 0, fmt.Errorf("could not find port for %s", gvc)
 					}
-					return strconv.Atoi(portValue)
+					port, err := strconv.Atoi(portValue)
+					if err != nil {
+						return "", 0, err
+					}
+					return containerName, port, nil
 				}
 			}
-			return 0, fmt.Errorf("could not find plugin for %s", gvc)
+			return "", 0, fmt.Errorf("could not find plugin for %s", gvc)
 		}
 		if plugin.Spec.DeprecatedGroup == gvc.Group && plugin.Spec.DeprecatedKind == gvc.Kind {
 			for _, version := range plugin.Spec.DeprecatedVersions {
 				if version.Name == gvc.Version {
+					containerAnnotation := getDriverContainerAnnotation(plugin.Name, version.Name)
+					containerName, ok := pod.Annotations[containerAnnotation]
+					if !ok {
+						return "", 0, fmt.Errorf("could not find container for %s", gvc)
+					}
 					portAnnotation := getDriverPortAnnotation(plugin.Name, version.Name)
 					portValue, ok := pod.Annotations[portAnnotation]
 					if !ok {
-						return 0, fmt.Errorf("could not find port for %s", gvc)
+						return "", 0, fmt.Errorf("could not find port for %s", gvc)
 					}
-					return strconv.Atoi(portValue)
+					port, err := strconv.Atoi(portValue)
+					if err != nil {
+						return "", 0, err
+					}
+					return containerName, port, nil
 				}
 			}
-			return 0, fmt.Errorf("could not find plugin for %s", gvc)
+			return "", 0, fmt.Errorf("could not find plugin for %s", gvc)
 		}
 	}
-	return 0, fmt.Errorf("could not find plugin for %s", gvc)
+	return "", 0, fmt.Errorf("could not find plugin for %s", gvc)
 }
 
 func (r *AgentReconciler) getPod(agent *sidecarv2beta1.Agent) (*corev1.Pod, error) {
@@ -451,3 +507,39 @@ func (m *storeAgentMapper) Map(object handler.MapObject) []reconcile.Request {
 }
 
 var _ handler.Mapper = &storeAgentMapper{}
+
+func newPodAgentMapper(mgr manager.Manager) handler.Mapper {
+	return &podAgentMapper{
+		client: mgr.GetClient(),
+	}
+}
+
+type podAgentMapper struct {
+	client client.Client
+}
+
+func (m *podAgentMapper) Map(object handler.MapObject) []reconcile.Request {
+	pod := object.Object.(*corev1.Pod)
+	agents := &sidecarv2beta1.AgentList{}
+	options := &client.ListOptions{
+		LabelSelector: labels.SelectorFromSet(map[string]string{
+			"pod": string(pod.UID),
+		}),
+	}
+	if err := m.client.List(context.TODO(), agents, options); err != nil {
+		log.Error(err)
+		return []reconcile.Request{}
+	}
+	requests := make([]reconcile.Request, 0, len(agents.Items))
+	for _, agent := range agents.Items {
+		requests = append(requests, reconcile.Request{
+			NamespacedName: types.NamespacedName{
+				Namespace: agent.Namespace,
+				Name:      agent.Name,
+			},
+		})
+	}
+	return requests
+}
+
+var _ handler.Mapper = &podAgentMapper{}

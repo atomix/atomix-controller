@@ -121,7 +121,44 @@ func (r *ProxyReconciler) reconcileCreate(proxy *sidecarv2beta1.Proxy) (reconcil
 		return reconcile.Result{}, r.addFinalizer(proxy)
 	}
 
+	agentName := types.NamespacedName{
+		Namespace: proxy.Spec.Agent.Namespace,
+		Name:      proxy.Spec.Agent.Name,
+	}
+	agent, err := r.getAgent(proxy)
+	if err != nil {
+		return reconcile.Result{}, err
+	} else if agent == nil || agent.DeletionTimestamp != nil {
+		log.Infof("Agent %s not found. Deleting Proxy %s", agentName, proxyName)
+		if err := r.client.Delete(context.TODO(), proxy); err != nil {
+			if !k8serrors.IsNotFound(err) {
+				log.Error(err)
+				return reconcile.Result{}, err
+			}
+		}
+		return reconcile.Result{}, nil
+	}
+
+	// If the proxy container ID is different from the agent container ID, update the proxy container
+	// ID and reset the status to not ready.
+	if proxy.Status.ContainerID != agent.Status.ContainerID {
+		log.Infof("Updating proxy %s status for container '%s'", proxyName, agent.Status.ContainerID)
+		proxy.Status.ContainerID = agent.Status.ContainerID
+		proxy.Status.Ready = false
+		if err := r.client.Status().Update(context.TODO(), proxy); err != nil {
+			log.Error(err)
+			return reconcile.Result{}, err
+		}
+		return reconcile.Result{}, nil
+	}
+
+	// If the proxy status is ready skip reconciliation.
 	if proxy.Status.Ready {
+		return reconcile.Result{}, nil
+	}
+
+	// If the agent status is not ready, skip reconciliation and wait for it to become ready.
+	if !agent.Status.Ready {
 		return reconcile.Result{}, nil
 	}
 
@@ -158,28 +195,6 @@ func (r *ProxyReconciler) reconcileCreate(proxy *sidecarv2beta1.Proxy) (reconcil
 				return reconcile.Result{}, err
 			}
 		}
-		return reconcile.Result{}, nil
-	}
-
-	agentName := types.NamespacedName{
-		Namespace: proxy.Spec.Agent.Namespace,
-		Name:      proxy.Spec.Agent.Name,
-	}
-	agent, err := r.getAgent(proxy)
-	if err != nil {
-		return reconcile.Result{}, err
-	} else if agent == nil || agent.DeletionTimestamp != nil {
-		log.Infof("Agent %s not found. Deleting Proxy %s", agentName, proxyName)
-		if err := r.client.Delete(context.TODO(), proxy); err != nil {
-			if !k8serrors.IsNotFound(err) {
-				log.Error(err)
-				return reconcile.Result{}, err
-			}
-		}
-		return reconcile.Result{}, nil
-	}
-
-	if !agent.Status.Ready {
 		return reconcile.Result{}, nil
 	}
 

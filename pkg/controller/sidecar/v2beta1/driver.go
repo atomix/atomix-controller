@@ -214,8 +214,9 @@ func (i *DriverInjector) injectDriver(name types.NamespacedName, pod *corev1.Pod
 		return false, nil
 	}
 
+	containerName := strings.ReplaceAll(fmt.Sprintf("driver-%s-%s", pluginName, driver), ".", "-")
 	container := corev1.Container{
-		Name:            strings.ReplaceAll(fmt.Sprintf("driver-%s-%s", pluginName, driver), ".", "-"),
+		Name:            containerName,
 		Image:           image,
 		ImagePullPolicy: corev1.PullIfNotPresent,
 		Args: []string{
@@ -253,6 +254,7 @@ func (i *DriverInjector) injectDriver(name types.NamespacedName, pod *corev1.Pod
 	pod.Spec.Containers = append(pod.Spec.Containers, container)
 
 	pod.Annotations[getDriverStatusAnnotation(plugin, driver)] = injectedStatus
+	pod.Annotations[getDriverContainerAnnotation(plugin, driver)] = containerName
 	pod.Annotations[getDriverPortAnnotation(plugin, driver)] = fmt.Sprint(port)
 	return true, nil
 }
@@ -263,6 +265,10 @@ func getPluginStatusAnnotation(plugin string) string {
 
 func getDriverStatusAnnotation(plugin, driver string) string {
 	return fmt.Sprintf("%s/status", getDriverDomain(plugin, driver))
+}
+
+func getDriverContainerAnnotation(plugin, driver string) string {
+	return fmt.Sprintf("%s/container", getDriverDomain(plugin, driver))
 }
 
 func getDriverPortAnnotation(plugin, driver string) string {

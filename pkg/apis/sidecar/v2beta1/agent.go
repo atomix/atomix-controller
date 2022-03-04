@@ -28,8 +28,9 @@ type AgentSpec struct {
 
 // AgentStatus is an agent status
 type AgentStatus struct {
-	Ready    bool  `json:"ready,omitempty"`
-	Revision int64 `json:"revision,omitempty"`
+	ContainerID string `json:"containerID,omitempty"`
+	Ready       bool   `json:"ready,omitempty"`
+	Revision    int64  `json:"revision,omitempty"`
 }
 
 // +genclient
