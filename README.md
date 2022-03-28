@@ -1,3 +1,8 @@
+<!--
+SPDX-FileCopyrightText: 2019-present Open Networking Foundation <info@opennetworking.org>
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # Atomix Kubernetes atomix-controller
 
 [![Build Status](https://travis-ci.org/atomix/atomix-controller.svg?branch=master)](https://travis-ci.org/atomix/atomix-controller)
