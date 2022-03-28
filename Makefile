@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2019-present Open Networking Foundation <info@opennetworking.org>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 export CGO_ENABLED=0
 export GO111MODULE=on
 
@@ -43,7 +47,7 @@ push: # @HELP push controller Docker image
 	docker push atomix/atomix-controller-init-certs:${CONTROLLER_VERSION}
 
 test: # @HELP run the unit tests and source code validation
-test: deps license_check linters
+test: deps license linters
 	go test github.com/atomix/atomix-controller/cmd/...
 	go test github.com/atomix/atomix-controller/pkg/...
 
@@ -53,5 +57,8 @@ deps: # @HELP ensure that the required dependencies are in place
 linters: # @HELP examines Go source code and reports coding problems
 	golangci-lint run
 
-license_check: # @HELP examine and ensure license headers exist
-	./build/licensing/boilerplate.py -v
+reuse-tool: # @HELP install reuse if not present
+	command -v reuse || python3 -m pip install reuse
+
+license: reuse-tool # @HELP run license checks
+	reuse lint
